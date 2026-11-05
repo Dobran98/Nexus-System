@@ -60,3 +60,4 @@ NEXUS SYSTEM/
 
 - **Frontend:** Vercel (Next.js App Router desacoplado).
 - **Backend / Persistencia:** Supabase PostgreSQL 15+.
+

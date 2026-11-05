@@ -184,3 +184,4 @@ export const AlertTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({
 export const AlertDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement>> = ({ className = '', ...props }) => (
   <p className={`text-xs opacity-90 leading-relaxed ${className}`} {...props} />
 );
+
