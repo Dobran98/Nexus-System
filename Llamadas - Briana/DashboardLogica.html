@@ -1,0 +1,495 @@
+<script>
+  const Dashboard = {
+    charts: {},
+    intervalId: null,
+    filtroActual: { tipo: 'activas', valor: '' },
+    listaCampanasCargada: false,
+
+    init: function () {
+      this.mostrarCarga();
+      // Default to tab 1
+      this.cambiarTab('mod1');
+      this.cargarDatos();
+
+      // Auto-refresh every 60s
+      if (this.intervalId) clearInterval(this.intervalId);
+      this.intervalId = setInterval(() => this.cargarDatos(), 60000);
+    },
+
+    detener: function () {
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+      }
+      this.destruirCharts();
+    },
+
+    destruirCharts: function () {
+      Object.keys(this.charts).forEach(key => {
+        if (this.charts[key]) {
+          this.charts[key].destroy();
+          delete this.charts[key];
+        }
+      });
+    },
+
+    cambiarTab: function (tabId) {
+      document.querySelectorAll('.dash-tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.dash-modulo').forEach(mod => mod.style.display = 'none');
+
+      document.getElementById('btn-tab-' + tabId).classList.add('active');
+      document.getElementById('modulo-' + tabId).style.display = 'block';
+    },
+
+    mostrarCarga: function () {
+      document.getElementById('dash-loader').style.display = 'flex';
+      document.getElementById('dash-content').style.display = 'none';
+    },
+
+    ocultarCarga: function () {
+      document.getElementById('dash-loader').style.display = 'none';
+      document.getElementById('dash-content').style.display = 'block';
+    },
+
+    aplicarFiltro: function (tipo, valor = '') {
+      this.filtroActual = { tipo, valor };
+
+      // Actualizar UI de botones
+      document.getElementById('btn-filtro-activas').classList.toggle('active', tipo === 'activas');
+      document.getElementById('btn-filtro-todas').classList.toggle('active', tipo === 'todas');
+
+      // Si se eligió activa o todas, resetear el select
+      if (tipo !== 'especifica') {
+        document.getElementById('select-filtro-especifica').value = '';
+      }
+
+      this.mostrarCarga();
+      this.cargarDatos();
+    },
+
+    cargarDatos: function () {
+      google.script.run.withSuccessHandler((data) => {
+        this.ocultarCarga();
+        if (data.error) {
+          console.error("Dashboard Error:", data.error);
+          return;
+        }
+
+        // Poblar selector de campañas una sola vez
+        if (!this.listaCampanasCargada && data.listaNombresCampanas) {
+          const select = document.getElementById('select-filtro-especifica');
+          data.listaNombresCampanas.forEach(nombre => {
+            let opt = document.createElement('option');
+            opt.value = nombre;
+            opt.innerText = nombre;
+            select.appendChild(opt);
+          });
+          this.listaCampanasCargada = true;
+        }
+
+        this.renderModulo1(data.campanas);
+        this.renderModulo2(data.personal);
+        this.renderModulo3(data.kpis, data.campanas);
+        this.renderModulo4(data.tipificaciones);
+      }).withFailureHandler((err) => {
+        this.ocultarCarga();
+        console.error("Dashboard Server Error:", err);
+      }).obtenerDatosDashboard(this.filtroActual);
+    },
+
+    // Color palette helpers
+    colors: {
+      green: '#10b981', amber: '#f59e0b', red: '#ef4444', blue: '#3b82f6', purple: '#8b5cf6',
+      bg: 'rgba(30, 41, 59, 0.5)', border: 'rgba(255,255,255,0.1)', text: '#94a3b8'
+    },
+
+    commonOptions: function () {
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        color: this.colors.text,
+        plugins: { legend: { labels: { color: this.colors.text } } },
+        scales: {
+          x: { grid: { color: this.colors.border }, ticks: { color: this.colors.text } },
+          y: { grid: { color: this.colors.border }, ticks: { color: this.colors.text } }
+        }
+      };
+    },
+
+    // ==========================================
+    // MÓDULO 1: Rendimiento de Campañas
+    // ==========================================
+    renderModulo1: function (campanas) {
+      if (!campanas || campanas.length === 0) return;
+
+      // Solo mostramos la primera para el KPI principal de ejemplo, o un resumen
+      let totalGeneral = 0, efectivasGeneral = 0, fallidasGeneral = 0;
+      let htmlTabla = '';
+
+      campanas.forEach(c => {
+        totalGeneral += c.totalContactos;
+        efectivasGeneral += c.efectivos;
+        fallidasGeneral += c.fallidos;
+
+        let estadoClass = c.tasaEfectividad >= c.meta ? 'optimo' : (c.tasaEfectividad >= (c.meta * 0.7) ? 'alerta' : 'critico');
+        let estadoTexto = c.tasaEfectividad >= c.meta ? 'ÓPTIMO' : (c.tasaEfectividad >= (c.meta * 0.7) ? 'ALERTA' : 'CRÍTICO');
+
+        let progressColor = c.tasaEfectividad >= c.meta ? this.colors.green : (c.tasaEfectividad >= (c.meta * 0.7) ? this.colors.amber : this.colors.red);
+
+        htmlTabla += `
+        <tr>
+          <td><div class="fw-bold text-white">${c.nombre}</div></td>
+          <td class="text-center">${c.totalContactos}</td>
+          <td class="text-center text-success fw-bold">${c.efectivos}</td>
+          <td class="text-center text-danger">${c.fallidos}</td>
+          <td class="text-center">
+            <div class="d-flex align-items-center gap-2">
+              <span class="fw-bold">${c.tasaEfectividad}%</span>
+              <div class="dash-progress-container flex-grow-1" style="width:60px;">
+                <div class="dash-progress-bar" style="width: ${Math.min(c.tasaEfectividad, 100)}%; background: ${progressColor};"></div>
+              </div>
+            </div>
+          </td>
+          <td class="text-center text-info">${c.meta}%</td>
+          <td class="text-center"><span class="dash-badge ${estadoClass}">${estadoTexto}</span></td>
+        </tr>
+      `;
+      });
+
+      document.getElementById('m1-kpi-total').innerText = totalGeneral;
+      document.getElementById('m1-kpi-efectivos').innerText = efectivasGeneral;
+      document.getElementById('m1-kpi-fallidos').innerText = fallidasGeneral;
+      document.getElementById('m1-tabla-body').innerHTML = htmlTabla;
+
+      // Chart: Radial Progress (Promedio Global vs Meta)
+      let metaPromedio = campanas.reduce((acc, c) => acc + c.meta, 0) / campanas.length || 0;
+      let efectividadPromedio = totalGeneral > 0 ? ((efectivasGeneral / totalGeneral) * 100) : 0;
+
+      if (this.charts['m1-chart']) this.charts['m1-chart'].destroy();
+      const ctx = document.getElementById('m1-chart-radial').getContext('2d');
+      this.charts['m1-chart'] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Efectividad Actual', 'Restante para Meta'],
+          datasets: [{
+            data: [efectividadPromedio, Math.max(0, 100 - efectividadPromedio)],
+            backgroundColor: [this.colors.blue, this.colors.bg],
+            borderWidth: 0,
+            cutout: '80%',
+            circumference: 180,
+            rotation: 270
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } }
+        }
+      });
+    },
+
+    // ==========================================
+    // MÓDULO 2: Gestión de Personal
+    // ==========================================
+    renderModulo2: function (personal) {
+      if (!personal) return;
+
+      document.getElementById('m2-activos').innerText = personal.activos;
+      document.getElementById('m2-pausa').innerText = personal.enPausa;
+      document.getElementById('m2-ausentes').innerText = personal.ausentes;
+
+      // Chart 1: Doughnut Distribución
+      if (this.charts['m2-dist']) this.charts['m2-dist'].destroy();
+      this.charts['m2-dist'] = new Chart(document.getElementById('m2-chart-dist'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Activos', 'En Pausa', 'Ausentes'],
+          datasets: [{
+            data: [personal.activos, personal.enPausa, personal.ausentes],
+            backgroundColor: [this.colors.green, this.colors.amber, this.colors.red],
+            borderWidth: 2, borderColor: '#1e293b'
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#fff' } } } }
+      });
+
+      // Chart 2: Barras Apiladas por Turno
+      if (this.charts['m2-turnos']) this.charts['m2-turnos'].destroy();
+      let opt = this.commonOptions();
+      opt.scales.x.stacked = true;
+      opt.scales.y.stacked = true;
+
+      this.charts['m2-turnos'] = new Chart(document.getElementById('m2-chart-turnos'), {
+        type: 'bar',
+        data: {
+          labels: ['Mañana', 'Tarde'],
+          datasets: [
+            { label: 'Activos', data: [personal.distribucionTurnos.mañana.activos, personal.distribucionTurnos.tarde.activos], backgroundColor: this.colors.blue },
+            { label: 'Inactivos', data: [personal.distribucionTurnos.mañana.total - personal.distribucionTurnos.mañana.activos, personal.distribucionTurnos.tarde.total - personal.distribucionTurnos.tarde.activos], backgroundColor: this.colors.bg }
+          ]
+        },
+        options: opt
+      });
+    },
+
+    // ==========================================
+    // MÓDULO 3: Vista Consolidada
+    // ==========================================
+    renderModulo3: function (kpis, campanas) {
+      if (!kpis) return;
+
+      // 1. Actualizar Tarjetas KPI Superiores
+      document.getElementById('m3-prod').innerText = kpis.productividadTotal;
+      document.getElementById('m3-carga').innerText = kpis.cargaPorOperador;
+
+      let txtCarga = document.getElementById('m3-txt-carga');
+      let cardCarga = document.getElementById('m3-card-carga');
+      let alertBanner = document.getElementById('m3-alerta-carga');
+
+      if (kpis.alertaCarga) {
+        txtCarga.innerHTML = `Umbral: 150 <span class="text-danger ms-1"><i class="fas fa-caret-up"></i> ¡Supera umbral!</span>`;
+        cardCarga.style.border = '1px solid var(--dash-neon-red)';
+        cardCarga.style.background = 'rgba(239, 68, 68, 0.05)';
+        document.getElementById('m3-carga').classList.add('text-danger');
+        alertBanner.style.display = 'block';
+      } else {
+        txtCarga.innerHTML = `Umbral: 150 <span class="text-success ms-1"><i class="fas fa-check"></i> Normal</span>`;
+        cardCarga.style.border = '1px solid var(--dash-border)';
+        cardCarga.style.background = 'var(--dash-surface)';
+        document.getElementById('m3-carga').classList.remove('text-danger');
+        alertBanner.style.display = 'none';
+      }
+
+      document.getElementById('m3-efec').innerText = kpis.efectividadGlobal + '%';
+      document.getElementById('m3-ops').innerText = kpis.operadoresActivos;
+
+      // 2. Gráfico Radial de Efectividad Global
+      document.getElementById('m3-efec-center').innerText = kpis.efectividadGlobal + '%';
+
+      if (this.charts['m3-radial']) this.charts['m3-radial'].destroy();
+      const ctxRadial = document.getElementById('m3-chart-radial').getContext('2d');
+      this.charts['m3-radial'] = new Chart(ctxRadial, {
+        type: 'doughnut',
+        data: {
+          labels: ['Efectividad', 'Restante'],
+          datasets: [{
+            data: [kpis.efectividadGlobal, Math.max(0, 100 - kpis.efectividadGlobal)],
+            backgroundColor: [this.colors.green, 'rgba(255,255,255,0.05)'],
+            borderWidth: 0,
+            cutout: '75%'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          animation: { duration: 1500, easing: 'easeOutQuart' }
+        }
+      });
+
+      // 3. Barras de Efectividad por Campaña (Lista)
+      if (campanas && campanas.length > 0) {
+        let campHtml = '';
+        const campColors = [this.colors.blue, this.colors.purple, this.colors.green, this.colors.amber];
+
+        campanas.forEach((c, index) => {
+          let color = campColors[index % campColors.length];
+          let metaTxt = c.meta || 80;
+          let icon = c.tasaEfectividad >= metaTxt ? `<i class="fas fa-check-square ms-2 text-success"></i>` :
+            (c.tasaEfectividad >= (metaTxt * 0.7) ? `<i class="fas fa-exclamation-triangle ms-2 text-warning"></i>` : `<i class="fas fa-times-circle ms-2 text-danger"></i>`);
+
+          campHtml += `
+          <div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-white" style="font-size: 0.85rem;"><span style="color: ${color};">●</span> ${c.nombre} ${icon}</span>
+              <span class="text-white fw-bold" style="font-size: 0.85rem;">${c.tasaEfectividad}%</span>
+            </div>
+            <div class="dash-progress-container mb-1" style="height: 6px;">
+              <div class="dash-progress-bar" style="width: ${Math.min(c.tasaEfectividad, 100)}%; background: ${color};"></div>
+            </div>
+            <div class="text-end" style="color: var(--dash-text-muted); font-size: 0.7rem;">Meta: ${metaTxt}%</div>
+          </div>
+        `;
+        });
+        document.getElementById('m3-campanas-list').innerHTML = campHtml;
+      }
+
+      // 4. Evolución del Turno (Line Chart) - DISEÑO IDENTICO A IMAGEN
+      if (this.charts['m3-line']) this.charts['m3-line'].destroy();
+
+      // Filtrar slots con datos para que el gráfico se vea limpio
+      let datosFiltrados = kpis.evolucionTurno.filter(e => e.productividad > 0 || e.efectividad > 0);
+      if (datosFiltrados.length === 0) datosFiltrados = kpis.evolucionTurno; // Fallback si no hay nada
+
+      let horas = datosFiltrados.map(e => e.hora);
+      let prodData = datosFiltrados.map(e => e.productividad);
+      let efecData = datosFiltrados.map(e => e.efectividad);
+
+      const ctxLine = document.getElementById('m3-chart-line').getContext('2d');
+
+      this.charts['m3-line'] = new Chart(ctxLine, {
+        type: 'line',
+        data: {
+          labels: horas,
+          datasets: [
+            {
+              label: 'Productividad',
+              data: prodData,
+              borderColor: '#f59e0b', // Naranja
+              backgroundColor: 'transparent',
+              yAxisID: 'y1',
+              tension: 0.4,
+              borderWidth: 3,
+              pointRadius: 4,
+              pointBackgroundColor: '#f59e0b',
+              pointBorderColor: '#fff',
+              pointHoverRadius: 7,
+              pointHoverBackgroundColor: '#f59e0b',
+              pointHoverBorderWidth: 3
+            },
+            {
+              label: 'Efectividad %',
+              data: efecData,
+              borderColor: '#10b981', // Verde
+              borderDash: [5, 5],
+              yAxisID: 'y2',
+              tension: 0.4,
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 6,
+              pointHoverBackgroundColor: '#10b981',
+              pointHoverBorderColor: '#fff',
+              pointHoverBorderWidth: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom',
+              labels: { color: this.colors.text, usePointStyle: true, boxWidth: 8, padding: 20 }
+            },
+            tooltip: {
+              enabled: true,
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              titleColor: '#fff',
+              bodyColor: '#94a3b8',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1,
+              padding: 12,
+              displayColors: true,
+              callbacks: {
+                label: function (context) {
+                  let label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  if (context.parsed.y !== null) {
+                    label += context.datasetIndex === 1 ? context.parsed.y + '%' : context.parsed.y;
+                  }
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { color: this.colors.text }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              min: 0,
+              max: Math.max(...prodData, 140),
+              grid: { color: 'rgba(255,255,255,0.05)', borderDash: [2, 2] },
+              ticks: { color: this.colors.text, stepSize: 35 }
+            },
+            y2: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              min: 0,
+              max: 100,
+              grid: { display: false },
+              ticks: { color: this.colors.text, stepSize: 25, callback: (v) => v }
+            }
+          }
+        },
+        plugins: [{
+          id: 'verticalLine',
+          afterDraw: chart => {
+            if (chart.tooltip?._active?.length) {
+              let x = chart.tooltip._active[0].element.x;
+              let yAxis = chart.scales.y1;
+              let ctx = chart.ctx;
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(x, yAxis.top);
+              ctx.lineTo(x, yAxis.bottom);
+              ctx.lineWidth = 1;
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+              ctx.stroke();
+              ctx.restore();
+            }
+          }
+        }, {
+          id: 'goalLine',
+          beforeDraw: chart => {
+            let yAxis = chart.scales.y1;
+            let ctx = chart.ctx;
+            let y = yAxis.getPixelForValue(125); // Umbral de productividad meta
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(chart.scales.x.left, y);
+            ctx.lineTo(chart.scales.x.right, y);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }]
+      });
+    },
+
+    // ==========================================
+    // MÓDULO 4: Tipificaciones y SLA
+    // ==========================================
+    renderModulo4: function (tipos) {
+      if (!tipos || tipos.length === 0) return;
+
+      let html = '';
+      tipos.forEach(t => {
+        let slaClase = t.estadoSLA === 'Cumple' ? 'optimo' : 'critico';
+        let moraClase = t.tasaMora > 20 ? 'text-danger' : 'text-warning';
+        let moraBar = t.tasaMora > 20 ? this.colors.red : this.colors.amber;
+
+        html += `
+        <tr>
+          <td><div class="fw-bold text-white">${t.entidad}</div></td>
+          <td class="text-center">${t.incidenciasAbiertas}</td>
+          <td class="text-center">${t.tiempoMedioResolucion}h</td>
+          <td class="text-center">
+            <div class="d-flex align-items-center gap-2">
+              <span class="${moraClase} fw-bold">${t.tasaMora}%</span>
+              <div class="dash-progress-container flex-grow-1" style="width:60px;">
+                <div class="dash-progress-bar" style="width: ${Math.min(t.tasaMora, 100)}%; background: ${moraBar};"></div>
+              </div>
+            </div>
+          </td>
+          <td class="text-center"><span class="dash-badge ${slaClase}">${t.estadoSLA}</span></td>
+        </tr>
+      `;
+      });
+
+      document.getElementById('m4-tabla-body').innerHTML = html;
+    }
+  };
+</script>

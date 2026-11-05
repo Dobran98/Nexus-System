@@ -1,0 +1,190 @@
+<h4 class="fw-bold mb-4">Gestión de Formularios</h4>
+<div id="contenedor-lista-formularios">
+  <button class="btn btn-vibrant-success mb-3 px-4 rounded-pill" onclick="mostrarEditorForm()"><i
+      class="fas fa-plus me-2"></i>Crear Nuevo Formulario</button>
+  <div class="glass-card p-4">
+    <div class="table-responsive">
+      <table class="table custom-table">
+        <thead>
+          <tr>
+            <th>Nombre del Formulario</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-formularios-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="contenedor-editor-formulario" style="display:none;">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <button class="btn btn-light rounded-pill shadow-sm" onclick="cancelarEdicionForm()"><i
+        class="fas fa-arrow-left me-2"></i> Volver al listado</button>
+    <h4 class="fw-bold m-0" id="titulo-editor-form">Nuevo Formulario</h4>
+    <button class="btn btn-vibrant-success px-4 rounded-pill fw-bold" onclick="guardarFormulario()">Guardar
+      Formulario</button>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="glass-card p-4 mb-4">
+        <h6 class="fw-bold mb-3 text-primary">1. Configuración Básica</h6>
+        <div class="mb-3">
+          <label class="form-label small fw-bold">Nombre del Formulario</label>
+          <input type="text" id="nuevo-form-nombre" class="form-control custom-form-control"
+            placeholder="Ej: Venta Directa">
+          <input type="hidden" id="form-fila">
+        </div>
+      </div>
+      
+      <div class="glass-card p-4 mb-4">
+        <h6 class="fw-bold mb-3 text-primary"><i class="fas fa-layer-group me-2"></i>2. Gestión de Secciones</h6>
+        <p class="small text-muted mb-2">Agrupa campos para mostrarlos/ocultarlos dinámicamente.</p>
+        <div class="d-flex mb-2">
+          <input type="text" id="nueva-seccion-nombre" class="form-control form-control-sm me-2" placeholder="Ej: Datos de Venta">
+          <button class="btn btn-sm btn-primary" onclick="agregarSeccionForm()"><i class="fas fa-plus"></i></button>
+        </div>
+        <div id="lista-secciones-form" class="mt-2"></div>
+      </div>
+
+      <div class="glass-card p-4">
+        <h6 class="fw-bold mb-3 text-primary">3. Añadir Elementos</h6>
+        <div class="d-grid gap-2" style="max-height: 400px; overflow-y: auto; padding-right: 5px;">
+          <button class="btn btn-outline-primary btn-sm text-start" onclick="habilitarInputCampo('texto')"><i class="fas fa-font me-2"></i> Texto Corto</button>
+          <button class="btn btn-outline-primary btn-sm text-start" onclick="habilitarInputCampo('textarea')"><i class="fas fa-align-left me-2"></i> Texto Largo (Obs.)</button>
+          <button class="btn btn-outline-secondary btn-sm text-start" onclick="habilitarInputCampo('numerico')"><i class="fas fa-hashtag me-2"></i> Numérico</button>
+          <button class="btn btn-outline-secondary btn-sm text-start" onclick="habilitarInputCampo('porcentaje')"><i class="fas fa-percent me-2"></i> Porcentual (%)</button>
+          <button class="btn btn-outline-success btn-sm text-start" onclick="habilitarInputCampo('telefono')"><i class="fas fa-phone me-2"></i> Teléfono Simple</button>
+          <button class="btn btn-outline-success btn-sm text-start" onclick="habilitarInputCampo('telefono_ve')"><i class="fas fa-mobile-alt me-2"></i> Teléfono (VZLA 2025)</button>
+          <button class="btn btn-outline-danger btn-sm text-start" onclick="habilitarInputCampo('correo')"><i class="fas fa-envelope me-2"></i> Correo</button>
+          <button class="btn btn-outline-info btn-sm text-start" onclick="habilitarInputCampo('fecha')"><i class="fas fa-calendar me-2"></i> Fecha</button>
+          <button class="btn btn-outline-dark btn-sm text-start" onclick="habilitarInputCampo('documento_identidad')"><i class="fas fa-id-card me-2"></i> Documento Identidad</button>
+          <hr class="my-1">
+          <button class="btn btn-outline-secondary btn-sm text-start" onclick="habilitarInputCampo('checkbox')"><i class="fas fa-check-square me-2"></i> Checkbox Dinámico</button>
+          <button class="btn btn-outline-dark btn-sm text-start" onclick="habilitarInputCampo('radio')"><i class="fas fa-dot-circle me-2"></i> Radio Button</button>
+          <button class="btn btn-outline-primary btn-sm text-start" onclick="habilitarInputCampo('select_busqueda')"><i class="fas fa-search me-2"></i> Desplegable c/ Búsqueda</button>
+          <button class="btn btn-outline-warning btn-sm text-start" onclick="habilitarInputCampo('cascada')"><i class="fas fa-stream me-2"></i> Lista en Cascada (IVR)</button>
+          <hr class="my-1">
+          <button class="btn btn-outline-warning btn-sm text-start" onclick="habilitarInputCampo('guion')"><i class="fas fa-comment-dots me-2"></i> Bloque de Guion (Lectura)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="glass-card p-4" style="min-height: 400px;">
+        <div id="config-campo-nuevo" class="p-3 bg-light rounded-3 mb-4"
+          style="display:none; border: 2px dashed #0061ff;">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label id="label-tipo-nuevo" class="form-label extra-small fw-bold text-uppercase text-primary m-0"></label>
+            <div class="d-flex align-items-center gap-3">
+              <div class="form-check form-switch" id="container-campo-obligatorio">
+                <input class="form-check-input" type="checkbox" id="campo-obligatorio">
+                <label class="form-check-label small fw-bold" for="campo-obligatorio">¿Obligatorio?</label>
+              </div>
+              <button id="btn-mas-opciones" class="btn btn-primary btn-sm rounded-circle"
+                style="display:none; width:24px; height:24px; padding:0; line-height:1;"
+                onclick="agregarOpcionMultipleInput()"><i class="fas fa-plus"></i></button>
+            </div>
+          </div>
+
+          <div id="wrapper-input-normal">
+            <div class="mb-3">
+              <input type="text" id="input-label-nuevo" class="form-control"
+                placeholder="Escribe la pregunta o etiqueta principal">
+            </div>
+
+            <!-- Nuevos Campos de Configuración -->
+            <div class="row g-2 mb-3" id="config-avanzada-container">
+              <div class="col-md-6" id="config-seccion">
+                <select id="campo-seccion" class="form-select form-select-sm">
+                  <option value="">[Sin Sección - Siempre Visible]</option>
+                </select>
+              </div>
+              <div class="col-md-3" id="config-min-length" style="display:none;">
+                <input type="number" id="campo-min-length" class="form-control form-control-sm" placeholder="Mín. Caracteres">
+              </div>
+              <div class="col-md-3" id="config-max-length" style="display:none;">
+                <input type="number" id="campo-max-length" class="form-control form-control-sm" placeholder="Máx. Caracteres">
+              </div>
+            </div>
+
+            <div id="config-guion-container" style="display:none;" class="mb-3">
+              <textarea id="campo-guion-contenido" class="form-control form-control-sm mb-2" rows="4" placeholder="Escribe aquí el guion que el operador debe leer..."></textarea>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="campo-guion-confirmacion">
+                <label class="form-check-label small fw-bold text-primary" for="campo-guion-confirmacion">
+                  Exigir confirmación ("He leído esto al cliente")
+                </label>
+              </div>
+            </div>
+
+            <div id="config-doc-container" style="display:none;" class="mb-3">
+              <p class="small text-muted mb-1">Los prefijos fijos son V-, E-, J-, G-. El campo solo aceptará números (sin puntos).</p>
+            </div>
+
+            <div id="config-territorio-container" style="display:none;" class="mb-3">
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <label class="extra-small fw-bold text-uppercase text-muted d-block mb-1">Nombre Pestaña (Hoja)</label>
+                  <input type="text" id="campo-territorio-pestana" class="form-control form-control-sm" placeholder="Ej: Estados" value="Estados">
+                </div>
+                <div class="col-md-4">
+                  <label class="extra-small fw-bold text-uppercase text-muted d-block mb-1">Columna de Datos</label>
+                  <select id="campo-territorio-fuente" class="form-select form-select-sm" onchange="verificarDependenciaTerritorio()">
+                    <option value="0">Nivel 1 (Columna A - Raíz)</option>
+                    <option value="1">Nivel 2 (Columna B)</option>
+                    <option value="2">Nivel 3 (Columna C)</option>
+                    <option value="3">Nivel 4 (Columna D)</option>
+                    <option value="4">Nivel 5 (Columna E)</option>
+                  </select>
+                </div>
+                <div class="col-md-4" id="wrapper-depende-de" style="display:none;">
+                  <label class="extra-small fw-bold text-uppercase text-muted d-block mb-1">Depende del campo (Padre):</label>
+                  <select id="campo-territorio-depende" class="form-select form-select-sm">
+                    <option value="">[Sin dependencia]</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div id="opciones-cascada-container" style="display:none;" class="mb-3">
+              <p class="small text-muted mb-2">Define las opciones y las <b>Super Reglas</b>
+                (Mostrar/Ocultar campos o secciones).</p>
+              <div id="ivr-options-list"></div>
+              <button class="btn btn-sm btn-link text-primary p-0 mt-2" onclick="agregarOpcionCascada()"><i
+                  class="fas fa-plus"></i> Agregar Opción</button>
+            </div>
+
+            <div id="opciones-multiples-container" style="display:none;" class="mb-3">
+              <div id="multiples-inputs-list" class="row g-2"></div>
+            </div>
+
+            <div class="d-flex gap-2 mt-3">
+              <button id="btn-confirmar-campo" class="btn btn-vibrant-primary w-100"
+                onclick="confirmarAgregarCampo()">Añadir al
+                Formulario</button>
+              <button class="btn btn-outline-danger" onclick="cancelarNuevoCampo()">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <h6 class="fw-bold mb-3">Diseño del Formulario</h6>
+        <div id="contenedor-campos-dinamicos">
+          <p class="text-muted text-center py-5">Usa el panel de la izquierda para diseñar tu formulario.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="contenedor-vista-previa" style="display:none;">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <button class="btn btn-light rounded-pill shadow-sm" onclick="cerrarVistaPrevia()"><i
+        class="fas fa-arrow-left me-2"></i> Volver al listado</button>
+    <h4 class="fw-bold m-0 text-primary">Vista Previa: <span id="preview-form-nombre"></span></h4>
+    <div></div>
+  </div>
+  <div class="glass-card p-4 mx-auto" style="max-width: 800px;">
+    <div id="preview-formulario-dinamico"></div>
+  </div>
+</div>

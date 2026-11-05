@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;700&display=swap"
+    rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <script>
+    const PREVIEW_FORM_NAME = "<?= previewFormName ?>";
+  </script>
+  <?!= '<script>window.FUENTES_DATOS = ' + JSON.stringify(obtenerFuentesDatos()) + '; window.ESTADOS_DATA = window.FUENTES_DATOS["Estados"] || [];</script>' ?>
+
+  <?!= include('Estilos'); ?>
+  <?!= include('DashboardEstilos'); ?>
+
+  <style>
+    /* Titulo de incidencias encontradas */
+    .titulo-incidencias-encontradas {
+      color: #f59e0b;
+      font-weight: 700;
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+    }
+
+    #lista-incidencias-operador {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .card-incidencia-wrapper {
+      transition: all 0.3s ease;
+    }
+
+    /* ESTADO INACTIVO: ES UN CUADRADO */
+    .card-incidencia-wrapper:not(.active) {
+      width: 140px;
+      height: 140px;
+    }
+
+    /* ESTADO ACTIVO: SE EXPANDE AL 100% PARA MOSTRAR EL FORMULARIO */
+    .card-incidencia-wrapper.active {
+      width: 100%;
+      flex-basis: 100%;
+    }
+
+    .card-incidencia-header {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+
+    /* HEADER INACTIVO: Centrado y cuadrado */
+    .card-incidencia-wrapper:not(.active) .card-incidencia-header {
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      padding: 10px;
+      border-top: 5px solid #4f46e5;
+      border-left: 1px solid #e2e8f0;
+    }
+
+    .card-incidencia-wrapper:not(.active) .card-incidencia-header:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    /* HEADER ACTIVO: Fila horizontal ancha */
+    .card-incidencia-wrapper.active .card-incidencia-header {
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 20px;
+      height: auto;
+      border-left: 5px solid #4f46e5;
+      border-top: 1px solid #e2e8f0;
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+    }
+
+    .card-incidencia-title {
+      color: #4f46e5;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+    }
+
+    .card-incidencia-wrapper:not(.active) .card-incidencia-title {
+      flex-direction: column;
+      font-size: 0.95rem;
+    }
+
+    .card-incidencia-wrapper:not(.active) .card-incidencia-title i {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+      margin-right: 0 !important;
+    }
+
+    .card-incidencia-wrapper.active .card-incidencia-title {
+      flex-direction: row;
+      font-size: 1.1rem;
+    }
+
+    .card-incidencia-wrapper.active .card-incidencia-title i {
+      font-size: 1.2rem;
+      margin-bottom: 0;
+      margin-right: 10px;
+    }
+
+    .card-incidencia-wrapper:not(.active) .icon-chevron {
+      display: none;
+    }
+
+    .icon-chevron {
+      color: #64748b;
+      transition: transform 0.3s ease;
+    }
+
+    .card-incidencia-body {
+      display: none;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-top: none;
+      border-bottom-left-radius: 12px;
+      border-bottom-right-radius: 12px;
+      padding: 20px;
+      margin-top: 0;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    .card-incidencia-wrapper.active .card-incidencia-body {
+      display: block;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .card-incidencia-wrapper.active .icon-chevron {
+      transform: rotate(180deg);
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="pantalla-carga"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); z-index: 10000; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(3px);">
+    <div class="spinner-border text-primary" style="width: 3.5rem; height: 3.5rem;" role="status"></div>
+    <h5 class="mt-3 fw-bold text-primary" id="texto-carga">Procesando...</h5>
+  </div>
+
+  <div id="login-page" class="login-container">
+    <div class="login-card">
+      <div class="icon-box-blue"><i class="fas fa-shield-halved"></i></div>
+      <h2 class="mt-3">Sistema Briana</h2>
+      <div class="mt-4">
+        <div class="mb-3 custom-input"><i class="fas fa-user"></i><input type="text" id="usuario" placeholder="Usuario"
+            onkeydown="if(event.key === 'Enter') login()">
+        </div>
+        <div class="mb-3 custom-input"><i class="fas fa-lock"></i><input type="password" id="password"
+            placeholder="Contraseña" onkeydown="if(event.key === 'Enter') login()"></div>
+        <div class="mb-4 custom-input"><i class="fas fa-headset"></i><input type="text" id="extension"
+            placeholder="Extensión" maxlength="5"
+            oninput="if(this.value.length > 0) { if(!this.value.startsWith('110')) this.value = '110'; this.value = '110' + this.value.substring(3).replace(/\D/g,'').slice(0,2); }"
+            onkeydown="if(this.selectionStart < 3 && event.key === 'Backspace') { if(this.value.length <= 3) this.value = ''; else event.preventDefault(); } if(event.key === 'Enter') login();">
+        </div>
+        <button class="btn btn-modern-blue w-100" onclick="login()">Iniciar Sesión</button>
+      </div>
+      <div id="loader-login" class="mt-3 text-center" style="display:none;">
+        <div class="spinner-border text-primary spinner-border-sm"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="home-page" style="display: none;">
+    <aside class="sidebar" id="sidebar-admin" style="display:none;">
+      <div class="sidebar-brand"><i class="fas fa-layer-group"></i> <span>BRIANA ADMINISTRADOR</span></div>
+
+      <div class="sidebar-nav">
+        <a class="nav-link-custom d-flex justify-content-between align-items-center" id="btn-nav-campanas-main"
+          data-bs-toggle="collapse" href="#collapseCampanas" role="button" aria-expanded="true"
+          aria-controls="collapseCampanas" style="text-decoration: none;">
+          <span><i class="fas fa-bullhorn me-2"></i> Campañas</span>
+          <i class="fas fa-chevron-down" style="font-size: 0.8rem;"></i>
+        </a>
+        <div class="collapse show" id="collapseCampanas">
+          <button class="nav-link-custom active w-100 text-start" id="btn-nav-campanas-salientes"
+            onclick="mostrarSeccion('campanas-salientes')"
+            style="padding-left: 2.8rem; font-size: 0.9rem; margin-bottom: 5px;"><i class="fas fa-phone-slash me-2"></i>
+            Salientes</button>
+          <button class="nav-link-custom w-100 text-start" id="btn-nav-campanas-entrantes"
+            onclick="mostrarSeccion('campanas-entrantes')"
+            style="padding-left: 2.8rem; font-size: 0.9rem; margin-bottom: 5px;"><i
+              class="fas fa-phone-volume me-2"></i> Entrantes</button>
+        </div>
+
+        <button class="nav-link-custom mt-2" id="btn-nav-formularios" onclick="mostrarSeccion('formularios')"><i
+            class="fas fa-file-alt me-2"></i> Formularios</button>
+        <button class="nav-link-custom" id="btn-nav-usuarios" onclick="mostrarSeccion('usuarios')"><i
+            class="fas fa-users me-2"></i> Usuarios</button>
+        <button class="nav-link-custom mt-2" id="btn-nav-dashboard" onclick="mostrarSeccion('dashboard')"><i
+            class="fas fa-chart-pie me-2"></i> Dashboard</button>
+        <button class="nav-link-custom" id="btn-nav-supervisor" onclick="mostrarSeccion('supervisor')"><i
+            class="fas fa-chart-line me-2"></i> Supervisor</button>
+        <button class="nav-link-custom" id="btn-nav-ranking" onclick="mostrarSeccion('ranking')"><i
+            class="fas fa-trophy me-2"></i> Ranking</button>
+      </div>
+
+      <div class="sidebar-footer">
+        <div id="label-rol-admin" class="badge-role mb-3 text-center"></div>
+        <button class="btn-dark-mode-toggle mb-2 w-100" onclick="toggleDarkMode()"><i class="fas fa-moon"></i> Modo
+          Oscuro</button>
+        <button class="btn-logout-sidebar mb-2" style="background: #f59e0b; color: #fff;"
+          onclick="forzarRefrescoGlobal()"><i class="fas fa-sync-alt"></i> Refrescar Sistema</button>
+        <button class="btn-logout-sidebar" onclick="logout()"><i class="fas fa-power-off"></i> Salir</button>
+      </div>
+    </aside>
+
+    <aside class="sidebar" id="sidebar-operador" style="display:none;">
+      <div class="sidebar-brand"><i class="fas fa-headset"></i> <span>BRIANA OPERADOR</span></div>
+      <div class="sidebar-nav">
+        <button class="nav-link-custom active" id="btn-nav-op-campanas"
+          onclick="mostrarSeccionOperador('mis-campanas')">
+          <i class="fas fa-tasks"></i> Mis Campañas
+        </button>
+        <button class="nav-link-custom" id="btn-nav-op-stats" onclick="mostrarSeccionOperador('mis-estadisticas')">
+          <i class="fas fa-chart-bar"></i> Estadísticas
+        </button>
+      </div>
+      <div class="sidebar-footer">
+        <div id="label-rol-operador" class="badge-role mb-2 text-center"></div>
+        <div id="label-extension-operador" class="badge-role mb-3 text-center"
+          style="background:#0284c7 !important; color: white !important;"></div>
+        <button class="btn-dark-mode-toggle mb-2 w-100" onclick="toggleDarkMode()"><i class="fas fa-moon"></i> Modo
+          Oscuro</button>
+        <button class="btn-logout-sidebar" onclick="logout()"><i class="fas fa-power-off"></i> Salir</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div id="vista-admin" style="display:none;">
+
+        <div id="seccion-campanas">
+
+          <div id="contenedor-lista-campanas">
+            <h4 class="fw-bold mb-4" id="titulo-panel-campanas">Panel de Campañas Salientes</h4>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button class="btn btn-primary px-4 rounded-pill" onclick="prepararCreacion()"><i
+                  class="fas fa-plus me-2"></i>Nueva Campaña</button>
+              <button class="btn btn-warning px-4 rounded-pill text-dark fw-bold shadow-sm"
+                onclick="abrirModalAnalisisContactos()"><i class="fas fa-chart-pie me-2"></i>Análisis de
+                Contactos</button>
+              <button class="btn btn-vibrant-primary px-4 rounded-pill fw-bold shadow-sm"
+                onclick="abrirModalReactivacion()"
+                style="background: linear-gradient(135deg,#7c3aed,#4f46e5);border:none;">
+                <i class="fas fa-bolt me-2"></i>Reporte de Reactivación</button>
+              <button id="btn-descargar-reporte-global" class="btn btn-success px-4 rounded-pill fw-bold shadow-sm"
+                onclick="abrirModalReporteEstadistico()" style="display:none;"><i
+                  class="fas fa-file-excel me-2"></i>Descargar Reporte</button>
+            </div>
+            <div class="glass-card p-4">
+              <div class="mb-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="search-container-premium">
+                  <div class="input-group search-group-modern">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" id="buscador-campanas" class="form-control"
+                      placeholder="Buscar por nombre o descripción..." onkeyup="evaluarBusqueda(event)"
+                      oninput="filtrarCampanas()">
+                    <button class="btn-clear-search" id="btn-clear-campanas" onclick="limpiarBuscadorCampanas()"
+                      style="display:none;">
+                      <i class="fas fa-times"></i>
+                    </button>
+                    <button class="btn-search-action" onclick="filtrarCampanas()" title="Buscar">
+                      <i class="fas fa-search"></i>
+                    </button>
+                  </div>
+                </div>
+                <div id="info-paginacion-campanas" class="info-label-premium"></div>
+              </div>
+              <div class="table-responsive">
+                <table class="table custom-table">
+                  <thead>
+                    <tr>
+                      <th>Información de la Campaña</th>
+                      <th>Vigencia</th>
+                      <th>Estatus</th>
+                      <th class="text-end">Opciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabla-campanas-body"></tbody>
+                </table>
+              </div>
+              <div id="paginacion-campanas" class="mt-3 d-flex justify-content-center gap-2"></div>
+            </div>
+          </div>
+
+          <div id="contenedor-editor-campana" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <button class="btn btn-light rounded-pill shadow-sm" onclick="regresarALista()"><i
+                  class="fas fa-arrow-left me-2"></i> Volver al listado</button>
+              <h4 class="fw-bold m-0" id="titulo-editor-campana">Nueva Campaña</h4>
+              <button class="btn btn-vibrant-success px-4 rounded-pill fw-bold" onclick="procesarCampana()">Guardar
+                Campaña</button>
+            </div>
+
+            <div class="glass-card p-4 mx-auto" style="max-width: 800px;">
+              <input type="hidden" id="campana-fila">
+              <input type="hidden" id="campana-reporte-id">
+              <input type="hidden" id="campana-columnas-visibles">
+
+              <div class="mb-3"><label class="form-label small fw-bold">Nombre</label><input type="text"
+                  id="campana-nombre" class="form-control custom-form-control"></div>
+              <div class="row">
+                <div class="col-6 mb-3"><label class="form-label small fw-bold">Inicio</label><input type="date"
+                    id="campana-fecha" class="form-control custom-form-control"></div>
+                <div class="col-6 mb-3"><label class="form-label small fw-bold">Fin</label><input type="date"
+                    id="campana-fecha-fin" class="form-control custom-form-control"></div>
+              </div>
+              <div class="mb-3"><label class="form-label small fw-bold">Descripción</label><textarea
+                  id="campana-descripcion" class="form-control custom-form-control" rows="2"></textarea></div>
+              <div class="mb-3"><label class="form-label small fw-bold">Diálogo Sugerido</label><textarea
+                  id="campana-dialogo" class="form-control custom-form-control" rows="3"></textarea></div>
+              <div class="mb-3"><label class="form-label small fw-bold">Cargar Formulario</label><select
+                  id="campana-form-id" class="form-select custom-form-control">
+                  <option value="">Ninguno</option>
+                </select></div>
+
+              <div class="mb-3">
+                <label class="form-label fw-bold small">Tipo de Campaña</label>
+                <select class="form-select custom-form-control" id="campana-tipo-direccion"
+                  onchange="toggleDistribucion()">
+                  <option value="Saliente">Saliente (Marcación / Con Base de Datos)</option>
+                  <option value="Entrante">Entrante (0-800 / Receptiva / Sin Base de Datos)</option>
+                </select>
+              </div>
+
+              <div class="row">
+                <div class="col-6 mb-3">
+                  <label class="form-label small fw-bold text-success"><i class="fas fa-bullseye me-2"></i>Meta
+                    Efectividad (%)</label>
+                  <input type="number" id="campana-meta" class="form-control custom-form-control" placeholder="Ej: 85"
+                    min="0" max="100">
+                </div>
+                <div class="col-6 mb-3">
+                  <label class="form-label small fw-bold text-warning"><i class="fas fa-clock me-2"></i>SLA Esperado
+                    (Horas)</label>
+                  <input type="number" id="campana-sla" class="form-control custom-form-control" placeholder="Ej: 24"
+                    min="0">
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                  <label class="form-label small fw-bold m-0">Accesos de Operadores</label>
+                  <div class="d-flex flex-wrap gap-2 justify-content-end">
+                    <button class="btn btn-sm btn-outline-info py-0 px-2" type="button"
+                      onclick="seleccionarPorTurno('mañana')"><i class="fas fa-sun me-1"></i>Mañana</button>
+                    <button class="btn btn-sm btn-outline-warning py-0 px-2" type="button"
+                      onclick="seleccionarPorTurno('tarde')"><i class="fas fa-moon me-1"></i>Tarde</button>
+                    <button class="btn btn-sm btn-outline-success py-0 px-2" type="button"
+                      onclick="seleccionarTodosUsuarios()"><i class="fas fa-check-square me-1"></i>Todos</button>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-2" type="button"
+                      onclick="deseleccionarTodosUsuarios()"><i class="fas fa-square me-1"></i>Ninguno</button>
+                  </div>
+                </div>
+                <input type="text" id="buscador-usuarios" class="form-control custom-form-control mb-2"
+                  placeholder="Buscar usuario..." onkeyup="filtrarUsuarios()">
+                <div id="contenedor-usuarios-checkboxes" class="border rounded p-2 custom-form-control"
+                  style="height: 150px; overflow-y: auto; background-color: #fff;">
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center justify-content-between p-3 bg-light rounded-3 mt-4">
+                <span class="fw-bold">Estatus: <span id="texto-estatus">Activa</span></span>
+                <div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="campana-estatus"
+                    checked onchange="actualizarTextoEstatus()"></div>
+              </div>
+
+              <div class="mt-4 p-3 border rounded-3 bg-white shadow-sm" id="bloque-modo-asignacion">
+                <label class="form-label small fw-bold text-primary"><i class="fas fa-network-wired me-2"></i>Modo de
+                  Asignación</label>
+                <select id="campana-tipo-asignacion" class="form-select custom-form-control mb-3"
+                  onchange="toggleDistribucion()">
+                  <option value="Issabel">Issabel (Automático / Externo)</option>
+                  <option value="Manual">Manual (Por rangos de filas)</option>
+                  <option value="Incidencias">Incidencias</option>
+                  <option value="ExploracionDuplicados">Exploración de Duplicados</option>
+                </select>
+
+                <div id="contenedor-distribucion-manual" style="display:none;">
+                  <div class="d-flex justify-content-between align-items-end mb-2 pb-2 border-bottom">
+                    <div>
+                      <label class="form-label small fw-bold m-0">Distribución de Filas por Operador</label>
+                      <small class="text-muted d-block">Asigna los rangos (Ej: 1-30)</small>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                      <input type="number" id="total-filas-distribuir"
+                        class="form-control form-control-sm custom-form-control" placeholder="Total filas"
+                        style="width: 100px;">
+                      <button class="btn btn-sm btn-primary" onclick="autoDistribuirFilas()"><i
+                          class="fas fa-magic me-1"></i> Auto Distribuir</button>
+                    </div>
+                  </div>
+                  <div id="lista-distribucion-operadores" class="pt-2">
+                    <p class="text-muted small text-center m-0 py-2">Selecciona operadores arriba para asignar filas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div id="contenedor-data-campana" style="display:none;">
+            <button class="btn btn-light mb-4 rounded-pill shadow-sm" onclick="regresarALista()"><i
+                class="fas fa-arrow-left me-2"></i> Volver</button>
+            <div class="glass-card p-4">
+              <h4 id="data-nombre-campana" class="fw-bold mb-3 text-primary">Cargar Base de Datos</h4>
+              <div class="p-3 border rounded-3 bg-light mb-4">
+                <label class="form-label fw-bold">Seleccionar archivo (Excel o CSV)</label>
+                <input type="file" id="input-archivo-data" class="form-control" accept=".csv, .xlsx, .xls">
+                <button class="btn btn-vibrant-primary mt-3 w-100 rounded-pill" onclick="procesarArchivoData()">Subir y
+                  Procesar</button>
+              </div>
+              <div id="loading-data" style="display:none;" class="text-center mb-3">
+                <div class="spinner-border text-primary"></div>
+              </div>
+              <div class="table-responsive" style="max-height: 400px;">
+                <table class="table table-sm table-hover border">
+                  <thead id="cabecera-data-preview" class="table-dark"></thead>
+                  <tbody id="cuerpo-data-preview"></tbody>
+                </table>
+              </div>
+
+              <div id="bloque-config-columnas" class="mt-4 p-4 border rounded-3 bg-white shadow-sm"
+                style="display:none;">
+                <h6 class="fw-bold text-primary mb-3"><i class="fas fa-columns me-2"></i>Columnas Visibles para el
+                  Operador</h6>
+                <p class="small text-muted mb-3">Selecciona qué columnas de la base de datos se mostrarán en la pantalla
+                  del operador.</p>
+                <div id="lista-columnas-data" class="d-flex flex-wrap gap-4 mb-4"></div>
+                <button class="btn btn-vibrant-success px-4 rounded-pill fw-bold" onclick="guardarConfigColumnas()"><i
+                    class="fas fa-save me-2"></i> Guardar Configuración</button>
+              </div>
+
+            </div>
+          </div>
+
+          <div id="contenedor-reporte-campana" style="display:none;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <button class="btn btn-light rounded-pill shadow-sm" onclick="regresarALista()"><i
+                  class="fas fa-arrow-left me-2"></i> Volver</button>
+              <button class="btn btn-vibrant-success rounded-pill px-4 fw-bold" onclick="descargarReporteExcel()"><i
+                  class="fas fa-file-excel me-2"></i>Descargar Excel</button>
+            </div>
+            <div class="glass-card p-4">
+              <h4 id="reporte-nombre-campana" class="fw-bold mb-3 text-success">Reporte de Gestiones</h4>
+              <div class="table-responsive" style="max-height: 500px;">
+                <table class="table table-sm table-hover border small">
+                  <thead id="cabecera-reporte" class="table-success text-uppercase"></thead>
+                  <tbody id="cuerpo-reporte"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div id="contenedor-stats-campana" style="display:none;">
+            <button class="btn btn-light mb-4 rounded-pill shadow-sm" onclick="regresarALista()"><i
+                class="fas fa-arrow-left me-2"></i> Volver</button>
+            <h4 id="stats-nombre-campana" class="fw-bold mb-4 text-primary"></h4>
+
+            <div class="row g-3 mb-5">
+              <div class="col-md">
+                <div class="stat-card card-exitosas"><i class="fas fa-check-circle icon-bg"></i>
+                  <div class="stat-value" id="val-exitosas">0</div>
+                  <div class="stat-label">Exitosas</div>
+                </div>
+              </div>
+              <div class="col-md">
+                <div class="stat-card card-fallidas"><i class="fas fa-times-circle icon-bg"></i>
+                  <div class="stat-value" id="val-fallidas">0</div>
+                  <div class="stat-label">Fallidas</div>
+                </div>
+              </div>
+
+              <div class="col-md">
+                <div class="stat-card card-total"
+                  style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);"><i
+                    class="fas fa-headset icon-bg"></i>
+                  <div class="stat-value" id="val-total-realizadas">0</div>
+                  <div class="stat-label">Total Realizadas</div>
+                </div>
+              </div>
+
+              <div class="col-md">
+                <div class="stat-card card-efectividad"
+                  style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);"><i
+                    class="fas fa-chart-line icon-bg"></i>
+                  <div class="stat-value" id="val-efectividad-gestiones">0%</div>
+                  <div class="stat-label">Efectividad Gestiones</div>
+                </div>
+              </div>
+
+              <div class="col-md">
+                <div class="stat-card card-total"><i class="fas fa-database icon-bg"></i>
+                  <div class="stat-value" id="val-total-data">0</div>
+                  <div class="stat-label">Total Gestiones</div>
+                </div>
+              </div>
+
+              <div class="col-md">
+                <div class="stat-card card-efectividad"><i class="fas fa-percent icon-bg"></i>
+                  <div class="stat-value" id="val-efectividad">0%</div>
+                  <div class="stat-label">Efectividad</div>
+                </div>
+              </div>
+
+              <div class="col-md" id="col-stat-incidencias" style="display: none;">
+                <div class="stat-card" style="background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%);">
+                  <i class="fas fa-ticket-alt icon-bg"></i>
+                  <div class="stat-value" id="val-incidencias-abarcadas">0</div>
+                  <div class="stat-label">Incidencias Abarcadas</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-5 glass-card p-4">
+              <h5 class="fw-bold mb-3 text-primary"><i class="fas fa-users me-2"></i>Rendimiento por Operador</h5>
+              <div class="table-responsive">
+                <table class="table custom-table table-hover">
+                  <thead>
+                    <tr>
+                      <th>Operador</th>
+                      <th class="text-center">Exitosas</th>
+                      <th class="text-center">Fallidas</th>
+                      <th class="text-center">Total Realizadas</th>
+                      <th class="text-center">% de Efectividad</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabla-stats-operadores">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div id="seccion-formularios" style="display:none;">
+          <?!= include('Formulario'); ?>
+        </div>
+
+        <div id="seccion-usuarios" style="display:none;">
+          <h4 class="fw-bold mb-4">Gestión de Usuarios</h4>
+          <div class="glass-card p-4 mb-4">
+            <h5 id="titulo-form-usuario" class="fw-bold mb-3 text-primary"><i class="fas fa-user-plus me-2"></i>Crear
+              Nuevo Usuario</h5>
+            <input type="hidden" id="nuevo-user-fila">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-3">
+                <label class="form-label small fw-bold">Usuario</label>
+                <input type="text" id="nuevo-user-nombre" class="form-control custom-form-control">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small fw-bold">Contraseña</label>
+                <input type="password" id="nuevo-user-pass" class="form-control custom-form-control">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold">Rol</label>
+                <select id="nuevo-user-rol" class="form-select custom-form-control">
+                  <option value="admin">admin</option>
+                  <option value="Analista">Analista</option>
+                  <option value="Operadores">Operadores</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small fw-bold">Turno</label>
+                <select id="nuevo-user-turno" class="form-select custom-form-control">
+                  <option value="mañana">Mañana</option>
+                  <option value="tarde">Tarde</option>
+                </select>
+              </div>
+              <div class="col-md-2 d-flex align-items-center mb-1">
+                <div class="form-check form-switch mt-4">
+                  <input class="form-check-input" type="checkbox" id="nuevo-user-permiso-reporte">
+                  <label class="form-check-label small fw-bold" for="nuevo-user-permiso-reporte">Reporte</label>
+                </div>
+              </div>
+              <div class="col-md-2 d-flex align-items-center mb-1">
+                <div class="form-check form-switch mt-4">
+                  <input class="form-check-input" type="checkbox" id="nuevo-user-permiso-reporte">
+                  <label class="form-check-label small fw-bold" for="nuevo-user-permiso-reporte">Habilitar
+                    Reporte</label>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <button id="btn-guardar-usuario" class="btn btn-vibrant-primary w-100 rounded-pill fw-bold py-2"
+                  onclick="guardarUsuario()"><i class="fas fa-save me-2"></i> Registrar</button>
+                <button id="btn-cancelar-edicion-usuario"
+                  class="btn btn-outline-danger w-100 rounded-pill fw-bold py-2 mt-2" style="display:none;"
+                  onclick="cancelarEdicionUsuario()">Cancelar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card p-4">
+            <h5 class="fw-bold mb-3 text-primary"><i class="fas fa-list me-2"></i>Lista de Usuarios</h5>
+            <div class="table-responsive">
+              <table class="table custom-table">
+                <thead>
+                  <tr>
+                    <th>Usuario</th>
+                    <th>Contraseña</th>
+                    <th>Rol</th>
+                    <th>Turno</th>
+                    <th class="text-end">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-usuarios-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECCIÓN SUPERVISOR -->
+        <div id="seccion-supervisor" style="display:none;">
+          <h4 class="fw-bold mb-4"><i class="fas fa-chart-line me-2"></i>Panel de Supervisor en Tiempo Real</h4>
+
+          <!-- Métricas Globales -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-3">
+              <div class="stat-card card-total">
+                <i class="fas fa-headset icon-bg"></i>
+                <div class="stat-value" id="sup-llamadas-hoy">0</div>
+                <div class="stat-label">Llamadas Hoy</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card card-exitosas">
+                <i class="fas fa-check-circle icon-bg"></i>
+                <div class="stat-value" id="sup-exitosas-hoy">0</div>
+                <div class="stat-label">Exitosas</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card card-fallidas">
+                <i class="fas fa-times-circle icon-bg"></i>
+                <div class="stat-value" id="sup-fallidas-hoy">0</div>
+                <div class="stat-label">Fallidas</div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="stat-card card-efectividad">
+                <i class="fas fa-bolt icon-bg"></i>
+                <div class="stat-value" id="sup-efectividad-hoy">0%</div>
+                <div class="stat-label">Efectividad</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-4">
+            <!-- Operadores Activos -->
+            <div class="col-md-4">
+              <div class="glass-card p-4">
+                <h5 class="fw-bold mb-3 text-primary"><i class="fas fa-users me-2"></i>Operadores Conectados</h5>
+                <div id="lista-operadores-activos" class="d-flex flex-wrap gap-2">
+                  <p class="text-muted">Cargando...</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Campañas Activas -->
+            <div class="col-md-4">
+              <div class="glass-card p-4">
+                <h5 class="fw-bold mb-3 text-success"><i class="fas fa-bullhorn me-2"></i>Campañas Activas</h5>
+                <div id="lista-campanas-activas-supervisor">
+                  <p class="text-muted">Cargando...</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Últimos Registros -->
+            <div class="col-md-4">
+              <div class="glass-card p-4">
+                <h5 class="fw-bold mb-3 text-warning"><i class="fas fa-clock me-2"></i>Últimas Gestiones</h5>
+                <div id="lista-ultimas-gestiones" style="max-height: 200px; overflow-y: auto;">
+                  <p class="text-muted">Cargando...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Botón Refrescar -->
+          <button class="btn btn-vibrant-primary mt-4" onclick="cargarPanelSupervisor()">
+            <i class="fas fa-sync-alt me-2"></i>Refrescar Datos
+          </button>
+        </div>
+
+        <!-- SECCIÓN RANKING -->
+        <div id="seccion-ranking" style="display:none;">
+          <h4 class="fw-bold mb-4"><i class="fas fa-trophy me-2"></i>Ranking de Operadores</h4>
+
+          <div class="d-flex flex-wrap gap-2 mb-4 align-items-center">
+            <button class="btn btn-vibrant-primary" onclick="cargarRanking('daily')">
+              <i class="fas fa-calendar-day me-2"></i>Día
+            </button>
+            <button class="btn btn-vibrant-success" onclick="cargarRanking('weekly')">
+              <i class="fas fa-calendar-week me-2"></i>Semana
+            </button>
+            <button class="btn btn-vibrant-warning" onclick="cargarRanking('mensual')">
+              <i class="fas fa-calendar-alt me-2"></i>Mes
+            </button>
+            <button class="btn btn-secondary" onclick="cargarRanking('historico')">
+              <i class="fas fa-history me-2"></i>Histórico
+            </button>
+
+            <div class="d-flex gap-2 ms-auto align-items-center bg-white p-1 rounded shadow-sm border">
+              <input type="date" id="ranking-fecha-inicio" class="form-control form-control-sm border-0 bg-light"
+                style="max-width: 140px;">
+              <span class="text-muted fw-bold small">al</span>
+              <input type="date" id="ranking-fecha-fin" class="form-control form-control-sm border-0 bg-light"
+                style="max-width: 140px;">
+              <button class="btn btn-sm btn-vibrant-primary rounded-pill px-3" onclick="cargarRankingRango()">
+                <i class="fas fa-filter me-1"></i> Filtrar
+              </button>
+            </div>
+          </div>
+
+          <div class="glass-card p-4">
+            <h5 class="fw-bold mb-3" id="titulo-ranking">Ranking del Día</h5>
+            <div class="table-responsive">
+              <table class="table custom-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Operador</th>
+                    <th class="text-center">Exitosas</th>
+                    <th class="text-center">Fallidas</th>
+                    <th class="text-center">Total</th>
+                    <th class="text-center">Efectividad</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-ranking-body">
+                  <tr>
+                    <td colspan="6" class="text-center text-muted">Selecciona un período</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Heatmap de Horarios -->
+          <div class="glass-card p-4 mt-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-clock me-2"></i>Análisis de Mejores Horarios</h5>
+            <div id="heatmap-horarios" class="d-flex flex-wrap gap-2">
+              <p class="text-muted">Cargando...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECCIÓN DASHBOARD ANALÍTICO -->
+        <div id="seccion-dashboard" style="display:none;" class="dash-container">
+
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+              <h3 class="fw-bold m-0" style="color: var(--dash-neon-blue);"><i
+                  class="fas fa-chart-pie me-2"></i>Dashboard Ejecutivo</h3>
+              <p class="m-0" style="color: var(--dash-text-muted);">Métricas operativas y rendimiento en tiempo real</p>
+            </div>
+            <button class="btn btn-sm text-white" style="background: var(--dash-neon-purple); border-radius: 8px;"
+              onclick="Dashboard.cargarDatos()">
+              <i class="fas fa-sync-alt me-1"></i> Actualizar
+            </button>
+          </div>
+
+          <!-- Pestañas del Dashboard -->
+          <div class="dash-tabs">
+            <button class="dash-tab-btn active" id="btn-tab-mod1" onclick="Dashboard.cambiarTab('mod1')">
+              <i class="fas fa-bullseye"></i> Campañas
+            </button>
+            <button class="dash-tab-btn" id="btn-tab-mod2" onclick="Dashboard.cambiarTab('mod2')">
+              <i class="fas fa-users"></i> Personal
+            </button>
+            <button class="dash-tab-btn" id="btn-tab-mod3" onclick="Dashboard.cambiarTab('mod3')">
+              <i class="fas fa-chart-line"></i> Consolidado
+            </button>
+            <button class="dash-tab-btn" id="btn-tab-mod4" onclick="Dashboard.cambiarTab('mod4')">
+              <i class="fas fa-clipboard-check"></i> Tipificaciones
+            </button>
+          </div>
+
+          <!-- Loader Central -->
+          <div id="dash-loader"
+            style="display: none; height: 300px; justify-content: center; align-items: center; flex-direction: column;">
+            <div class="spinner-border" style="color: var(--dash-neon-blue); width: 3rem; height: 3rem;" role="status">
+            </div>
+            <p class="mt-3" style="color: var(--dash-text-muted);">Procesando Big Data...</p>
+          </div>
+
+          <!-- Contenedor de Módulos -->
+          <div id="dash-content">
+
+            <!-- MODULO 1: Campañas -->
+            <div id="modulo-mod1" class="dash-modulo">
+              <!-- FILTROS DE CAMPAÑA -->
+              <div class="dash-card mb-4 d-flex justify-content-between align-items-center flex-wrap gap-3"
+                style="border: 1px solid var(--dash-border); background: var(--dash-surface); padding: 15px;">
+                <div class="d-flex align-items-center gap-2">
+                  <span
+                    style="color: var(--dash-text-muted); font-size: 0.8rem; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Mostrar:</span>
+                  <div class="btn-group" role="group">
+                    <button type="button" id="btn-filtro-activas" class="btn btn-sm btn-outline-primary active"
+                      onclick="Dashboard.aplicarFiltro('activas')">Activas</button>
+                    <button type="button" id="btn-filtro-todas" class="btn btn-sm btn-outline-primary"
+                      onclick="Dashboard.aplicarFiltro('todas')">Todas</button>
+                  </div>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                  <i class="fas fa-filter text-muted" style="font-size: 0.8rem;"></i>
+                  <select id="select-filtro-especifica" class="form-select form-select-sm"
+                    style="width: 200px; background: rgba(15, 23, 42, 0.5); color: #fff; border: 1px solid var(--dash-border);"
+                    onchange="Dashboard.aplicarFiltro('especifica', this.value)">
+                    <option value="">-- Campaña Específica --</option>
+                  </select>
+                </div>
+              </div>
+              <div class="dash-kpi-grid">
+                <div class="dash-card">
+                  <i class="fas fa-headset kpi-icon-bg"></i>
+                  <div class="kpi-label">Total Contactos</div>
+                  <div class="kpi-value" id="m1-kpi-total">0</div>
+                </div>
+                <div class="dash-card" style="border-bottom: 3px solid var(--dash-neon-green);">
+                  <i class="fas fa-check-circle kpi-icon-bg" style="color: var(--dash-neon-green)"></i>
+                  <div class="kpi-label text-success">Total Efectivos</div>
+                  <div class="kpi-value" id="m1-kpi-efectivos">0</div>
+                </div>
+                <div class="dash-card" style="border-bottom: 3px solid var(--dash-neon-red);">
+                  <i class="fas fa-times-circle kpi-icon-bg" style="color: var(--dash-neon-red)"></i>
+                  <div class="kpi-label text-danger">Total Fallidos</div>
+                  <div class="kpi-value" id="m1-kpi-fallidos">0</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="dash-card dash-table-container">
+                    <table class="dash-table">
+                      <thead>
+                        <tr>
+                          <th>Campaña</th>
+                          <th class="text-center">Volumen</th>
+                          <th class="text-center">Efectivos</th>
+                          <th class="text-center">Fallidos</th>
+                          <th class="text-center" style="width: 150px;">Efectividad</th>
+                          <th class="text-center">Meta</th>
+                          <th class="text-center">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody id="m1-tabla-body">
+                        <!-- Llenado por JS -->
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="dash-card d-flex flex-column align-items-center justify-content-center"
+                    style="height: 100%;">
+                    <h5 style="color: var(--dash-text-muted);" class="mb-4 text-center">Efectividad Global vs Meta</h5>
+                    <div style="position: relative; width: 100%; height: 200px;">
+                      <canvas id="m1-chart-radial"></canvas>
+                      <div
+                        style="position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                        <i class="fas fa-tachometer-alt fa-2x" style="color: var(--dash-neon-blue); opacity: 0.5;"></i>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODULO 2: Personal -->
+            <div id="modulo-mod2" class="dash-modulo" style="display:none;">
+              <div class="dash-kpi-grid">
+                <div class="dash-card" style="border-left: 4px solid var(--dash-neon-green);">
+                  <div class="kpi-label">Operadores Activos</div>
+                  <div class="kpi-value text-success" id="m2-activos">0</div>
+                </div>
+                <div class="dash-card" style="border-left: 4px solid var(--dash-neon-amber);">
+                  <div class="kpi-label">En Pausa / Break</div>
+                  <div class="kpi-value text-warning" id="m2-pausa">0</div>
+                </div>
+                <div class="dash-card" style="border-left: 4px solid var(--dash-neon-red);">
+                  <div class="kpi-label">Ausentes</div>
+                  <div class="kpi-value text-danger" id="m2-ausentes">0</div>
+                </div>
+              </div>
+              <div class="chart-grid-2">
+                <div class="dash-card">
+                  <h5 class="mb-4" style="color: var(--dash-text-muted);">Distribución Actual</h5>
+                  <div style="height: 250px;"><canvas id="m2-chart-dist"></canvas></div>
+                </div>
+                <div class="dash-card">
+                  <h5 class="mb-4" style="color: var(--dash-text-muted);">Ocupación por Turno</h5>
+                  <div style="height: 250px;"><canvas id="m2-chart-turnos"></canvas></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODULO 3: Consolidado -->
+            <div id="modulo-mod3" class="dash-modulo" style="display:none;">
+
+              <!-- Header -->
+              <div class="d-flex justify-content-between align-items-center mb-4 p-3 dash-card"
+                style="border: 1px solid var(--dash-border); background: var(--dash-surface);">
+                <div class="d-flex align-items-center gap-3">
+                  <div style="background: rgba(245, 158, 11, 0.1); padding: 10px; border-radius: 8px;">
+                    <i class="fas fa-chart-line" style="color: var(--dash-neon-amber); font-size: 1.5rem;"></i>
+                  </div>
+                  <div>
+                    <h5 class="mb-0 text-white fw-bold">Vista Consolidada — Sala Nacional</h5>
+                    <small style="color: var(--dash-text-muted);">Métricas transversales agregadas de todas las
+                      campañas</small>
+                  </div>
+                </div>
+                <div id="m3-alerta-carga"
+                  style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--dash-neon-red); color: var(--dash-neon-red); padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 0.9rem;">
+                  <i class="fas fa-exclamation-triangle"></i> ¡Carga crítica por operador!
+                </div>
+              </div>
+
+              <!-- KPI Cards -->
+              <div class="dash-kpi-grid mb-4">
+                <div class="dash-card">
+                  <div class="d-flex justify-content-between mb-2">
+                    <span style="color: var(--dash-text-muted); font-size: 0.9rem;">Productividad Total Sala</span>
+                    <i class="fas fa-bolt" style="color: var(--dash-neon-blue);"></i>
+                  </div>
+                  <div class="kpi-value text-info mb-1" id="m3-prod">0</div>
+                  <small style="color: var(--dash-text-muted); font-size: 0.8rem;">Contactos efectivos / turno</small>
+                </div>
+
+                <div class="dash-card" id="m3-card-carga"
+                  style="border: 1px solid var(--dash-border); transition: all 0.3s;">
+                  <div class="d-flex justify-content-between mb-2">
+                    <span style="color: var(--dash-text-muted); font-size: 0.9rem;">Carga por Operador</span>
+                    <i class="fas fa-chart-bar" style="color: var(--dash-neon-red);"></i>
+                  </div>
+                  <div class="kpi-value text-white mb-1" id="m3-carga">0</div>
+                  <small style="font-size: 0.8rem;" id="m3-txt-carga">Umbral: 150 <span class="text-success ms-1"><i
+                        class="fas fa-check"></i> Normal</span></small>
+                </div>
+
+                <div class="dash-card"
+                  style="border: 1px solid rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.03);">
+                  <div class="d-flex justify-content-between mb-2">
+                    <span style="color: var(--dash-text-muted); font-size: 0.9rem;">Efectividad Global</span>
+                    <i class="fas fa-heartbeat text-success"></i>
+                  </div>
+                  <div class="kpi-value text-success mb-1" id="m3-efec">0%</div>
+                  <small style="color: var(--dash-text-muted); font-size: 0.8rem;" id="m3-meta-global">Meta: 80%</small>
+                </div>
+
+                <div class="dash-card">
+                  <div class="d-flex justify-content-between mb-2">
+                    <span style="color: var(--dash-text-muted); font-size: 0.9rem;">Operadores Activos</span>
+                    <i class="fas fa-wave-square" style="color: var(--dash-text-muted);"></i>
+                  </div>
+                  <div class="kpi-value text-white mb-1" id="m3-ops">0</div>
+                  <small style="color: var(--dash-text-muted); font-size: 0.8rem;">Asis — en tiempo real</small>
+                </div>
+              </div>
+
+              <!-- 3 Column Layout -->
+              <div class="row g-4">
+                <div class="col-md-4">
+                  <div class="dash-card h-100 d-flex flex-column align-items-center">
+                    <h6 style="color: var(--dash-text-muted); font-size: 0.85rem; letter-spacing: 1px;"
+                      class="mb-4 text-center w-100">EFECTIVIDAD GLOBAL</h6>
+                    <div style="position: relative; width: 100%; height: 220px;">
+                      <canvas id="m3-chart-radial"></canvas>
+                      <div
+                        style="position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                        <h3 class="text-white fw-bold mb-0" id="m3-efec-center" style="font-size: 2.2rem;">0%</h3>
+                        <small style="color: var(--dash-text-muted); font-size: 0.8rem;" id="m3-meta-center">Meta:
+                          80%</small>
+                      </div>
+                    </div>
+                    <small style="color: var(--dash-text-muted); font-size: 0.8rem;"
+                      class="mt-auto text-center w-100">Promedio ponderado todas las campañas</small>
+                  </div>
+                </div>
+
+                <div class="col-md-4">
+                  <div class="dash-card h-100">
+                    <h6 style="color: var(--dash-text-muted); font-size: 0.85rem; letter-spacing: 1px;" class="mb-4">
+                      EFECTIVIDAD POR CAMPAÑA</h6>
+                    <div id="m3-campanas-list" class="d-flex flex-column gap-3"
+                      style="max-height: 250px; overflow-y: auto; overflow-x: hidden;">
+                      <!-- Rendereado por JS -->
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-md-4">
+                  <div class="dash-card h-100">
+                    <h6 style="color: var(--dash-text-muted); font-size: 0.85rem; letter-spacing: 1px;" class="mb-4">
+                      EVOLUCIÓN DEL TURNO</h6>
+                    <div style="height: 250px;">
+                      <canvas id="m3-chart-line"></canvas>
+                    </div>
+                    <div class="d-flex justify-content-center gap-3 mt-2"
+                      style="font-size: 0.75rem; color: var(--dash-text-muted);">
+                      <div><span style="color: var(--dash-neon-green);">●</span> Efectividad %</div>
+                      <div><span style="color: var(--dash-neon-amber);">●</span> Productividad</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- MODULO 4: Tipificaciones -->
+            <div id="modulo-mod4" class="dash-modulo" style="display:none;">
+              <div class="dash-card dash-table-container">
+                <table class="dash-table">
+                  <thead>
+                    <tr>
+                      <th>Entidad / Tipificación</th>
+                      <th class="text-center">Volumen Atendido</th>
+                      <th class="text-center">TMR (Horas)</th>
+                      <th class="text-center" style="width: 200px;">Tasa de Mora</th>
+                      <th class="text-center">Estado SLA</th>
+                    </tr>
+                  </thead>
+                  <tbody id="m4-tabla-body">
+                    <!-- Llenado por JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+      <div id="vista-operador" style="display:none;">
+        <div id="seccion-mis-campanas">
+          <h4 class="fw-bold mb-4">Mis Campañas Asignadas</h4>
+          <div id="grid-campanas-operador" class="row g-4"></div>
+        </div>
+
+        <div id="seccion-mis-estadisticas" style="display:none;">
+          <h4 class="fw-bold mb-4">Mis Estadísticas de Hoy</h4>
+          <div id="grid-estadisticas-operador" class="row g-4"></div>
+        </div>
+
+        <div id="seccion-gestion-llamada" style="display:none;">
+          <div id="header-campana-unica" style="display:none;">
+            <h4 id="nombre-campana-cabecera" class="fw-bold mb-4 text-primary"></h4>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <button id="btn-volver-operador" class="btn btn-light rounded-pill shadow-sm"
+              onclick="volverACampanasOperador()"><i class="fas fa-arrow-left me-2"></i> Salir de la Campaña</button>
+
+            <div class="d-flex gap-3 align-items-center">
+
+              <div class="d-flex gap-2">
+                <span class="badge-counter-wrapper op-badge-success" title="Exitosas"><i class="fas fa-check"></i> <span
+                    id="op-count-exitosas">0</span></span>
+                <span class="badge-counter-wrapper op-badge-danger" title="Fallidas"><i class="fas fa-times"></i> <span
+                    id="op-count-fallidas">0</span></span>
+                <span class="badge-counter-wrapper op-badge-warning text-dark" id="badge-incidencias-operador"
+                  style="display: none;" title="Incidencias Abarcadas"><i class="fas fa-ticket-alt"></i> <span
+                    id="op-count-incidencias">0</span></span>
+              </div>
+
+              <span class="badge-counter-wrapper op-badge-primary" id="contador-registros-operador">- / -</span>
+
+              <div class="input-group" style="max-width: 480px;" id="contenedor-buscador-operador">
+                <button id="btn-anterior-registro" class="btn btn-outline-secondary rounded-start-pill px-3"
+                  onclick="cargarAnteriorFallido()" title="Registro Anterior (Solo Fallidos)" style="display:none;">
+                  <i class="fas fa-arrow-left"></i>
+                </button>
+                <input type="text" id="busqueda-telefono" class="form-control rounded-start-pill"
+                  placeholder="Buscar Teléfono...">
+                <button id="btn-buscar-telefono" class="btn btn-vibrant-primary px-3" onclick="buscarPorTelefono()"
+                  title="Buscar Manualmente"><i class="fas fa-search"></i></button>
+                <button id="btn-siguiente-registro" class="btn btn-vibrant-success rounded-end-pill px-4"
+                  onclick="cargarSiguienteCliente()" title="Siguiente Registro"><i
+                    class="fas fa-arrow-right"></i></button>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-4">
+              <div class="glass-card p-4 mb-4">
+                <h6 class="fw-bold text-primary"><i class="fas fa-comment-dots me-2"></i>Diálogo Sugerido</h6>
+                <p id="op-dialogo-texto" class="small text-muted" style="white-space: pre-wrap;"></p>
+              </div>
+
+              <div class="glass-card p-4" id="tarjeta-datos-cliente">
+                <h6 class="fw-bold text-primary"><i class="fas fa-id-card me-2"></i>Datos del Cliente</h6>
+                <div id="op-cliente-info" class="small">
+                  <p class="text-muted text-center py-3 m-0">Ingresa un teléfono para ver los datos</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-8">
+              <div id="tarjeta-duplicados" style="display:none; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div class="titulo-incidencias-encontradas m-0" style="color: #0284c7;">
+                    <i class="fas fa-copy me-2"></i> Candidatos Encontrados
+                  </div>
+                  <button class="btn btn-sm btn-outline-secondary rounded-pill" onclick="limpiarExploradorDuplicados()">
+                    <i class="fas fa-redo me-1"></i> Limpiar y Siguiente
+                  </button>
+                </div>
+                <div id="lista-duplicados-operador" class="mb-3 d-flex flex-wrap gap-3"></div>
+              </div>
+
+              <div id="tarjeta-incidencias" style="display:none; border-top: 1px solid #e2e8f0; padding-top: 15px;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div class="titulo-incidencias-encontradas m-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i> Incidencias Encontradas
+                  </div>
+                  <button id="btn-respuesta-general"
+                    class="btn btn-outline-primary btn-sm rounded-pill fw-bold shadow-sm"
+                    onclick="abrirRespuestaGeneral()" style="display:none;">
+                    <i class="fas fa-reply-all me-2"></i> Respuesta General
+                  </button>
+                </div>
+                <div id="lista-incidencias-operador" class="mb-3"></div>
+
+                <div id="contenedor-finalizar-persona" style="display:none; text-align: center; margin-top: 20px;">
+                  <button class="btn btn-success rounded-pill px-4 py-2 fw-bold shadow-sm"
+                    onclick="finalizarPersonaCompleta()">
+                    <i class="fas fa-check-double me-2"></i> Finalizar con esta Persona
+                  </button>
+                </div>
+              </div>
+
+              <div id="contenedor-original-formulario">
+                <div class="glass-card p-4" id="tarjeta-formulario-gestion">
+                  <h5 class="fw-bold mb-4 border-bottom pb-2">Formulario de Gestión</h5>
+                  <div id="op-formulario-dinamico"></div>
+                  <hr>
+                  <button class="btn btn-vibrant-primary w-100 rounded-pill py-2 fw-bold"
+                    onclick="finalizarGestion()">Finalizar
+                    y Siguiente</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: Análisis de Contactos -->
+  <div class="modal fade" id="modalAnalisisContactos" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+        <div class="modal-header bg-primary text-white border-0">
+          <h5 class="modal-title fw-bold"><i class="fas fa-chart-pie me-2"></i>Análisis Multi-Campaña de Contactos</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4 bg-light">
+          <p class="text-muted small mb-4">Seleccione las campañas que desea incluir en el análisis. El sistema generará
+            dos hojas dentro del reporte Excel (Resumen y Detalle por Fechas) cruzando a los contactos coincidentes.
+            Identificará a cada persona por su Cédula, Teléfono o ID.</p>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label fw-bold text-primary m-0">Campañas Disponibles</label>
+            <div>
+              <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="marcarTodasAnalisis(true)">Seleccionar
+                Todo</button>
+              <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                onclick="marcarTodasAnalisis(false)">Ninguna</button>
+            </div>
+          </div>
+          <div id="lista-campanas-analisis" class="border rounded bg-white p-3 shadow-sm mb-3"
+            style="max-height: 250px; overflow-y: auto;">
+            <!-- Renderizado dinámico -->
+          </div>
+
+          <label class="form-label fw-bold text-primary m-0 mb-2">Modo de Análisis</label>
+          <div class="border rounded bg-white p-3 shadow-sm mb-3">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="modo_analisis" id="modo_agrupar" value="agrupar"
+                checked>
+              <label class="form-check-label fw-bold" for="modo_agrupar">
+                Agrupar por número
+              </label>
+              <small class="d-block text-muted">Trata al mismo teléfono como 1 sola línea de tiempo aunque cambie su
+                nombre o cédula.</small>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="modo_analisis" id="modo_separar" value="separar">
+              <label class="form-check-label fw-bold" for="modo_separar">
+                Separar si cambian datos
+              </label>
+              <small class="d-block text-muted">Divide los intentos si el mismo número registra un nombre o cédula
+                distinto (Personas diferentes).</small>
+            </div>
+          </div>
+
+          <label class="form-label fw-bold text-primary m-0 mb-2">Fuente y Auditoría</label>
+          <div class="border rounded bg-white p-3 shadow-sm mb-3">
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="modo_fuente" id="fuente_gestiones" value="gestiones"
+                onchange="toggleIssabelInput()" checked>
+              <label class="form-check-label fw-bold" for="fuente_gestiones">
+                Estricto Briana (Solo Gestionados)
+              </label>
+              <small class="d-block text-muted">Analiza solo los contactos que fueron interactuados por un
+                operador.</small>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="radio" name="modo_fuente" id="fuente_issabel" value="issabel"
+                onchange="toggleIssabelInput()">
+              <label class="form-check-label fw-bold" for="fuente_issabel">
+                Auditoría Completa (Cruzar con Base Original + Issabel)
+              </label>
+              <small class="d-block text-muted">Busca contactos fantasmas que el discador llamó pero nunca llegaron a
+                ser gestionados.</small>
+            </div>
+
+            <div id="contenedor-issabel-intentos"
+              style="display: none; background: #f8f9fa; border-radius: 8px; padding: 12px; border: 1px dotted #ccc;">
+              <label class="form-label small fw-bold mb-1"><i class="fas fa-robot text-danger me-1"></i>Barridos Totales
+                del Discador Múltiple</label>
+              <input type="number" class="form-control form-control-sm" id="input_intentos_issabel" placeholder="Ej: 3"
+                min="1" value="3">
+              <small class="text-muted" style="font-size: 0.75rem;">Se inyectará esta cantidad de llamadas fallidas a
+                los que tengan 0, o la diferencia matemática a los que tienen menos. (Los contactos con 0 Fallidas y >0
+                Exitosas se salvan).</small>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer border-0 bg-white">
+          <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-warning rounded-pill px-4 fw-bold text-dark"
+            onclick="ejecutarAnalisisMultiCampana()"><i class="fas fa-cogs me-2"></i>Generar Excel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Reporte Estadístico con Filtros -->
+  <div class="modal fade" id="modalReporteEstadistico" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+        <div class="modal-header bg-success text-white border-0">
+          <h5 class="modal-title fw-bold"><i class="fas fa-file-excel me-2"></i>Descargar Reporte Estadístico</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4 bg-light">
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <label class="form-label fw-bold text-primary small">Fecha Inicio</label>
+              <input type="date" id="rep-fecha-inicio" class="form-control custom-form-control shadow-sm">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold text-primary small">Fecha Fin</label>
+              <input type="date" id="rep-fecha-fin" class="form-control custom-form-control shadow-sm">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label fw-bold text-primary m-0">Seleccionar Campañas</label>
+              <div>
+                <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                  onclick="marcarTodasReporte(true)">Todas</button>
+                <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                  onclick="marcarTodasReporte(false)">Ninguna</button>
+              </div>
+            </div>
+            <div id="lista-campanas-reporte" class="border rounded bg-white p-3 shadow-sm"
+              style="max-height: 250px; overflow-y: auto;">
+              <!-- Dinámico -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-0 bg-white">
+          <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cerrar</button>
+          <button type="button" class="btn btn-success rounded-pill px-4 fw-bold"
+            onclick="ejecutarDescargaReporteEstadistico()">
+            <i class="fas fa-download me-2"></i>Descargar Excel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: REPORTE DE REACTIVACIÓN ===== -->
+  <div class="modal fade" id="modalReactivacion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content border-0 shadow-lg" style="border-radius:20px;overflow:hidden;">
+        <!-- Header con gradiente violeta -->
+        <div class="modal-header border-0 py-4 px-4" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);">
+          <div>
+            <h5 class="modal-title fw-bold text-white mb-0"><i class="fas fa-bolt me-2"></i>Reporte de Reactivación</h5>
+            <small class="text-white-50">Contactos fallidos según la escala de prioridad — listos para rellamar</small>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body px-4 py-3">
+          <!-- Barra de acciones rápidas -->
+          <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-sm rounded-pill fw-bold px-3" style="background:#7c3aed;color:#fff;"
+                onclick="seleccionarTodasReactivacion()">
+                <i class="fas fa-check-square me-1"></i>Todas
+              </button>
+              <button class="btn btn-sm btn-outline-secondary rounded-pill fw-bold px-3"
+                onclick="deseleccionarTodasReactivacion()">
+                <i class="fas fa-square me-1"></i>Ninguna
+              </button>
+            </div>
+            <span class="badge rounded-pill fw-bold text-white" id="badge-campanas-reactivacion"
+              style="background:#7c3aed;font-size:0.85rem;padding:8px 14px;">0 seleccionadas</span>
+          </div>
+
+          <!-- Lista de campañas con checkboxes -->
+          <div id="lista-campanas-reactivacion"
+            style="max-height:320px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;">
+            <div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Cargando campañas…</div>
+          </div>
+
+          <!-- Info sobre la escala -->
+          <div class="mt-3 p-3 rounded-3" style="background:#f5f3ff;border:1px solid #e9d5ff;">
+            <p class="small fw-bold text-purple mb-1" style="color:#7c3aed;">
+              <i class="fas fa-info-circle me-1"></i>Escala de prioridad aplicada (orden de mayor a menor urgencia):
+            </p>
+            <div class="d-flex flex-wrap gap-2" id="escala-reactivacion-display"></div>
+          </div>
+        </div>
+
+        <div class="modal-footer border-0 px-4 pb-4">
+          <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn rounded-pill px-5 fw-bold text-white"
+            style="background:linear-gradient(135deg,#7c3aed,#4f46e5);" onclick="descargarReporteReactivacion()"
+            id="btn-descargar-reactivacion">
+            <i class="fas fa-file-excel me-2"></i>Descargar Reporte Excel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ===== FIN MODAL REACTIVACIÓN ===== -->
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <?!= include('JavaScript'); ?>
+  <?!= include('DashboardLogica'); ?>
+  <script>
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+      const isDark = document.body.classList.contains('dark-mode');
+      document.querySelectorAll('.btn-dark-mode-toggle').forEach(btn => {
+        btn.innerHTML = isDark ? '<i class="fas fa-sun"></i> Modo Claro' : '<i class="fas fa-moon"></i> Modo Oscuro';
+      });
+    }
+  </script>
+</body>
+
+
+</html>

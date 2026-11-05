@@ -1,0 +1,3446 @@
+<script>
+  let ROL = localStorage.getItem('rol_briana') || "";
+  let USUARIO_ACTUAL = localStorage.getItem('usuario_briana') || "";
+  let DATOS_CAMPANAS = [];
+  let DATOS_FORMULARIOS = [];
+  let CAMPOS_FORMULARIO = [];
+  let SECCIONES_FORMULARIO = [];
+  let TIPO_CAMPO_PENDIENTE = "";
+  let CAMPANA_ACTUAL_DATA = "";
+  let CAMPANA_OPERANDO = null;
+  let DATA_CACHE_OPERADOR = [];
+  let GESTIONES_ACTUALES = [];
+  let CAMPO_EDITANDO_INDEX = null;
+  let CAMPOS_FORM_ACTUAL = [];
+
+  const PREFIJOS_VE = {
+    movil: ["0412", "0422", "0414", "0424", "0416", "0426"],
+    fijo: [
+      "0212", "0234", "0235", "0237", "0238", "0239", "0240", "0241", "0242", "0243", "0244", "0245", "0246", "0247", "0248", "0249",
+      "0251", "0252", "0253", "0254", "0255", "0256", "0257", "0258", "0259", "0261", "0262", "0263", "0264", "0265", "0266", "0267",
+      "0268", "0269", "0271", "0272", "0273", "0274", "0275", "0276", "0277", "0278", "0279", "0281", "0282", "0283", "0285", "0286",
+      "0287", "0288", "0289", "0291", "0292", "0293", "0294", "0295"
+    ]
+  };
+
+  let ASIGNACION_INICIO = 1;
+  let ASIGNACION_FIN = 0;
+  let REGISTRO_ACTUAL = 1;
+
+  let INTERVALO_ESTADISTICAS = null;
+  let ULTIMO_TIEMPO_SERVIDOR = "0";
+  let INTERVALO_REFRESCO = null;
+  let VISTA_CAMPANAS_ACTUAL = 'Saliente';
+
+  // Variables Modo Incidencias y recolección oculta
+  let REGISTROS_INCIDENCIAS_ACTUALES = [];
+  let INCIDENCIA_SELECCIONADA = null;
+  let REGISTRO_ACTUAL_DATA = null;
+  let INCIDENCIAS_RESUELTAS = [];
+  let RESPUESTA_GENERAL_ACTIVA = false; // <--- NUEVA VARIABLE
+
+  let TELEFONOS_EXITOSOS_CACHE = []; // NUEVA CACHÉ
+  let HISTORIAL_LLAMADAS_FALLIDAS = []; // HISTORIAL PARA RETROCESO EN MANUAL
+  let DATA_GESTIONES_CACHE = []; // CACHÉ GLOBAL DE GESTIONES PARA EXPLORACIÓN
+
+  // Variables Modo Exploración de Duplicados
+  let REGISTROS_DUPLICADOS_ACTUALES = [];
+  let DUPLICADO_SELECCIONADO_INDEX = null;
+  let DUPLICADOS_GESTIONADOS = [];
+
+  // Variables para Paginación y Búsqueda de Campañas
+  let PAGINA_ACTUAL_CAMPANAS = 1;
+  const ITEMS_POR_PAGINA_CAMPANAS = 10;
+  let CAMPANAS_FILTRADAS = [];
+
+  const ESTADOS_REINTENTO = [
+    "No Contesta",
+    "Sin Cobertura",
+    "No Tiene Información",
+    "Buzón de Voz",
+    "No Se Encuentra Disponible",
+    "Número Suspendido"
+  ];
+
+  function mostrarCarga(texto) {
+    document.getElementById('texto-carga').innerText = texto || "Procesando...";
+    document.getElementById('pantalla-carga').style.display = "flex";
+  }
+
+  function ocultarCarga() {
+    document.getElementById('pantalla-carga').style.display = "none";
+  }
+
+  function login() {
+    const u = document.getElementById('usuario').value;
+    const p = document.getElementById('password').value;
+    const ext = document.getElementById('extension').value;
+    if (!u || !p || !ext || ext.length < 5) { alert("Por favor complete todos los campos e ingrese una extensión válida (5 dígitos)"); return; }
+    document.getElementById('loader-login').style.display = "block";
+    google.script.run.withSuccessHandler(function (res) {
+      document.getElementById('loader-login').style.display = "none";
+      if (res.success) {
+        ROL = res.rol;
+        USUARIO_ACTUAL = res.usuario;
+
+        localStorage.setItem('rol_briana', ROL);
+        localStorage.setItem('usuario_briana', USUARIO_ACTUAL);
+        localStorage.setItem('extension_briana', ext);
+        localStorage.setItem('permiso_reporte_briana', res.permisoReporte ? "S" : "N");
+
+        document.getElementById('login-page').style.display = "none";
+        document.getElementById('home-page').style.display = "block";
+
+        iniciarEscuchaRefresco();
+
+        if (ROL === "admin" || ROL.toLowerCase() === "analista") {
+          document.getElementById('sidebar-admin').style.display = "flex";
+          document.getElementById('vista-admin').style.display = "block";
+          document.getElementById('label-rol-admin').innerText = (ROL.toLowerCase() === "analista" ? "ANALISTA: " : "ADMIN: ") + USUARIO_ACTUAL;
+
+          if (ROL.toLowerCase() === "analista") {
+            document.getElementById('btn-nav-usuarios').style.display = "none";
+          } else {
+            document.getElementById('btn-nav-usuarios').style.display = "flex";
+          }
+
+          mostrarSeccion('campanas-salientes');
+        } else {
+          document.getElementById('sidebar-operador').style.display = "flex";
+          document.getElementById('vista-operador').style.display = "block";
+          document.getElementById('label-rol-operador').innerText = "OPERADOR: " + USUARIO_ACTUAL;
+
+          const labelExt = document.getElementById('label-extension-operador');
+          if (labelExt) {
+            labelExt.innerText = "EXTENSIÓN: " + (ext || "N/A");
+            labelExt.style.setProperty('display', 'block', 'important');
+          }
+
+          mostrarSeccionOperador('mis-campanas');
+        }
+      } else { alert(res.mensaje); }
+    }).validarCredenciales(u, p, ext);
+  }
+
+  function logout() {
+    ROL = "";
+    USUARIO_ACTUAL = "";
+
+    if (INTERVALO_ESTADISTICAS) {
+      clearInterval(INTERVALO_ESTADISTICAS);
+      INTERVALO_ESTADISTICAS = null;
+    }
+
+    if (INTERVALO_REFRESCO) {
+      clearInterval(INTERVALO_REFRESCO);
+      INTERVALO_REFRESCO = null;
+    }
+
+    localStorage.removeItem('rol_briana');
+    localStorage.removeItem('usuario_briana');
+    localStorage.removeItem('extension_briana');
+
+    document.getElementById('usuario').value = "";
+    document.getElementById('password').value = "";
+    document.getElementById('extension').value = "";
+    document.getElementById('login-page').style.display = "flex";
+    document.getElementById('home-page').style.display = "none";
+    document.getElementById('sidebar-admin').style.display = "none";
+    document.getElementById('sidebar-operador').style.display = "none";
+    document.getElementById('vista-admin').style.display = "none";
+    document.getElementById('vista-operador').style.display = "none";
+
+    const labelExt = document.getElementById('label-extension-operador');
+    if (labelExt) labelExt.style.display = "none";
+  }
+
+  function iniciarEscuchaRefresco() {
+    google.script.run.withSuccessHandler(function (serverTime) {
+      ULTIMO_TIEMPO_SERVIDOR = serverTime;
+      if (INTERVALO_REFRESCO) clearInterval(INTERVALO_REFRESCO);
+      INTERVALO_REFRESCO = setInterval(revisarRefresco, 10000);
+    }).checkGlobalRefresh();
+  }
+
+  function revisarRefresco() {
+    if (!USUARIO_ACTUAL) return;
+    google.script.run.withSuccessHandler(function (serverTime) {
+      if (serverTime !== "0" && serverTime !== ULTIMO_TIEMPO_SERVIDOR) {
+        ULTIMO_TIEMPO_SERVIDOR = serverTime;
+        ejecutarRefrescoAlInicio();
+      }
+    }).checkGlobalRefresh();
+  }
+
+  function forzarRefrescoGlobal() {
+    if (confirm("¿Forzar el refresco de TODAS las sesiones activas? (Los usuarios volverán a su pantalla principal para ver los datos actualizados)")) {
+      mostrarCarga("Enviando orden de actualización global...");
+      google.script.run
+        .withSuccessHandler(function (serverTime) {
+          ULTIMO_TIEMPO_SERVIDOR = serverTime;
+          ejecutarRefrescoAlInicio();
+          alert("Orden enviada exitosamente. El resto de usuarios se actualizarán en breve.");
+        })
+        .withFailureHandler(function (error) {
+          ocultarCarga();
+          alert("Error de conexión con Google: " + error);
+        })
+        .triggerGlobalRefresh();
+    }
+  }
+
+  function ejecutarRefrescoAlInicio() {
+    mostrarCarga("Actualizando sistema...");
+    setTimeout(() => {
+      // Manejar visibilidad del botón de reporte global
+      const pRep = localStorage.getItem('permiso_reporte_briana') === "S";
+      const btnRep = document.getElementById('btn-descargar-reporte-global');
+      if (btnRep) btnRep.style.display = pRep ? "inline-block" : "none";
+
+      if (ROL === "admin" || ROL.toLowerCase() === "analista") {
+        regresarALista();
+        mostrarSeccion(VISTA_CAMPANAS_ACTUAL === 'Entrante' ? 'campanas-entrantes' : 'campanas-salientes');
+      } else if (ROL !== "") {
+        volverACampanasOperador();
+      }
+      ocultarCarga();
+    }, 800);
+  }
+
+  function mostrarSeccionOperador(seccion) {
+    const btnCampanas = document.getElementById('btn-nav-op-campanas');
+    const btnStats = document.getElementById('btn-nav-op-stats');
+
+    if (btnCampanas) btnCampanas.classList.remove('active');
+    if (btnStats) btnStats.classList.remove('active');
+
+    document.getElementById('seccion-mis-campanas').style.display = 'none';
+    document.getElementById('seccion-gestion-llamada').style.display = 'none';
+    document.getElementById('seccion-mis-estadisticas').style.display = 'none';
+
+    if (seccion === 'mis-campanas') {
+      if (btnCampanas) btnCampanas.classList.add('active');
+      document.getElementById('seccion-mis-campanas').style.display = 'block';
+      cargarCampanasOperador();
+    } else if (seccion === 'mis-estadisticas') {
+      if (btnStats) btnStats.classList.add('active');
+      document.getElementById('seccion-mis-estadisticas').style.display = 'block';
+      cargarMisEstadisticasHoy();
+    }
+  }
+
+  function cargarMisEstadisticasHoy() {
+    const grid = document.getElementById('grid-estadisticas-operador');
+    grid.innerHTML = '<div class="col-12 text-center text-muted">Cargando estadísticas...</div>';
+
+    google.script.run.withSuccessHandler(function (stats) {
+      if (stats.length === 0) {
+        grid.innerHTML = '<div class="col-12 text-center text-muted">No has realizado ninguna gestión el día de hoy.</div>';
+        return;
+      }
+
+      grid.innerHTML = stats.map(s => {
+        let isIncidencia = s.tipoAsignacion === 'Incidencias';
+        let incidenciasHTML = isIncidencia ? `
+            <div class="d-flex justify-content-between mb-3">
+              <span class="text-muted fw-bold">Incidencias:</span>
+              <span class="badge bg-warning text-dark rounded-pill px-3" style="font-size: 0.9rem;"><i class="fas fa-ticket-alt"></i> ${s.incidencias}</span>
+            </div>` : '';
+
+        return `
+        <div class="col-md-6 col-lg-4">
+          <div class="glass-card p-4 h-100 border-top border-primary border-4">
+            <h5 class="fw-bold text-primary mb-3"><i class="fas fa-headset me-2"></i>${s.nombre}</h5>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted fw-bold">Efectivas:</span>
+              <span class="badge bg-success rounded-pill px-3" style="font-size: 0.9rem;">${s.exitosas}</span>
+            </div>
+            <div class="d-flex justify-content-between ${!isIncidencia ? 'mb-3' : 'mb-2'}">
+              <span class="text-muted fw-bold">Fallidas:</span>
+              <span class="badge bg-danger rounded-pill px-3" style="font-size: 0.9rem;">${s.fallidas}</span>
+            </div>
+            ${incidenciasHTML}
+            <hr>
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="text-dark fw-bold">Total Hoy:</span>
+              <span class="badge bg-primary rounded-pill px-3" style="font-size: 0.9rem;">${s.exitosas + s.fallidas}</span>
+            </div>
+          </div>
+        </div>
+      `}).join('');
+    }).obtenerMisEstadisticasHoy(USUARIO_ACTUAL);
+  }
+
+  function actualizarContadorOperador(nombreCampana) {
+    google.script.run.withSuccessHandler(function (stats) {
+      document.getElementById('op-count-exitosas').innerText = stats.exitosas;
+      document.getElementById('op-count-fallidas').innerText = stats.fallidas;
+      if (document.getElementById('op-count-incidencias')) {
+        document.getElementById('op-count-incidencias').innerText = stats.incidencias;
+      }
+    }).obtenerContadorOperador(nombreCampana, USUARIO_ACTUAL);
+  }
+
+  function cargarCampanasOperador() {
+    google.script.run.withSuccessHandler(function (campanas) {
+      if (campanas.length === 0) {
+        document.getElementById('grid-campanas-operador').innerHTML = '<div class="col-12 text-center text-muted">No tienes campañas activas asignadas.</div>';
+        return;
+      }
+      if (campanas.length === 1) {
+        iniciarGestionCampana(campanas[0]);
+        document.getElementById('btn-volver-operador').style.display = "none";
+        document.getElementById('header-campana-unica').style.display = "block";
+        document.getElementById('nombre-campana-cabecera').innerText = "Campaña: " + campanas[0].nombre;
+      } else {
+        document.getElementById('header-campana-unica').style.display = "none";
+        document.getElementById('btn-volver-operador').style.display = "block";
+        const grid = document.getElementById('grid-campanas-operador');
+        grid.innerHTML = campanas.map(c => {
+          let badgeTipo = c.tipoCampana === 'Entrante'
+            ? '<span class="badge bg-info text-dark ms-2" style="font-size:0.6rem;">ENTRANTE</span>'
+            : '';
+
+          return `
+          <div class="col-md-4">
+            <div class="op-campana-card" onclick='iniciarGestionCampana(${JSON.stringify(c)})'>
+              <div class="d-flex align-items-center mb-3">
+                <div class="icon-box-blue m-0 me-3" style="width:45px; height:45px; font-size:1rem;">
+                  <i class="fas ${c.tipoCampana === 'Entrante' ? 'fa-phone-volume' : 'fa-headset'}"></i>
+                </div>
+                <h6 class="fw-bold m-0">${c.nombre} ${badgeTipo}</h6>
+              </div>
+              <p class="small text-muted mb-3">${c.descripcion}</p>
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="badge-active">Disponible</span>
+                <i class="fas fa-chevron-right text-primary"></i>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }).obtenerCampanasOperador(USUARIO_ACTUAL);
+  }
+
+  function esColumnaVisible(header) {
+    if (!CAMPANA_OPERANDO || !CAMPANA_OPERANDO.columnasVisibles) return true;
+    const visibles = CAMPANA_OPERANDO.columnasVisibles.split(',').map(s => s.trim());
+    return visibles.includes(header.trim());
+  }
+
+  function iniciarGestionCampana(campana) {
+    CAMPANA_OPERANDO = campana;
+
+    // Reset variables de incidencias y data oculta
+    REGISTROS_INCIDENCIAS_ACTUALES = [];
+    INCIDENCIA_SELECCIONADA = null;
+    REGISTRO_ACTUAL_DATA = null;
+    RESPUESTA_GENERAL_ACTIVA = false;
+
+    // Reset variables de duplicados
+    REGISTROS_DUPLICADOS_ACTUALES = [];
+    DUPLICADO_SELECCIONADO_INDEX = null;
+    DUPLICADOS_GESTIONADOS = [];
+
+    document.getElementById('tarjeta-incidencias').style.display = 'none';
+    document.getElementById('lista-incidencias-operador').innerHTML = '';
+    document.getElementById('tarjeta-duplicados').style.display = 'none';
+    document.getElementById('lista-duplicados-operador').innerHTML = '';
+
+    document.getElementById('seccion-mis-campanas').style.display = "none";
+    document.getElementById('seccion-gestion-llamada').style.display = "block";
+    document.getElementById('op-dialogo-texto').innerText = campana.dialogo || "Sin diálogo asignado.";
+    document.getElementById('busqueda-telefono').value = "";
+
+    const badgeIncidencias = document.getElementById('badge-incidencias-operador');
+    if (badgeIncidencias) {
+      if (campana.tipoAsignacion === 'Incidencias') {
+        badgeIncidencias.style.display = 'inline-block';
+      } else {
+        badgeIncidencias.style.display = 'none';
+      }
+    }
+
+    document.getElementById('op-count-exitosas').innerText = "0";
+    document.getElementById('op-count-fallidas').innerText = "0";
+    actualizarContadorOperador(campana.nombre);
+
+    const contador = document.getElementById('contador-registros-operador');
+    const btnSiguiente = document.getElementById('btn-siguiente-registro');
+    const btnBuscar = document.getElementById('btn-buscar-telefono');
+
+    const contenedorBuscador = document.getElementById('contenedor-buscador-operador');
+    const tarjetaDatosCliente = document.getElementById('tarjeta-datos-cliente');
+
+    // Asegurar que el formulario esté en su lugar original antes de empezar
+    const formGest = document.getElementById('tarjeta-formulario-gestion');
+    document.getElementById('contenedor-original-formulario').appendChild(formGest);
+    formGest.classList.add('glass-card', 'shadow-sm', 'p-4');
+    formGest.style.marginTop = "0";
+
+    if (campana.tipoAsignacion === 'Incidencias') {
+      formGest.style.display = 'none'; // Se oculta hasta buscar y seleccionar
+    } else {
+      formGest.style.display = 'block';
+    }
+
+    if (campana.tipoCampana === 'Entrante') {
+      if (contenedorBuscador) contenedorBuscador.style.display = "none";
+      if (tarjetaDatosCliente) tarjetaDatosCliente.style.display = "none";
+      contador.style.display = "none";
+      DATA_CACHE_OPERADOR = [];
+    } else {
+      if (contenedorBuscador) contenedorBuscador.style.display = "flex";
+      if (tarjetaDatosCliente) tarjetaDatosCliente.style.display = "block";
+      document.getElementById('op-cliente-info').innerHTML = '<p class="text-muted text-center py-3 m-0">Ingresa un teléfono para ver los datos</p>';
+      document.getElementById('busqueda-telefono').placeholder = "Buscar teléfono o ID...";
+      contador.innerText = "- / -";
+      btnSiguiente.disabled = false;
+      if (btnBuscar) btnBuscar.style.display = "inline-block";
+
+      ASIGNACION_FIN = 0;
+      REGISTRO_ACTUAL = 1;
+      HISTORIAL_LLAMADAS_FALLIDAS = [];
+
+      const btnAnterior = document.getElementById('btn-anterior-registro');
+      const inputTel = document.getElementById('busqueda-telefono');
+
+      if (campana.tipoAsignacion === 'Manual') {
+        contador.style.display = "inline-block";
+        btnSiguiente.style.display = "block";
+        if (btnBuscar) btnBuscar.classList.remove('rounded-end-pill');
+        if (btnAnterior) {
+          btnAnterior.style.display = 'inline-block';
+          inputTel.classList.remove('rounded-start-pill');
+        }
+      } else {
+        contador.style.display = "none";
+        btnSiguiente.style.display = "none";
+        if (btnBuscar) btnBuscar.classList.add('rounded-end-pill');
+        if (btnAnterior) {
+          btnAnterior.style.display = 'none';
+          inputTel.classList.add('rounded-start-pill');
+        }
+      }
+
+      if (campana.tipoAsignacion === 'Manual' && campana.distribucion) {
+        try {
+          let dist = JSON.parse(campana.distribucion);
+          if (dist[USUARIO_ACTUAL]) {
+            let partes = dist[USUARIO_ACTUAL].split('-');
+            ASIGNACION_INICIO = parseInt(partes[0]);
+            ASIGNACION_FIN = parseInt(partes[1]);
+            REGISTRO_ACTUAL = ASIGNACION_INICIO;
+          }
+        } catch (e) { }
+      }
+    }
+
+    mostrarCarga("Iniciando entorno...");
+    google.script.run.withSuccessHandler(function (contexto) {
+      ocultarCarga();
+      if (!contexto) return alert("Error: El servidor no respondió. Intente recargar.");
+      if (contexto.error) return alert("Error: " + contexto.error);
+
+      // 1. Metadatos y UI inmediata
+      TELEFONOS_EXITOSOS_CACHE = contexto.exitosos || [];
+      document.getElementById('op-count-exitosas').innerText = contexto.stats.exitosas;
+      document.getElementById('op-count-fallidas').innerText = contexto.stats.fallidas;
+      if (document.getElementById('op-count-incidencias')) {
+        document.getElementById('op-count-incidencias').innerText = contexto.stats.incidencias;
+      }
+
+      const formObj = contexto.formularios.find(f => f.nombre === campana.formularioId);
+      let parsed = formObj ? JSON.parse(formObj.campos || "[]") : [];
+      if (Array.isArray(parsed)) {
+        CAMPOS_FORM_ACTUAL = parsed;
+        SECCIONES_FORMULARIO = [];
+      } else {
+        CAMPOS_FORM_ACTUAL = parsed.campos || [];
+        SECCIONES_FORMULARIO = parsed.secciones || [];
+      }
+      renderizarFormularioOperador(CAMPOS_FORM_ACTUAL);
+
+      // 2. Carga de Base de Datos (CSV)
+      google.script.run.withSuccessHandler(function (data) {
+        DATA_CACHE_OPERADOR = data || [];
+        if (ASIGNACION_FIN === 0 && DATA_CACHE_OPERADOR.length > 1) {
+          ASIGNACION_FIN = DATA_CACHE_OPERADOR.length - 1;
+        }
+        const contador = document.getElementById('contador-registros-operador');
+        if (ASIGNACION_FIN === 0) { contador.innerText = "0 / 0"; }
+        else { contador.innerText = `${REGISTRO_ACTUAL} / ${ASIGNACION_FIN}`; }
+      }).obtenerDataCampaña(campana.nombre, 0);
+
+      // 3. Carga de Gestiones (Cache para búsquedas)
+      google.script.run.withSuccessHandler(function (gestiones) {
+        DATA_GESTIONES_CACHE = gestiones || [];
+      }).obtenerGestionesCampana(campana.nombre, 0);
+
+    }).getContextoOperador(campana.nombre, USUARIO_ACTUAL);
+  }
+
+  function cargarSiguienteCliente() {
+    if (!DATA_CACHE_OPERADOR || DATA_CACHE_OPERADOR.length <= 1) {
+      return alert("La base de datos está vacía o aún no ha cargado.");
+    }
+
+    const cabecera = DATA_CACHE_OPERADOR[0];
+    let indexTel = cabecera.findIndex(h => h.toLowerCase().includes("tel") || h.toLowerCase().includes("cel") || h.toLowerCase() === "id");
+    if (indexTel === -1) indexTel = 0;
+
+    let registro = null;
+
+    // Auto-saltar los finalizados exitosos
+    while (REGISTRO_ACTUAL <= ASIGNACION_FIN) {
+      registro = DATA_CACHE_OPERADOR[REGISTRO_ACTUAL];
+      if (registro) {
+        let telStr = registro[indexTel] ? registro[indexTel].toString().trim() : "";
+        if (TELEFONOS_EXITOSOS_CACHE.includes(telStr)) {
+          REGISTRO_ACTUAL++;
+          registro = null; // para que no procese y salte
+          continue;
+        }
+        break; // Encontró uno válido
+      } else {
+        REGISTRO_ACTUAL++;
+      }
+    }
+
+    if (REGISTRO_ACTUAL > ASIGNACION_FIN) {
+      return alert("Has completado todos los registros de tu asignación.");
+    }
+
+    if (registro) {
+      REGISTRO_ACTUAL_DATA = registro;
+      REGISTRO_ACTUAL_DATA._index = REGISTRO_ACTUAL;
+      let html = "";
+      cabecera.forEach((h, i) => {
+        if (esColumnaVisible(h)) {
+          html += `<div class="data-item-row"><span class="data-item-label">${h}:</span><span class="data-item-value info-cliente-val" data-key="${h}">${registro[i]}</span></div>`;
+        }
+      });
+      document.getElementById('op-cliente-info').innerHTML = html;
+      document.getElementById('busqueda-telefono').value = "";
+      document.getElementById('contador-registros-operador').innerText = `${REGISTRO_ACTUAL} / ${ASIGNACION_FIN}`;
+      REGISTRO_ACTUAL++;
+      document.getElementById('btn-siguiente-registro').disabled = true;
+    } else {
+      alert("Registro no encontrado en la base de datos.");
+    }
+  }
+
+  function cargarAnteriorFallido() {
+    if (HISTORIAL_LLAMADAS_FALLIDAS.length === 0) return alert("No hay registros fallidos previos para retroceder.");
+
+    const idx = HISTORIAL_LLAMADAS_FALLIDAS.pop();
+    if (!DATA_CACHE_OPERADOR || !DATA_CACHE_OPERADOR[idx]) return alert("Error al recuperar el registro del historial.");
+
+    const cabecera = DATA_CACHE_OPERADOR[0];
+    const registro = DATA_CACHE_OPERADOR[idx];
+
+    REGISTRO_ACTUAL_DATA = registro;
+    REGISTRO_ACTUAL_DATA._index = idx;
+
+    let html = "";
+    cabecera.forEach((h, i) => {
+      if (esColumnaVisible(h)) {
+        html += `<div class="data-item-row"><span class="data-item-label">${h}:</span><span class="data-item-value info-cliente-val" data-key="${h}">${registro[i]}</span></div>`;
+      }
+    });
+
+    document.getElementById('op-cliente-info').innerHTML = html;
+    document.getElementById('busqueda-telefono').value = "";
+
+    // Sincronizar puntero de navegación y UI
+    REGISTRO_ACTUAL = idx + 1;
+    document.getElementById('contador-registros-operador').innerText = `${idx} / ${ASIGNACION_FIN}`;
+    document.getElementById('btn-siguiente-registro').disabled = true;
+    document.getElementById('tarjeta-formulario-gestion').style.display = 'block';
+
+    // Limpiar formulario para la nueva gestión
+    document.querySelectorAll('.field-data').forEach(i => i.value = "");
+    document.querySelectorAll('.field-data-check').forEach(i => i.checked = false);
+    checkearSecuencia();
+  }
+
+  function limpiarExploradorDuplicados() {
+    REGISTROS_DUPLICADOS_ACTUALES = [];
+    DUPLICADO_SELECCIONADO_INDEX = null;
+    REGISTRO_ACTUAL_DATA = null;
+    DUPLICADOS_GESTIONADOS = [];
+
+    document.getElementById('tarjeta-duplicados').style.display = 'none';
+    document.getElementById('lista-duplicados-operador').innerHTML = '';
+    document.getElementById('tarjeta-formulario-gestion').style.display = 'none';
+    document.getElementById('op-cliente-info').innerHTML = '';
+
+    const busquedaInput = document.getElementById('busqueda-telefono');
+    busquedaInput.value = "";
+    busquedaInput.focus();
+  }
+
+  function buscarPorTelefono() {
+    const tel = document.getElementById('busqueda-telefono').value.trim();
+    if (!tel) return alert("Ingresa un número");
+
+    // En modo duplicados, permitimos buscar aunque ya haya éxito para limpiar otros registros del mismo número
+    if (CAMPANA_OPERANDO.tipoAsignacion !== 'ExploracionDuplicados') {
+      if (TELEFONOS_EXITOSOS_CACHE.includes(tel)) {
+        document.getElementById('busqueda-telefono').value = "";
+        return alert("Este Contacto ya tiene una respuesta exitosa");
+      }
+    }
+
+    if (!DATA_CACHE_OPERADOR || DATA_CACHE_OPERADOR.length === 0) return alert("No hay base de datos cargada para esta campaña.");
+
+    // Regresar el form a su base y ocultarlo
+    const formGest = document.getElementById('tarjeta-formulario-gestion');
+    document.getElementById('contenedor-original-formulario').appendChild(formGest);
+    formGest.style.display = 'none';
+
+    const cabecera = DATA_CACHE_OPERADOR[0];
+    let indexTel = -1;
+    cabecera.forEach((h, i) => { if (h.toLowerCase().includes("tel") || h.toLowerCase().includes("cel")) indexTel = i; });
+    if (indexTel === -1) indexTel = 0;
+
+    if (CAMPANA_OPERANDO.tipoAsignacion === 'ExploracionDuplicados') {
+      // 1. Si ya tenemos caché, procesamos instantáneamente
+      if (DATA_GESTIONES_CACHE && DATA_GESTIONES_CACHE.length > 0) {
+        procesarBusquedaDuplicados(tel, indexTel, cabecera, DATA_GESTIONES_CACHE);
+
+        // 2. Sincronización en segundo plano (silenciosa) para la próxima búsqueda
+        google.script.run.withSuccessHandler(function (dataGestiones) {
+          DATA_GESTIONES_CACHE = dataGestiones;
+          console.log("Sincronización de fondo completada.");
+        }).obtenerGestionesCampana(CAMPANA_OPERANDO.nombre, 0);
+        return;
+      }
+
+      // 3. Solo bloqueamos si es la primera búsqueda y no hay caché
+      mostrarCarga("Sincronizando base de datos...");
+      google.script.run.withSuccessHandler(function (dataGestiones) {
+        ocultarCarga();
+        DATA_GESTIONES_CACHE = dataGestiones;
+        procesarBusquedaDuplicados(tel, indexTel, cabecera, dataGestiones);
+      }).obtenerGestionesCampana(CAMPANA_OPERANDO.nombre, 0);
+      return;
+    } else if (CAMPANA_OPERANDO.tipoAsignacion === 'Incidencias') {
+      const registros = DATA_CACHE_OPERADOR.filter((fila, i) => i > 0 && fila[indexTel].toString().includes(tel));
+
+      if (registros.length > 0) {
+        REGISTROS_INCIDENCIAS_ACTUALES = registros;
+        INCIDENCIA_SELECCIONADA = null;
+        REGISTRO_ACTUAL_DATA = null;
+        RESPUESTA_GENERAL_ACTIVA = false;
+
+        // --- REINICIAR CONTROL DE INCIDENCIAS Y OCULTAR BOTÓN FINALIZAR ---
+        INCIDENCIAS_RESUELTAS = [];
+        document.getElementById('contenedor-finalizar-persona').style.display = 'none';
+        document.getElementById('btn-respuesta-general').style.display = 'inline-block';
+        document.getElementById('tarjeta-duplicados').style.display = 'none';
+
+        // FILTRADO PERSONALIZADO: Estado, Municipio, Nombreobpp, cedula, nombre, apellido (Y Teléfono que se detectó arriba)
+        let idxEstado = -1, idxMuni = -1, idxObpp = -1, idxC = -1, idxN = -1, idxA = -1;
+        cabecera.forEach((h, i) => {
+          let hl = h.toLowerCase().trim();
+          if (hl === "estado" || hl.includes("estado")) { if (idxEstado === -1) idxEstado = i; }
+          if (hl === "municipio" || hl.includes("municipio")) { if (idxMuni === -1) idxMuni = i; }
+          if (hl === "nombreobpp" || hl.includes("obpp")) { if (idxObpp === -1) idxObpp = i; }
+          if (hl === "cedula" || hl === "cédula" || hl.includes("cedula") || hl.includes("cédula")) { if (idxC === -1) idxC = i; }
+          if (hl === "nombre" || (hl.includes("nombre") && !hl.includes("obpp"))) { if (idxN === -1) idxN = i; }
+          if (hl === "apellido" || hl.includes("apellido")) { if (idxA === -1) idxA = i; }
+        });
+
+        let htmlCliente = "";
+        const regBase = registros[0];
+
+        if (idxEstado !== -1 && regBase[idxEstado] && esColumnaVisible(cabecera[idxEstado])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[idxEstado]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[idxEstado]}">${regBase[idxEstado]}</span></div>`;
+        if (idxMuni !== -1 && regBase[idxMuni] && esColumnaVisible(cabecera[idxMuni])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[idxMuni]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[idxMuni]}">${regBase[idxMuni]}</span></div>`;
+        if (idxObpp !== -1 && regBase[idxObpp] && esColumnaVisible(cabecera[idxObpp])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[idxObpp]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[idxObpp]}">${regBase[idxObpp]}</span></div>`;
+        if (idxC !== -1 && regBase[idxC] && esColumnaVisible(cabecera[idxC])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[idxC]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[idxC]}">${regBase[idxC]}</span></div>`;
+        if (idxN !== -1 && regBase[idxN] && esColumnaVisible(cabecera[idxN])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[idxN]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[idxN]}">${regBase[idxN]}</span></div>`;
+        if (idxA !== -1 && regBase[idxA] && esColumnaVisible(cabecera[idxA])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[idxA]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[idxA]}">${regBase[idxA]}</span></div>`;
+        if (indexTel !== -1 && regBase[indexTel] && esColumnaVisible(cabecera[indexTel])) htmlCliente += `<div class="data-item-row"><span class="data-item-label">${cabecera[indexTel]}:</span><span class="data-item-value info-cliente-val" data-key="${cabecera[indexTel]}">${regBase[indexTel]}</span></div>`;
+
+        if (htmlCliente === "") htmlCliente = "<p class='text-muted small'>No se encontraron los campos principales o están ocultos.</p>";
+        document.getElementById('op-cliente-info').innerHTML = htmlCliente;
+
+        // 2. Renderizar tarjetas de incidencias
+        let htmlIncidencias = "";
+        registros.forEach((reg, idx) => {
+          let titulo = `Incidencia #${idx + 1}`;
+          htmlIncidencias += `
+                <div class="card-incidencia-wrapper" id="card-incidencia-${idx}">
+                    <div class="card-incidencia-header" onclick="seleccionarIncidencia(${idx})">
+                        <div class="card-incidencia-title">
+                            <i class="fas fa-ticket-alt"></i><span>${titulo}</span>
+                        </div>
+                        <i class="fas fa-chevron-down icon-chevron"></i>
+                    </div>
+                    <div class="card-incidencia-body" id="body-incidencia-${idx}">
+                        <div id="detalle-incidencia-${idx}" class="small text-muted mb-3 border-bottom pb-2"></div>
+                        <div id="form-incidencia-${idx}"></div>
+                    </div>
+                </div>`;
+        });
+
+        document.getElementById('lista-incidencias-operador').innerHTML = htmlIncidencias;
+        document.getElementById('tarjeta-incidencias').style.display = 'block';
+        document.getElementById('btn-siguiente-registro').disabled = true;
+
+      } else {
+        REGISTRO_ACTUAL_DATA = null;
+        document.getElementById('op-cliente-info').innerHTML = '<div class="alert alert-danger py-2 small m-0">Número no encontrado en la base.</div>';
+        document.getElementById('tarjeta-incidencias').style.display = 'none';
+        if (document.getElementById('btn-respuesta-general')) document.getElementById('btn-respuesta-general').style.display = 'none';
+      }
+    } else {
+      // Lógica Normal
+      document.getElementById('tarjeta-duplicados').style.display = 'none';
+      document.getElementById('tarjeta-incidencias').style.display = 'none';
+      const registro = DATA_CACHE_OPERADOR.find((fila, i) => i > 0 && fila[indexTel].toString().includes(tel));
+      if (registro) {
+        REGISTRO_ACTUAL_DATA = registro;
+        let html = "";
+        cabecera.forEach((h, i) => {
+          if (esColumnaVisible(h)) {
+            html += `<div class="data-item-row"><span class="data-item-label">${h}:</span><span class="data-item-value info-cliente-val" data-key="${h}">${registro[i]}</span></div>`;
+          }
+        });
+        document.getElementById('op-cliente-info').innerHTML = html;
+        document.getElementById('btn-siguiente-registro').disabled = true;
+        document.getElementById('tarjeta-formulario-gestion').style.display = 'block';
+      } else {
+        REGISTRO_ACTUAL_DATA = null;
+        document.getElementById('op-cliente-info').innerHTML = '<div class="alert alert-danger py-2 small m-0">Número no encontrado en la base.</div>';
+      }
+    }
+  }
+
+  // --- NUEVA FUNCIÓN PARA RESPUESTA GENERAL ---
+  function abrirRespuestaGeneral() {
+    if (REGISTROS_INCIDENCIAS_ACTUALES.length === 0) return;
+
+    // Deseleccionar cualquier incidencia activa
+    document.querySelectorAll('.card-incidencia-wrapper.active').forEach(card => card.classList.remove('active'));
+    INCIDENCIA_SELECCIONADA = null;
+
+    // Establecer el registro base como el actual para la data general
+    REGISTRO_ACTUAL_DATA = REGISTROS_INCIDENCIAS_ACTUALES[0];
+    RESPUESTA_GENERAL_ACTIVA = true;
+
+    // Mover el formulario al contenedor original y mostrarlo
+    const formGest = document.getElementById('tarjeta-formulario-gestion');
+    formGest.classList.add('glass-card', 'shadow-sm', 'p-4');
+    formGest.style.marginTop = "0";
+    formGest.style.display = 'block';
+    document.getElementById('contenedor-original-formulario').appendChild(formGest);
+
+    // Limpiar campos para nueva gestión
+    document.querySelectorAll('.field-data').forEach(i => i.value = "");
+    document.querySelectorAll('.field-data-check').forEach(i => i.checked = false);
+    checkearSecuencia();
+
+    // Hacer focus visual en el formulario
+    formGest.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function seleccionarDuplicado(index) {
+    const cardActual = document.getElementById(`card-duplicado-${index}`);
+    if (cardActual.classList.contains('active')) {
+      cardActual.classList.remove('active');
+      DUPLICADO_SELECCIONADO_INDEX = null;
+      REGISTRO_ACTUAL_DATA = null;
+      document.getElementById('tarjeta-formulario-gestion').style.display = 'none';
+      return;
+    }
+
+    DUPLICADO_SELECCIONADO_INDEX = index;
+    REGISTRO_ACTUAL_DATA = REGISTROS_DUPLICADOS_ACTUALES[index];
+
+    // Marcar visualmente
+    document.querySelectorAll('.card-duplicado-wrapper').forEach(card => card.classList.remove('active'));
+    cardActual.classList.add('active');
+
+    // Cargar datos en el panel lateral (op-cliente-info)
+    const cabecera = DATA_CACHE_OPERADOR[0];
+    let html = "";
+    cabecera.forEach((h, i) => {
+      if (esColumnaVisible(h)) {
+        html += `<div class="data-item-row"><span class="data-item-label">${h}:</span><span class="data-item-value info-cliente-val" data-key="${h}">${REGISTRO_ACTUAL_DATA[i] || '-'}</span></div>`;
+      }
+    });
+    document.getElementById('op-cliente-info').innerHTML = html;
+
+    // Mostrar formulario
+    const formGest = document.getElementById('tarjeta-formulario-gestion');
+    formGest.style.display = 'block';
+
+    // Limpiar campos para nueva gestión
+    document.querySelectorAll('.field-data').forEach(i => i.value = "");
+    document.querySelectorAll('.field-data-check').forEach(i => i.checked = false);
+    checkearSecuencia();
+  }
+
+  function procesarBusquedaDuplicados(tel, indexTel, cabecera, dataGestiones) {
+    const registrosBase = DATA_CACHE_OPERADOR.filter((fila, i) => i > 0 && fila[indexTel].toString().includes(tel));
+
+    if (registrosBase.length === 0) {
+      document.getElementById('op-cliente-info').innerHTML = '<div class="alert alert-danger py-2 small m-0">Número no encontrado en la base.</div>';
+      document.getElementById('tarjeta-duplicados').style.display = 'none';
+      return;
+    }
+
+    // Identificar columnas en el reporte
+    let idxResultado = -1;
+    let idxEspecifico = -1;
+    let indicesCSVEnGestiones = [];
+
+    if (dataGestiones && dataGestiones.length > 0) {
+      const cabReporte = dataGestiones[0].map(h => h.toString().toLowerCase().trim());
+      idxResultado = cabReporte.indexOf("resultado");
+
+      // Buscar columna de estado específico
+      idxEspecifico = cabReporte.findIndex(h => h === "estado de la llamada" || h === "estado" || h === "resultado especifico");
+
+      // Mapear cabeceras del CSV a columnas del reporte
+      cabecera.forEach(h => {
+        indicesCSVEnGestiones.push(cabReporte.indexOf(h.toLowerCase().trim()));
+      });
+    }
+
+    // Filtrar los registros basados en las gestiones existentes
+    const registrosFiltrados = registrosBase.filter(reg => {
+      if (!dataGestiones || dataGestiones.length <= 1) return true;
+
+      // Buscar gestiones para este registro específico
+      // Usamos una firma de la fila para identificarla (ID o Nombre + Teléfono)
+      const gestionesDeEsteRegistro = dataGestiones.filter((rowG, i) => {
+        if (i === 0) return false;
+        // Comprobar si las columnas que coinciden con el CSV tienen los mismos valores
+        return indicesCSVEnGestiones.every((idxReporte, idxCSV) => {
+          if (idxReporte === -1) return true; // Si la columna no está en el reporte, no podemos comparar
+          return rowG[idxReporte].toString().trim() === reg[idxCSV].toString().trim();
+        });
+      });
+
+      if (gestionesDeEsteRegistro.length === 0) return true;
+
+      // Si hay gestiones, buscamos la última (o la "mejor")
+      // En este sistema, la última suele ser la válida.
+      const ultimaGest = gestionesDeEsteRegistro[gestionesDeEsteRegistro.length - 1];
+      const res = ultimaGest[idxResultado] ? ultimaGest[idxResultado].toString().toLowerCase() : "";
+
+      const esExito = res.includes("exitos") || res.includes("answered") || res.includes("contest") || res.includes("efectiv");
+      if (esExito) return false; // OCULTAR si es éxito
+
+      // En modo exploración de duplicados, si es fallida (Cualquier tipo), 
+      // debe seguir apareciendo para permitir gestionar otros candidatos del mismo número.
+      return true;
+    });
+
+    if (registrosFiltrados.length > 0) {
+      REGISTROS_DUPLICADOS_ACTUALES = registrosFiltrados;
+      DUPLICADO_SELECCIONADO_INDEX = null;
+      REGISTRO_ACTUAL_DATA = null;
+      DUPLICADOS_GESTIONADOS = [];
+
+      document.getElementById('tarjeta-duplicados').style.display = 'block';
+      document.getElementById('tarjeta-incidencias').style.display = 'none';
+
+      let htmlDuplicados = "";
+      registrosFiltrados.forEach((reg, idx) => {
+        let nombreCandidato = "Candidato " + (idx + 1);
+        let subInfo = "";
+
+        cabecera.forEach((h, i) => {
+          let hl = h.toLowerCase();
+          if (hl.includes("nombre") || hl.includes("cliente") || hl.includes("persona")) {
+            if (reg[i]) nombreCandidato = reg[i];
+          }
+          if (hl.includes("cedula") || hl.includes("cédula") || hl === "id") {
+            if (reg[i]) subInfo += `<div><strong>${h}:</strong> ${reg[i]}</div>`;
+          }
+        });
+
+        htmlDuplicados += `
+          <div class="card-duplicado-wrapper" id="card-duplicado-${idx}" onclick="seleccionarDuplicado(${idx})">
+            <span class="card-duplicado-title">${nombreCandidato}</span>
+            <div class="card-duplicado-info">
+              ${subInfo}
+              <div><strong>Fila Base:</strong> ${DATA_CACHE_OPERADOR.indexOf(reg)}</div>
+            </div>
+          </div>`;
+      });
+
+      document.getElementById('lista-duplicados-operador').innerHTML = htmlDuplicados;
+      document.getElementById('op-cliente-info').innerHTML = `<div class="alert alert-info py-2 small m-0"><i class="fas fa-filter me-2"></i>Se encontraron ${registrosFiltrados.length} candidatos pendientes de gestión definitiva.</div>`;
+    } else {
+      document.getElementById('op-cliente-info').innerHTML = '<div class="alert alert-warning py-2 small m-0">Todos los perfiles asociados a este número ya han sido gestionados de forma definitiva por ti o por otro operador.</div>';
+      document.getElementById('tarjeta-duplicados').style.display = 'none';
+    }
+
+    document.getElementById('btn-siguiente-registro').disabled = true;
+  }
+
+  function seleccionarIncidencia(index) {
+    // Si ya está seleccionada y abierta, la cerramos (toggle)
+    const cardActual = document.getElementById(`card-incidencia-${index}`);
+    if (cardActual.classList.contains('active')) {
+      cardActual.classList.remove('active');
+      INCIDENCIA_SELECCIONADA = null;
+      REGISTRO_ACTUAL_DATA = null;
+      return;
+    }
+
+    RESPUESTA_GENERAL_ACTIVA = false; // Deshabilitar modo general si se selecciona una tarjeta
+
+    INCIDENCIA_SELECCIONADA = REGISTROS_INCIDENCIAS_ACTUALES[index];
+    INCIDENCIA_SELECCIONADA.index = index;
+    REGISTRO_ACTUAL_DATA = INCIDENCIA_SELECCIONADA;
+
+    const cabecera = DATA_CACHE_OPERADOR[0];
+    const formGest = document.getElementById('tarjeta-formulario-gestion');
+
+    // Cerrar las otras
+    document.querySelectorAll('.card-incidencia-wrapper.active').forEach(card => {
+      card.classList.remove('active');
+    });
+
+    // Expandir esta
+    cardActual.classList.add('active');
+
+    // 1. Mostrar detalles extra de la incidencia (Excluyendo los de Datos de Cliente)
+    let htmlDetalle = "";
+    let idxEstado = -1, idxMuni = -1, idxObpp = -1, idxC = -1, idxN = -1, idxA = -1;
+    let indexTel = -1;
+    cabecera.forEach((h, i) => {
+      let hl = h.toLowerCase().trim();
+      if (hl === "estado" || hl.includes("estado")) { if (idxEstado === -1) idxEstado = i; }
+      if (hl === "municipio" || hl.includes("municipio")) { if (idxMuni === -1) idxMuni = i; }
+      if (hl === "nombreobpp" || hl.includes("obpp")) { if (idxObpp === -1) idxObpp = i; }
+      if (hl === "cedula" || hl === "cédula" || hl.includes("cedula") || hl.includes("cédula")) { if (idxC === -1) idxC = i; }
+      if (hl === "nombre" || (hl.includes("nombre") && !hl.includes("obpp"))) { if (idxN === -1) idxN = i; }
+      if (hl === "apellido" || hl.includes("apellido")) { if (idxA === -1) idxA = i; }
+      if (hl.includes("tel") || hl.includes("cel")) { if (indexTel === -1) indexTel = i; }
+    });
+
+    cabecera.forEach((h, i) => {
+      if (i !== idxEstado && i !== idxMuni && i !== idxObpp && i !== idxC && i !== idxN && i !== idxA && i !== indexTel && esColumnaVisible(h)) {
+        htmlDetalle += `<div class="data-item-row mb-1"><span class="fw-bold text-dark">${h}:</span> <span class="info-cliente-val" data-key="${h}">${INCIDENCIA_SELECCIONADA[i] || '-'}</span></div>`;
+      }
+    });
+    document.getElementById(`detalle-incidencia-${index}`).innerHTML = htmlDetalle;
+
+    // 2. Mover el formulario a esta tarjeta
+    // Le quitamos el padding/borde de tarjeta normal porque ya está dentro de la caja de incidencia
+    formGest.classList.remove('glass-card', 'shadow-sm', 'p-4');
+    formGest.style.marginTop = "10px";
+    formGest.style.display = 'block';
+    document.getElementById(`form-incidencia-${index}`).appendChild(formGest);
+
+    // Limpiar campos para nueva gestión
+    document.querySelectorAll('.field-data, .field-data-prefix').forEach(i => i.value = "");
+    document.querySelectorAll('.field-data-check').forEach(i => i.checked = false);
+    checkearSecuencia();
+  }
+
+  function procesarInputTelefonoVE(inputElem, selectId) {
+    let val = inputElem.value.replace(/[^0-9]/g, '');
+
+    // Auto-detección para paste o escritura manual de número completo (>= 10 dígitos)
+    // Soporta formatos locales (04141234567) o internacionales (+584141234567)
+    if (val.length >= 10) {
+      let numStr = val.slice(-7);
+      let prefCandidate = val.slice(0, -7);
+      let networkCode = prefCandidate.slice(-3); // Extrae la red (ej. 414)
+      let prefStr = "0" + networkCode; // Reconstruye formato local (0414)
+
+      let selectElem = document.getElementById(selectId);
+      if (selectElem) {
+        let optionExists = Array.from(selectElem.options).some(o => o.value === prefStr);
+        if (optionExists) {
+          selectElem.value = prefStr;
+          val = numStr; // Deja solo el número de abonado
+        }
+      }
+    }
+
+    // Limitación inteligente:
+    // Si empieza por 0 o 58, permitimos escribir hasta 12 dígitos para que pueda 
+    // activarse la autodetección (arriba). Si no, asumimos que es número local y limitamos a 7.
+    if (val.length > 7) {
+      if (val.startsWith("0") || val.startsWith("58")) {
+        val = val.substring(0, 12);
+      } else {
+        val = val.substring(0, 7);
+      }
+    }
+
+    inputElem.value = val;
+    if (inputElem.value.length === 7) checkearSecuencia();
+  }
+
+  function evaluarReglasIntegrales() {
+    const wrappers = document.querySelectorAll('.op-campo-wrapper');
+    const secciones = document.querySelectorAll('.op-seccion-wrapper');
+    const visibilityMap = {}; // true = mostrar, false = ocultar
+    const forcedObligatory = new Set();
+
+    // Resetear base visual (todo visible y habilitado inicialmente)
+    wrappers.forEach(w => {
+      w.style.display = "block";
+      w.style.opacity = "1";
+      w.style.pointerEvents = "auto";
+      const lbl = w.querySelector('.label-obligatorio-dinamico');
+      if (lbl) lbl.remove();
+      w.querySelectorAll('.field-data, .field-data-check, .field-data-doc, .field-data-prefix').forEach(i => i.disabled = false);
+    });
+    secciones.forEach(s => s.style.display = "block");
+
+    let saltarHastaId = null;
+    let bloquearTodoAbajo = false;
+
+    wrappers.forEach((wrapper, index) => {
+      const inputs = wrapper.querySelectorAll('.field-data, .field-data-check, .field-data-prefix, .field-data-doc');
+      const isReqBase = wrapper.dataset.req === "true";
+      const campoId = wrapper.dataset.id;
+      const parentSec = wrapper.closest('.op-seccion-wrapper');
+      const secId = parentSec ? parentSec.dataset.id : null;
+
+      // RESOLUCIÓN DE VISIBILIDAD SECUENCIAL (Última regla manda)
+      let isVisible = true;
+      if (secId && visibilityMap[secId] !== undefined) isVisible = visibilityMap[secId];
+      if (visibilityMap[campoId] !== undefined) isVisible = visibilityMap[campoId];
+
+      const isRealmenteOculto = !isVisible;
+
+      if (bloquearTodoAbajo || isRealmenteOculto || (saltarHastaId && saltarHastaId !== campoId)) {
+        if (isRealmenteOculto || (saltarHastaId && saltarHastaId !== campoId)) {
+          wrapper.style.display = "none";
+          // Si el estado de la sección es explícitamente ocultar, apagamos el contenedor
+          if (isRealmenteOculto && secId && visibilityMap[secId] === false && visibilityMap[campoId] === undefined) {
+            parentSec.style.display = "none";
+          }
+        } else {
+          wrapper.style.opacity = "0.4";
+          wrapper.style.pointerEvents = "none";
+        }
+
+        inputs.forEach(i => {
+          i.disabled = true;
+          if (i.type === "checkbox" || i.type === "radio") i.checked = false;
+          else i.value = "";
+        });
+
+        if (saltarHastaId === campoId) saltarHastaId = null;
+        return; // Salimos temprano, no evalúa llenado de campos ocultos
+      }
+
+      if (saltarHastaId === campoId) saltarHastaId = null;
+
+      // Si tiene inputs habilitados, verificamos si está lleno
+      if (inputs.length > 0) {
+        if (inputs[0].type === "checkbox" || inputs[0].type === "radio") {
+          const checked = wrapper.querySelectorAll('input:checked');
+          lleno = checked.length > 0;
+          valorInput = Array.from(checked).map(c => c.value).join(', ');
+        } else if (inputs[0].classList.contains('field-data-prefix')) {
+          // Documento de identidad
+          const docVal = wrapper.querySelector('.field-data-doc').value.trim();
+          lleno = docVal !== "";
+          valorInput = inputs[0].value + docVal;
+        } else {
+          valorInput = inputs[0].value.trim();
+          lleno = valorInput !== "";
+        }
+      }
+
+      // EVALUACIÓN DE REGLAS
+      if (inputs.length > 0 && (inputs[0].tagName === "SELECT" || inputs[0].type === "checkbox" || inputs[0].type === "radio") && lleno) {
+        const targets = (inputs[0].tagName === "SELECT") ? [inputs[0].options[inputs[0].selectedIndex]] : Array.from(wrapper.querySelectorAll('input:checked'));
+
+        targets.forEach(target => {
+          const destino = target.getAttribute("data-dest");
+          let especiales = [];
+          try { especiales = JSON.parse(target.getAttribute("data-especiales") || "[]"); }
+          catch (e) { console.error("Error parsing reglas:", e); }
+
+          especiales.forEach(regla => {
+            if (regla.accion === "ocultar" || regla.accion === "ocultar_seccion") {
+              regla.campos.forEach(id => visibilityMap[id] = false);
+            }
+            if (regla.accion === "mostrar_seccion") {
+              regla.campos.forEach(id => visibilityMap[id] = true);
+            }
+            if (regla.accion === "requerir" && regla.campos) {
+              regla.campos.forEach(id => forcedObligatory.add(id));
+            }
+          });
+
+          if (destino === "Finalizar") {
+            bloquearTodoAbajo = true;
+          } else if (destino && destino !== "") {
+            saltarHastaId = destino;
+          }
+        });
+      }
+
+      const esReqAhora = isReqBase || forcedObligatory.has(campoId);
+      if (forcedObligatory.has(campoId) && !wrapper.querySelector('.label-obligatorio-dinamico')) {
+        wrapper.querySelector('.form-label').innerHTML += ' <span class="text-danger label-obligatorio-dinamico">*</span>';
+      }
+
+      if (esReqAhora && !lleno) { bloquearTodoAbajo = true; }
+    });
+  }
+
+  function checkearSecuencia() {
+    evaluarReglasIntegrales();
+  }
+
+  function finalizarGestion() {
+    let formData = {};
+    let error = false;
+
+    // --- VALIDACIÓN DE IDENTIDAD TELEFÓNICA (REQUERIMIENTO INGENIERO) ---
+    let telIdentificado = "";
+    
+    // 1. Buscar en el registro actual cargado
+    if (REGISTRO_ACTUAL_DATA) {
+      const cabBase = (DATA_CACHE_OPERADOR && DATA_CACHE_OPERADOR.length > 0) ? DATA_CACHE_OPERADOR[0] : [];
+      let idxT = cabBase.findIndex(h => {
+        const hl = h.toLowerCase().trim();
+        return hl.includes("tel") || hl.includes("cel") || hl === "id";
+      });
+      if (idxT !== -1 && REGISTRO_ACTUAL_DATA[idxT]) {
+        telIdentificado = REGISTRO_ACTUAL_DATA[idxT].toString().trim();
+      }
+    }
+
+    // 2. Si no hay registro, o el registro no tiene teléfono, recolectamos primero el form para ver si el operador lo escribió
+    const camposInputsPre = document.querySelectorAll('.field-data, .field-data-check, .field-data-doc');
+    let tempFormData = {};
+    camposInputsPre.forEach(i => {
+      if (i.disabled) return;
+      const label = i.dataset.label ? i.dataset.label.toLowerCase().trim() : "";
+      let valor = "";
+      if (i.classList.contains('field-data-doc')) {
+        const idCampo = i.dataset.id;
+        const prefix = document.getElementById('pref_' + idCampo);
+        valor = prefix && i.value ? prefix.value + i.value : "";
+      } else if (i.type !== "checkbox" && i.type !== "radio") {
+        valor = i.value;
+      }
+      
+      if (valor && (label.includes("tel") || label.includes("cel") || label.includes("contacto"))) {
+        if (!telIdentificado) telIdentificado = valor;
+      }
+    });
+
+    if (!telIdentificado) {
+      return alert("ERROR: No se ha identificado un número telefónico para esta gestión. Por favor busque un cliente o asegúrese de llenar el campo de teléfono en el formulario.");
+    }
+
+    // Recopilar la información del formulario
+    const camposInputs = document.querySelectorAll('.field-data, .field-data-check, .field-data-doc');
+    camposInputs.forEach(i => {
+      if (i.disabled) return;
+
+      const label = i.dataset.label;
+      if (i.type === "checkbox" || i.type === "radio") {
+        if (i.checked) {
+          if (formData[label]) formData[label] += ", " + i.value;
+          else formData[label] = i.value;
+        } else {
+          // For checkboxes that are mandatory but not checked, validation is handled below if formData[label] remains undefined
+        }
+      } else if (i.classList.contains('field-data-doc')) {
+        const idCampo = i.dataset.id;
+        const prefix = document.getElementById('pref_' + idCampo);
+        const valorCompleto = prefix && i.value ? prefix.value + i.value : "";
+        if (i.dataset.req === "true" && !valorCompleto) error = true;
+        if (valorCompleto) formData[label] = valorCompleto;
+      } else {
+        if (i.dataset.req === "true" && !i.value) error = true;
+        if (i.value) formData[label] = i.value;
+      }
+    });
+
+    // Revisar si algún checkbox/radio obligatorio no fue checkeado
+    const checkRequiredGroups = document.querySelectorAll('.op-campo-wrapper[data-req="true"]');
+    checkRequiredGroups.forEach(w => {
+      if (w.style.display !== "none" && w.style.pointerEvents !== "none") {
+        const inputsGroup = w.querySelectorAll('.field-data, .field-data-check, .field-data-doc');
+        if (inputsGroup.length > 0 && (inputsGroup[0].type === "checkbox" || inputsGroup[0].type === "radio")) {
+          const checkedCount = w.querySelectorAll('.field-data-check:checked').length;
+          if (checkedCount === 0) error = true;
+        }
+      }
+    });
+
+    if (error) return alert("Por favor llena los campos obligatorios del formulario antes de finalizar.");
+
+    let estadoDetectado = "";
+    for (let k in formData) {
+      let clave = k.toString().toLowerCase().trim();
+      if (clave === "estado de la llamada" || clave === "estado" || clave === "resultado" || clave === "estatus") {
+        estadoDetectado = formData[k];
+        break;
+      }
+    }
+
+    const resultado = estadoDetectado || "Gestión Exitosa";
+    const rStr = resultado.toLowerCase().trim();
+
+    const csvHeaders = (DATA_CACHE_OPERADOR && DATA_CACHE_OPERADOR.length > 0) ? DATA_CACHE_OPERADOR[0] : [];
+    const preguntasOrdenadas = CAMPOS_FORM_ACTUAL.map(c => c.label);
+
+    // Cargar a caché si el estado es Exitoso globalmente
+    let isExEx = rStr.includes("exitos") || rStr.includes("answered") || rStr.includes("contest") || rStr.includes("efectiv");
+    if (isExEx) {
+      let idxTelCash = csvHeaders.findIndex(h => h.toLowerCase().includes("tel") || h.toLowerCase().includes("cel") || h.toLowerCase() === "id");
+      if (idxTelCash === -1) idxTelCash = 0;
+
+      let refTel = "";
+      if (CAMPANA_OPERANDO.tipoAsignacion === 'Incidencias' && RESPUESTA_GENERAL_ACTIVA) {
+        refTel = REGISTROS_INCIDENCIAS_ACTUALES[0] ? REGISTROS_INCIDENCIAS_ACTUALES[0][idxTelCash] : "";
+      } else if (REGISTRO_ACTUAL_DATA) {
+        refTel = REGISTRO_ACTUAL_DATA[idxTelCash];
+      }
+      if (refTel && !TELEFONOS_EXITOSOS_CACHE.includes(refTel.toString().trim())) {
+        TELEFONOS_EXITOSOS_CACHE.push(refTel.toString().trim());
+      }
+    } else {
+      // SI ES FALLIDA Y ES MANUAL, GUARDAR EN HISTORIAL
+      if (CAMPANA_OPERANDO.tipoAsignacion === 'Manual' && REGISTRO_ACTUAL_DATA && REGISTRO_ACTUAL_DATA._index) {
+        HISTORIAL_LLAMADAS_FALLIDAS.push(REGISTRO_ACTUAL_DATA._index);
+      }
+    }
+
+    mostrarCarga("Enviando gestión...");
+
+    // Función interna para manejar la actualización visual tras completar las solicitudes
+    function manejarExitoUI(esGeneral, esExito) {
+      ocultarCarga();
+      console.log("UI Actualizada - Guardado en proceso...");
+
+      const formGest = document.getElementById('tarjeta-formulario-gestion');
+
+      if (CAMPANA_OPERANDO.tipoAsignacion === 'ExploracionDuplicados') {
+        limpiarExploradorDuplicados();
+      } else if (CAMPANA_OPERANDO.tipoAsignacion === 'Incidencias') {
+        document.getElementById('contenedor-original-formulario').appendChild(formGest);
+        if (formGest) formGest.style.display = 'none';
+
+        if (esGeneral) {
+          INCIDENCIAS_RESUELTAS = REGISTROS_INCIDENCIAS_ACTUALES.map((_, idx) => idx);
+
+          document.querySelectorAll('.card-incidencia-wrapper').forEach(card => {
+            card.classList.remove('active');
+            card.style.opacity = '0.5';
+            card.style.pointerEvents = 'none';
+            if (!card.querySelector('.card-incidencia-title span').innerText.includes('(Resuelta)')) {
+              card.querySelector('.card-incidencia-title span').innerText += " (Res. General)";
+            }
+          });
+
+          document.getElementById('contenedor-finalizar-persona').style.display = 'block';
+          RESPUESTA_GENERAL_ACTIVA = false;
+          INCIDENCIA_SELECCIONADA = null;
+          REGISTRO_ACTUAL_DATA = null;
+        } else {
+          INCIDENCIAS_RESUELTAS.push(INCIDENCIA_SELECCIONADA.index);
+
+          const cardResuelta = document.getElementById('card-incidencia-' + INCIDENCIA_SELECCIONADA.index);
+          if (cardResuelta) {
+            cardResuelta.classList.remove('active');
+            cardResuelta.style.opacity = '0.5';
+            cardResuelta.style.pointerEvents = 'none';
+            cardResuelta.querySelector('.card-incidencia-title span').innerText += " (Resuelta)";
+          }
+
+          if (INCIDENCIAS_RESUELTAS.length === REGISTROS_INCIDENCIAS_ACTUALES.length) {
+            document.getElementById('contenedor-finalizar-persona').style.display = 'block';
+          }
+
+          INCIDENCIA_SELECCIONADA = null;
+          REGISTRO_ACTUAL_DATA = null;
+        }
+      } else {
+        document.getElementById('busqueda-telefono').value = "";
+        if (CAMPANA_OPERANDO.tipoCampana !== 'Entrante' && CAMPANA_OPERANDO.tipoAsignacion === 'Manual') {
+          cargarSiguienteCliente();
+        } else if (CAMPANA_OPERANDO.tipoCampana !== 'Entrante') {
+          document.getElementById('op-cliente-info').innerHTML = '<div class="alert alert-info py-2 small m-0"><i class="fas fa-check-circle me-1"></i> Gestión guardada. Listo para el siguiente contacto.</div>';
+          REGISTRO_ACTUAL_DATA = null;
+        }
+      }
+
+      document.querySelectorAll('.field-data').forEach(i => i.value = "");
+      document.querySelectorAll('.field-data-check').forEach(i => i.checked = false);
+      checkearSecuencia();
+
+      // Deshabilitamos la actualización por servidor aquí para evitar que el contador 
+      // retroceda a valores antiguos durante el guardado optimista.
+      // actualizarContadorOperador(CAMPANA_OPERANDO.nombre); 
+    }
+
+    // --- OPTIMISTIC UI: FLUJO INSTANTÁNEO ---
+    const dataOptimista = Object.assign({}, formData);
+
+    // 0. Actualizar contadores visuales inmediatamente (Optimistic)
+    let isEx = (resultado.toLowerCase().includes("exitosa") || resultado.toLowerCase().includes("answered") || resultado.toLowerCase().includes("contestó") || resultado.toLowerCase().includes("efectiv"));
+    if (isEx) {
+      let el = document.getElementById('op-count-exitosas');
+      if (el) el.innerText = (parseInt(el.innerText) || 0) + 1;
+    } else {
+      let el = document.getElementById('op-count-fallidas');
+      if (el) el.innerText = (parseInt(el.innerText) || 0) + 1;
+    }
+    if (document.getElementById('op-count-incidencias')) {
+      let incAdd = (RESPUESTA_GENERAL_ACTIVA && REGISTROS_INCIDENCIAS_ACTUALES) ? REGISTROS_INCIDENCIAS_ACTUALES.length : 1;
+      let el = document.getElementById('op-count-incidencias');
+      if (el) el.innerText = (parseInt(el.innerText) || 0) + incAdd;
+    }
+
+    // 1. Mostrar retroalimentación visual inmediata
+    showToast("Guardando gestión...", "info");
+
+    // 2. Limpiar UI instantáneamente (Sin esperar al servidor)
+    const registroParaGuardar = REGISTRO_ACTUAL_DATA;
+
+    // --- Actualización Optimista de Caches Locales ---
+    if (isEx && registroParaGuardar) {
+      const cabeceraBase = DATA_CACHE_OPERADOR[0];
+      let idxT = cabeceraBase.findIndex(h => h.toLowerCase().includes("tel") || h.toLowerCase().includes("cel") || h.toLowerCase() === "id");
+      if (idxT !== -1) {
+        let telStr = registroParaGuardar[idxT].toString().trim();
+        if (!TELEFONOS_EXITOSOS_CACHE.includes(telStr)) TELEFONOS_EXITOSOS_CACHE.push(telStr);
+      }
+    }
+
+    if (CAMPANA_OPERANDO.tipoAsignacion === 'ExploracionDuplicados' && registroParaGuardar) {
+      if (!DATA_GESTIONES_CACHE || DATA_GESTIONES_CACHE.length === 0) {
+        // Simulación de cabeceras EXACTA al servidor: Base + Cliente (CSV) + Formulario
+        const cabBase = ["Campaña", "Resultado", "Usuario", "Fecha"];
+        const cabCSV = DATA_CACHE_OPERADOR[0] || [];
+        const cabForm = CAMPOS_FORM_ACTUAL.map(c => c.label);
+
+        // Evitar duplicados entre base y csv
+        const clienteCols = cabCSV.filter(h => !cabBase.includes(h));
+        DATA_GESTIONES_CACHE = [cabBase.concat(clienteCols).concat(cabForm)];
+      }
+
+      if (DATA_GESTIONES_CACHE && DATA_GESTIONES_CACHE.length > 0) {
+        const cabReporte = DATA_GESTIONES_CACHE[0];
+        let nuevaFilaSim = new Array(cabReporte.length).fill("");
+
+        // Mapear campos base
+        cabReporte.forEach((hr, idxR) => {
+          let hLow = hr.toString().toLowerCase().trim();
+          if (hLow === "resultado") nuevaFilaSim[idxR] = resultado;
+          if (hLow === "usuario") nuevaFilaSim[idxR] = USUARIO_ACTUAL;
+          if (hLow === "campaña" || hLow === "campana") nuevaFilaSim[idxR] = CAMPANA_OPERANDO.nombre;
+          if (hLow === "fecha") nuevaFilaSim[idxR] = new Date();
+
+          // Buscar en CSV
+          const cabCSV = DATA_CACHE_OPERADOR[0];
+          const idxCSV = cabCSV.findIndex(h => h.toLowerCase().trim() === hLow);
+          if (idxCSV !== -1) {
+            nuevaFilaSim[idxR] = registroParaGuardar[idxCSV];
+          }
+
+          // Buscar en Form Data (Respuestas del operador)
+          if (formData[hr]) {
+            nuevaFilaSim[idxR] = formData[hr];
+          }
+        });
+
+        DATA_GESTIONES_CACHE.push(nuevaFilaSim);
+      }
+    }
+
+    manejarExitoUI(RESPUESTA_GENERAL_ACTIVA, isEx);
+
+    if (CAMPANA_OPERANDO.tipoCampana !== 'Entrante' && CAMPANA_OPERANDO.tipoAsignacion === 'Incidencias' && RESPUESTA_GENERAL_ACTIVA) {
+      let totalEnviados = 0;
+      let totalEsperados = REGISTROS_INCIDENCIAS_ACTUALES.length;
+
+      REGISTROS_INCIDENCIAS_ACTUALES.forEach((registroFila) => {
+        let dataFinal = Object.assign({}, formData);
+        csvHeaders.forEach((h, i) => {
+          dataFinal[h] = registroFila[i];
+        });
+
+        google.script.run
+          .withSuccessHandler(function () {
+            totalEnviados++;
+            if (totalEnviados === totalEsperados) {
+              showToast("Todas las incidencias guardadas.", "success");
+            }
+          })
+          .withFailureHandler(function (err) {
+            showToast("Error en lote: " + err, "danger");
+            console.error(err);
+          })
+          .registrarGestion(CAMPANA_OPERANDO.nombre, resultado, dataFinal, USUARIO_ACTUAL, csvHeaders, preguntasOrdenadas, CAMPANA_OPERANDO.tipoCampana);
+      });
+    } else {
+      let dataFinal = Object.assign({}, formData);
+      if (CAMPANA_OPERANDO.tipoCampana !== 'Entrante') {
+        csvHeaders.forEach((h, i) => {
+          dataFinal[h] = registroParaGuardar ? registroParaGuardar[i] : "";
+        });
+      }
+
+      google.script.run
+        .withSuccessHandler(function () {
+          showToast("Gestión guardada con éxito", "success");
+        })
+        .withFailureHandler(function (err) {
+          showToast("FALLO AL GUARDAR: " + err, "danger");
+          // Opción de recuperación si falla
+          console.error("Error crítico guardando:", err);
+        })
+        .registrarGestion(CAMPANA_OPERANDO.nombre, resultado, dataFinal, USUARIO_ACTUAL, csvHeaders, preguntasOrdenadas, CAMPANA_OPERANDO.tipoCampana);
+    }
+  }
+
+  function mostrarSeccion(seccion) {
+    const btnFormularios = document.getElementById('btn-nav-formularios');
+    const btnUsuarios = document.getElementById('btn-nav-usuarios');
+    const btnSalientes = document.getElementById('btn-nav-campanas-salientes');
+    const btnEntrantes = document.getElementById('btn-nav-campanas-entrantes');
+    const btnSupervisor = document.getElementById('btn-nav-supervisor');
+    const btnRanking = document.getElementById('btn-nav-ranking');
+    const btnDashboard = document.getElementById('btn-nav-dashboard');
+
+    if (btnFormularios) btnFormularios.classList.remove('active');
+    if (btnUsuarios) btnUsuarios.classList.remove('active');
+    if (btnSalientes) btnSalientes.classList.remove('active');
+    if (btnEntrantes) btnEntrantes.classList.remove('active');
+    if (btnSupervisor) btnSupervisor.classList.remove('active');
+    if (btnRanking) btnRanking.classList.remove('active');
+    if (btnDashboard) btnDashboard.classList.remove('active');
+
+    document.getElementById('seccion-campanas').style.display = seccion.startsWith('campanas') ? 'block' : 'none';
+    document.getElementById('seccion-formularios').style.display = seccion === 'formularios' ? 'block' : 'none';
+    document.getElementById('seccion-usuarios').style.display = seccion === 'usuarios' ? 'block' : 'none';
+    document.getElementById('seccion-supervisor').style.display = seccion === 'supervisor' ? 'block' : 'none';
+    document.getElementById('seccion-ranking').style.display = seccion === 'ranking' ? 'block' : 'none';
+    const seccionDashboard = document.getElementById('seccion-dashboard');
+    if (seccionDashboard) seccionDashboard.style.display = seccion === 'dashboard' ? 'block' : 'none';
+
+    // Detener siempre el refresco del supervisor y dashboard al cambiar de sección
+    if (INTERVALO_SUPERVISOR) {
+      clearInterval(INTERVALO_SUPERVISOR);
+      INTERVALO_SUPERVISOR = null;
+    }
+    if (typeof Dashboard !== 'undefined' && seccion !== 'dashboard') {
+      Dashboard.detener();
+    }
+
+    if (seccion.startsWith('campanas')) {
+      if (seccion === 'campanas-entrantes') {
+        if (btnEntrantes) btnEntrantes.classList.add('active');
+        VISTA_CAMPANAS_ACTUAL = 'Entrante';
+        document.getElementById('titulo-panel-campanas').innerText = "Panel de Campañas Entrantes";
+      } else {
+        if (btnSalientes) btnSalientes.classList.add('active');
+        VISTA_CAMPANAS_ACTUAL = 'Saliente';
+        document.getElementById('titulo-panel-campanas').innerText = "Panel de Campañas Salientes";
+      }
+      // Limpiar buscador al cambiar de sección de campañas
+      const buscador = document.getElementById('buscador-campanas');
+      if (buscador) buscador.value = "";
+
+      cargarCampanas();
+      regresarALista();
+    }
+    else if (seccion === 'formularios') {
+      if (btnFormularios) btnFormularios.classList.add('active');
+      cargarFormularios();
+      cancelarEdicionForm();
+    }
+    else if (seccion === 'usuarios') {
+      if (btnUsuarios) btnUsuarios.classList.add('active');
+      cancelarEdicionUsuario();
+      cargarUsuariosAdministrador();
+    }
+    else if (seccion === 'supervisor') {
+      if (btnSupervisor) btnSupervisor.classList.add('active');
+      cargarPanelSupervisor();
+      // Auto-refresco cada 30 segundos
+      INTERVALO_SUPERVISOR = setInterval(function () { cargarPanelSupervisor(true); }, 30000);
+    }
+    else if (seccion === 'ranking') {
+      if (btnRanking) btnRanking.classList.add('active');
+      cargarRanking('daily');
+    }
+    else if (seccion === 'dashboard') {
+      if (btnDashboard) btnDashboard.classList.add('active');
+      if (typeof Dashboard !== 'undefined') Dashboard.init();
+    }
+  }
+
+  // Variable para el intervalo del supervisor
+  let INTERVALO_SUPERVISOR = null;
+
+  function descargarDataConsolidada(index) {
+    const c = DATOS_CAMPANAS[index];
+    mostrarCarga("Generando consolidado general...");
+    google.script.run.withSuccessHandler(function (matriz) {
+      ocultarCarga();
+      if (!matriz || matriz.length === 0) {
+        return alert("No hay datos suficientes para generar el consolidado en esta campaña.");
+      }
+      const ws = XLSX.utils.aoa_to_sheet(matriz);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Consolidado");
+      XLSX.writeFile(wb, `Data_General_${c.nombre}.xlsx`);
+    }).obtenerDataConsolidada(c.nombre);
+  }
+
+  function cargarCampanas() {
+    const tabla = document.getElementById('tabla-campanas-body');
+    if (!tabla) return;
+
+    if (tabla.innerHTML.trim() === '') {
+      tabla.innerHTML = '<tr><td colspan="4" class="text-center">Cargando...</td></tr>';
+    }
+
+    google.script.run.withSuccessHandler(function (datos) {
+      DATOS_CAMPANAS = datos;
+      // Al cargar de nuevo, reseteamos a la página 1 y aplicamos filtros iniciales
+      PAGINA_ACTUAL_CAMPANAS = 1;
+      filtrarCampanas();
+    }).obtenerCampanas();
+  }
+
+  function evaluarBusqueda(e) {
+    const buscador = document.getElementById('buscador-campanas');
+    const btnClear = document.getElementById('btn-clear-campanas');
+    if (buscador && btnClear) {
+      btnClear.style.display = buscador.value.length > 0 ? "block" : "none";
+    }
+    if (e && e.key === "Enter") {
+      filtrarCampanas();
+    }
+    // Opcional: filtrar en tiempo real después de cierto delay o caracteres
+    if (buscador && buscador.value.length === 0) filtrarCampanas();
+  }
+
+  function limpiarBuscadorCampanas() {
+    const buscador = document.getElementById('buscador-campanas');
+    if (buscador) {
+      buscador.value = "";
+      evaluarBusqueda();
+      filtrarCampanas();
+    }
+  }
+
+  function filtrarCampanas() {
+    const buscador = document.getElementById('buscador-campanas');
+    const termino = buscador ? buscador.value.toLowerCase().trim() : "";
+
+    CAMPANAS_FILTRADAS = DATOS_CAMPANAS.filter(f => {
+      const tipo = f.tipoCampana || 'Saliente';
+      const coincideTipo = tipo === VISTA_CAMPANAS_ACTUAL;
+      if (!coincideTipo) return false;
+      if (termino === "") return true;
+      const nombre = (f.nombre || "").toLowerCase();
+      const desc = (f.descripcion || "").toLowerCase();
+      return nombre.includes(termino) || desc.includes(termino);
+    });
+
+    PAGINA_ACTUAL_CAMPANAS = 1;
+    if (typeof renderizarTablaCampanas === "function") {
+      renderizarTablaCampanas();
+    }
+  }
+
+  function renderizarTablaCampanas() {
+    const tabla = document.getElementById('tabla-campanas-body');
+    const labelInfo = document.getElementById('info-paginacion-campanas');
+    if (!tabla) return;
+
+    const total = CAMPANAS_FILTRADAS.length;
+    const inicio = (PAGINA_ACTUAL_CAMPANAS - 1) * ITEMS_POR_PAGINA_CAMPANAS;
+    const fin = Math.min(inicio + ITEMS_POR_PAGINA_CAMPANAS, total);
+    const dataPagina = CAMPANAS_FILTRADAS.slice(inicio, fin);
+
+    // Actualizar etiqueta de info
+    if (labelInfo) {
+      if (total > 0) {
+        labelInfo.innerHTML = `<span>Mostrando</span> <strong class="text-primary">${inicio + 1}-${fin}</strong> <span>de</span> <strong class="text-dark">${total}</strong> <span>campañas</span>`;
+      } else {
+        labelInfo.innerHTML = `<span>Sin resultados</span>`;
+      }
+    }
+
+    let html = '';
+    if (!Array.isArray(DATOS_CAMPANAS)) DATOS_CAMPANAS = [];
+
+    dataPagina.forEach((f) => {
+      // Búsqueda segura del índice original
+      const originalIndex = (DATOS_CAMPANAS || []).findIndex(c => c && c.nombre === f.nombre && c.fila === f.fila);
+
+      const safeRol = (ROL || "").toLowerCase();
+      // Sanitizar nombre para evitar que comillas rompan el onclick
+      const safeNombre = (f.nombre || "").replace(/'/g, "\\'");
+
+      let badgeTipo = f.tipoCampana === 'Entrante'
+        ? '<span class="badge bg-info text-dark ms-2" style="font-size:0.6rem;">ENTRANTE</span>'
+        : '<span class="badge bg-secondary ms-2" style="font-size:0.6rem;">SALIENTE</span>';
+
+      html += `
+      <tr>
+        <td><div class="fw-bold text-dark">${f.nombre} ${badgeTipo}</div><div class="small text-muted">${f.descripcion}</div></td>
+        <td><div class="small fw-bold text-primary">${f.fechaInicio}</div><div class="small text-danger">${f.fechaFin}</div></td>
+        <td><span class="${f.estatus === "Activa" ? 'badge-active' : 'badge-finished'}">${f.estatus}</span></td>
+        <td class="text-end">
+          <button class="btn-download-full" title="Descargar Data General Integrada" onclick="descargarDataConsolidada(${originalIndex})"><i class="fas fa-file-download"></i></button>
+          <button class="btn-report-view" title="Ver Gestiones" onclick="abrirReporteCampana(${originalIndex})"><i class="fas fa-file-invoice"></i></button>
+          <button class="btn-data-view" title="Data" onclick="abrirVistaData(${originalIndex})"><i class="fas fa-database"></i></button>
+          <button class="btn-phone-stats" title="Stats" onclick="verEstadisticas(${originalIndex})"><i class="fas fa-chart-pie"></i></button>
+          <button class="btn-edit-pencil" title="Editar" onclick="prepararEdicion(${originalIndex})"><i class="fas fa-pencil-alt"></i></button>
+          ${safeRol !== 'analista' ? `<button class="btn-delete-item" title="Eliminar" onclick="confirmarBorrado(${f.fila}, '${safeNombre}')"><i class="fas fa-trash-alt"></i></button>` : ''}
+        </td>
+      </tr>`;
+    });
+
+    tabla.innerHTML = html || '<tr><td colspan="4" class="text-center py-4 text-muted">No se encontraron campañas coincidentes</td></tr>';
+    renderizarControlesPaginacion();
+  }
+
+  function renderizarControlesPaginacion() {
+    const contenedor = document.getElementById('paginacion-campanas');
+    if (!contenedor) return;
+
+    const totalPaginas = Math.ceil(CAMPANAS_FILTRADAS.length / ITEMS_POR_PAGINA_CAMPANAS);
+    if (totalPaginas <= 1) {
+      contenedor.innerHTML = "";
+      return;
+    }
+
+    let html = `
+      <button class="btn-pagination nav-btn" ${PAGINA_ACTUAL_CAMPANAS === 1 ? 'disabled' : ''} onclick="cambiarPaginaCampanas(1)" title="Primera página">
+        <i class="fas fa-angle-double-left"></i>
+      </button>
+      <button class="btn-pagination nav-btn" ${PAGINA_ACTUAL_CAMPANAS === 1 ? 'disabled' : ''} onclick="cambiarPaginaCampanas(${PAGINA_ACTUAL_CAMPANAS - 1})" title="Anterior">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+    `;
+
+    // Rango de páginas a mostrar (máximo 5)
+    let inicioRango = Math.max(1, PAGINA_ACTUAL_CAMPANAS - 2);
+    let finRango = Math.min(totalPaginas, inicioRango + 4);
+    if (finRango - inicioRango < 4) inicioRango = Math.max(1, finRango - 4);
+
+    for (let i = inicioRango; i <= finRango; i++) {
+      html += `
+        <button class="btn-pagination ${i === PAGINA_ACTUAL_CAMPANAS ? 'active' : ''}" onclick="cambiarPaginaCampanas(${i})">
+          ${i}
+        </button>
+      `;
+    }
+
+    html += `
+      <button class="btn-pagination nav-btn" ${PAGINA_ACTUAL_CAMPANAS === totalPaginas ? 'disabled' : ''} onclick="cambiarPaginaCampanas(${PAGINA_ACTUAL_CAMPANAS + 1})" title="Siguiente">
+        <i class="fas fa-chevron-right"></i>
+      </button>
+      <button class="btn-pagination nav-btn" ${PAGINA_ACTUAL_CAMPANAS === totalPaginas ? 'disabled' : ''} onclick="cambiarPaginaCampanas(${totalPaginas})" title="Última página">
+        <i class="fas fa-angle-double-right"></i>
+      </button>
+    `;
+
+    contenedor.innerHTML = html;
+  }
+
+  function cambiarPaginaCampanas(nuevaPagina) {
+    const totalPaginas = Math.ceil(CAMPANAS_FILTRADAS.length / ITEMS_POR_PAGINA_CAMPANAS);
+    if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
+    PAGINA_ACTUAL_CAMPANAS = nuevaPagina;
+    renderizarTablaCampanas();
+    // Scroll suave hacia arriba de la tabla
+    document.getElementById('seccion-campanas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function abrirReporteCampana(index) {
+    const c = DATOS_CAMPANAS[index];
+    CAMPANA_ACTUAL_DATA = c.nombre;
+    document.getElementById('reporte-nombre-campana').innerText = "Gestiones: " + c.nombre;
+    document.getElementById('contenedor-lista-campanas').style.display = "none";
+    document.getElementById('contenedor-reporte-campana').style.display = "block";
+    google.script.run.withSuccessHandler(function (datos) {
+      GESTIONES_ACTUALES = datos;
+      const cuerpo = document.getElementById('cuerpo-reporte');
+      const cabecera = document.getElementById('cabecera-reporte');
+      if (!datos || datos.length === 0) {
+        cabecera.innerHTML = "";
+        cuerpo.innerHTML = '<tr><td class="text-center">No hay gestiones registradas</td></tr>';
+        return;
+      }
+      cabecera.innerHTML = "<tr>" + datos[0].map(h => `<th>${h}</th>`).join('') + "</tr>";
+      cuerpo.innerHTML = datos.slice(1).map(fila => `<tr>${fila.map(celda => `<td>${celda}</td>`).join('')}</tr>`).join('');
+    }).obtenerGestionesCampana(c.nombre);
+  }
+
+  function descargarReporteExcel() {
+    if (!GESTIONES_ACTUALES || GESTIONES_ACTUALES.length <= 1) return alert("No hay datos para descargar");
+    const ws = XLSX.utils.aoa_to_sheet(GESTIONES_ACTUALES);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Gestiones");
+    XLSX.writeFile(wb, `Reporte_${CAMPANA_ACTUAL_DATA || 'Gestiones'}.xlsx`);
+  }
+
+  function abrirVistaData(index) {
+    const c = DATOS_CAMPANAS[index];
+    CAMPANA_ACTUAL_DATA = c.nombre;
+    document.getElementById('data-nombre-campana').innerText = "Data de: " + c.nombre;
+    document.getElementById('contenedor-lista-campanas').style.display = "none";
+    document.getElementById('contenedor-data-campana').style.display = "block";
+
+    if (c.tipoCampana === 'Entrante') {
+      document.getElementById('cabecera-data-preview').innerHTML = "";
+      document.getElementById('cuerpo-data-preview').innerHTML = "<tr><td class='text-center text-muted py-5'><i class='fas fa-info-circle fa-2x mb-3 text-info'></i><br>Las campañas Entrantes no utilizan Base de Datos pre-cargada.</td></tr>";
+      document.getElementById('input-archivo-data').style.display = "none";
+      document.getElementById('input-archivo-data').nextElementSibling.style.display = "none";
+      document.getElementById('bloque-config-columnas').style.display = "none";
+    } else {
+      document.getElementById('input-archivo-data').style.display = "block";
+      document.getElementById('input-archivo-data').nextElementSibling.style.display = "inline-block";
+      google.script.run.withSuccessHandler(renderDataExistente).obtenerDataCampaña(c.nombre);
+    }
+  }
+
+  function renderDataExistente(matriz) {
+    if (!matriz || matriz.length === 0) {
+      document.getElementById('cabecera-data-preview').innerHTML = "";
+      document.getElementById('cuerpo-data-preview').innerHTML = "<tr><td>Sin base cargada</td></tr>";
+      document.getElementById('bloque-config-columnas').style.display = "none";
+      return;
+    }
+    document.getElementById('cabecera-data-preview').innerHTML = "<tr>" + matriz[0].map(h => `<th>${h}</th>`).join('') + "</tr>";
+    document.getElementById('cuerpo-data-preview').innerHTML = matriz.slice(1, 21).map(fila => `<tr>${fila.map(celda => `<td>${celda}</td>`).join('')}</tr>`).join('');
+
+    renderizarOpcionesColumnas(matriz[0]);
+  }
+
+  function renderizarOpcionesColumnas(cabeceras) {
+    const bloque = document.getElementById('bloque-config-columnas');
+    const contenedor = document.getElementById('lista-columnas-data');
+    if (!cabeceras || cabeceras.length === 0) {
+      bloque.style.display = "none";
+      return;
+    }
+
+    bloque.style.display = "block";
+
+    const campana = DATOS_CAMPANAS.find(c => c.nombre === CAMPANA_ACTUAL_DATA);
+    let configuradas = [];
+    let tieneConfiguracion = false;
+
+    if (campana && campana.columnasVisibles) {
+      configuradas = campana.columnasVisibles.split(',').map(s => s.trim());
+      tieneConfiguracion = true;
+    }
+
+    contenedor.innerHTML = cabeceras.map(h => {
+      const hTrim = h.trim();
+      const isChecked = tieneConfiguracion ? configuradas.includes(hTrim) : true;
+      return `
+        <div class="form-check form-switch custom-switch-columna">
+            <input class="form-check-input col-vis-check" type="checkbox" value="${hTrim}" id="col_${hTrim.replace(/\s+/g, '_')}" ${isChecked ? 'checked' : ''}>
+            <label class="form-check-label small fw-bold" for="col_${hTrim.replace(/\s+/g, '_')}">${hTrim}</label>
+        </div>
+        `;
+    }).join('');
+  }
+
+  function guardarConfigColumnas() {
+    const checkboxes = document.querySelectorAll('.col-vis-check');
+    const seleccionadas = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+    const columnasStr = seleccionadas.join(',');
+
+    mostrarCarga("Guardando configuración...");
+    google.script.run.withSuccessHandler(function (res) {
+      ocultarCarga();
+      if (res.success) {
+        alert("Configuración de columnas guardada con éxito.");
+        const idx = DATOS_CAMPANAS.findIndex(c => c.nombre === CAMPANA_ACTUAL_DATA);
+        if (idx !== -1) DATOS_CAMPANAS[idx].columnasVisibles = columnasStr;
+      } else {
+        alert("Error al guardar la configuración.");
+      }
+    }).guardarConfiguracionColumnas(CAMPANA_ACTUAL_DATA, columnasStr);
+  }
+
+  function procesarArchivoData() {
+    const fileInput = document.getElementById('input-archivo-data');
+    if (fileInput.files.length === 0) return alert("Selecciona un archivo");
+    document.getElementById('loading-data').style.display = "block";
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const matriz = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      google.script.run.withSuccessHandler(function () {
+        document.getElementById('loading-data').style.display = "none";
+        renderDataExistente(matriz);
+        alert("Data cargada y organizada en Drive");
+      }).procesarDataCampaña(CAMPANA_ACTUAL_DATA, matriz);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function toggleDistribucion() {
+    const tipoCampanaElem = document.getElementById('campana-tipo-direccion');
+    const tipoCampana = tipoCampanaElem ? tipoCampanaElem.value : 'Saliente';
+
+    const bloqueAsignacion = document.getElementById('bloque-modo-asignacion');
+    const tipoAsignacionElem = document.getElementById('campana-tipo-asignacion');
+
+    if (tipoCampana === 'Entrante') {
+      if (bloqueAsignacion) bloqueAsignacion.style.display = 'none';
+      document.getElementById('contenedor-distribucion-manual').style.display = 'none';
+      return;
+    } else {
+      if (bloqueAsignacion) bloqueAsignacion.style.display = 'block';
+    }
+
+    const tipo = tipoAsignacionElem ? tipoAsignacionElem.value : 'Issabel';
+    document.getElementById('contenedor-distribucion-manual').style.display = tipo === 'Manual' ? 'block' : 'none';
+
+    if (tipo === 'Manual') {
+      actualizarListaDistribucion();
+      const nombreCampana = document.getElementById('campana-nombre').value;
+      const inputTotal = document.getElementById('total-filas-distribuir');
+
+      if (nombreCampana) {
+        inputTotal.value = "";
+        inputTotal.placeholder = "Cargando...";
+        google.script.run.withSuccessHandler(function (total) {
+          inputTotal.value = total;
+          inputTotal.placeholder = "Total filas";
+        }).obtenerTotalFilasCampana(nombreCampana);
+      } else {
+        inputTotal.value = "0";
+        inputTotal.placeholder = "Total filas";
+      }
+    }
+  }
+
+  function actualizarListaDistribucion(savedData = null) {
+    const tipo = document.getElementById('campana-tipo-asignacion').value;
+    if (tipo !== 'Manual') return;
+
+    const usuarios = Array.from(document.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value);
+    const contenedor = document.getElementById('lista-distribucion-operadores');
+
+    if (usuarios.length === 0) {
+      contenedor.innerHTML = '<p class="text-muted small text-center m-0 py-2">Selecciona operadores arriba para asignar filas.</p>';
+      return;
+    }
+
+    let distData = {};
+    if (savedData && typeof savedData === 'string') {
+      try { distData = JSON.parse(savedData); } catch (e) { }
+    } else {
+      document.querySelectorAll('.dist-input-rango').forEach(input => {
+        distData[input.dataset.user] = input.value;
+      });
+    }
+
+    contenedor.innerHTML = usuarios.map(u => `
+      <div class="d-flex align-items-center mb-2">
+        <span class="fw-bold small text-secondary" style="width: 150px;"><i class="fas fa-user me-2"></i>${u}</span>
+        <input type="text" class="form-control form-control-sm custom-form-control dist-input-rango" data-user="${u}" placeholder="Ej: 1-30" value="${distData[u] || ''}">
+      </div>
+    `).join('');
+  }
+
+  function autoDistribuirFilas() {
+    const total = parseInt(document.getElementById('total-filas-distribuir').value);
+    const inputs = document.querySelectorAll('.dist-input-rango');
+    if (isNaN(total) || total <= 0) return alert("Ingresa un total válido de filas a distribuir.");
+    if (inputs.length === 0) return alert("Selecciona al menos un operador en 'Accesos de Operadores'.");
+
+    const perUser = Math.floor(total / inputs.length);
+    let remainder = total % inputs.length;
+
+    let currentStart = 1;
+    inputs.forEach(input => {
+      let currentEnd = currentStart + perUser - 1;
+      if (remainder > 0) { currentEnd++; remainder--; }
+      input.value = `${currentStart}-${currentEnd}`;
+      currentStart = currentEnd + 1;
+    });
+  }
+
+  function cargarUsuariosMulti(seleccionados = [], fila = null, distData = null) {
+    google.script.run.withSuccessHandler(function (lista) {
+      const contenedor = document.getElementById('contenedor-usuarios-checkboxes');
+      contenedor.innerHTML = lista.map(u => `
+        <div class="form-check usuario-item mb-1">
+          <input class="form-check-input user-checkbox" type="checkbox" value="${u.usuario}" id="chk_${u.usuario}" data-turno="${u.turno}" ${seleccionados.includes(u.usuario) ? 'checked' : ''} onchange="actualizarListaDistribucion()">
+          <label class="form-check-label w-100" for="chk_${u.usuario}" style="cursor: pointer;">${u.usuario} <span class="badge bg-light text-dark ms-2" style="font-size:0.65rem;">${u.turno.toUpperCase()}</span></label>
+        </div>
+      `).join('');
+      actualizarListaDistribucion(distData);
+    }).obtenerListaUsuarios(fila);
+  }
+
+  function filtrarUsuarios() {
+    const filtro = document.getElementById('buscador-usuarios').value.toLowerCase();
+    const items = document.querySelectorAll('.usuario-item');
+    items.forEach(item => {
+      const texto = item.innerText.toLowerCase();
+      item.style.display = texto.includes(filtro) ? "" : "none";
+    });
+  }
+
+  function prepararCreacion() {
+    document.getElementById('titulo-editor-campana').innerText = "Nueva Campaña";
+    document.getElementById('campana-fila').value = "";
+    document.getElementById('campana-reporte-id').value = "";
+    document.getElementById('campana-columnas-visibles').value = "";
+    document.getElementById('campana-nombre').value = "";
+    document.getElementById('campana-descripcion').value = "";
+    document.getElementById('campana-dialogo').value = "";
+    document.getElementById('campana-fecha').value = "";
+    document.getElementById('campana-fecha-fin').value = "";
+    document.getElementById('campana-meta').value = "";
+    document.getElementById('campana-sla').value = "";
+    document.getElementById('campana-estatus').checked = true;
+    document.getElementById('buscador-usuarios').value = "";
+
+    const tipoCampanaSelect = document.getElementById('campana-tipo-direccion');
+    if (tipoCampanaSelect) tipoCampanaSelect.value = VISTA_CAMPANAS_ACTUAL;
+
+    document.getElementById('campana-tipo-asignacion').value = "Issabel";
+    document.getElementById('total-filas-distribuir').value = "";
+
+    toggleDistribucion();
+    actualizarTextoEstatus();
+    cargarUsuariosMulti([], null, null);
+    cargarFormulariosEnSelect();
+
+    document.getElementById('contenedor-lista-campanas').style.display = "none";
+    document.getElementById('contenedor-editor-campana').style.display = "block";
+  }
+
+  function prepararEdicion(index) {
+    const c = DATOS_CAMPANAS[index];
+    document.getElementById('titulo-editor-campana').innerText = "Editar Campaña";
+    document.getElementById('campana-fila').value = c.fila;
+    document.getElementById('campana-reporte-id').value = c.reporteId || "";
+    document.getElementById('campana-columnas-visibles').value = c.columnasVisibles || "";
+    document.getElementById('campana-nombre').value = c.nombre;
+    document.getElementById('campana-descripcion').value = c.descripcion;
+    document.getElementById('campana-dialogo').value = c.dialogo;
+    document.getElementById('campana-fecha').value = c.fechaInicio;
+    document.getElementById('campana-fecha-fin').value = c.fechaFin;
+    document.getElementById('campana-meta').value = c.meta || "";
+    document.getElementById('campana-sla').value = c.sla || "";
+    document.getElementById('campana-estatus').checked = (c.estatus === "Activa");
+    document.getElementById('buscador-usuarios').value = "";
+
+    if (document.getElementById('campana-tipo-direccion')) document.getElementById('campana-tipo-direccion').value = c.tipoCampana || "Saliente";
+    document.getElementById('campana-tipo-asignacion').value = c.tipoAsignacion || "Issabel";
+    toggleDistribucion();
+
+    actualizarTextoEstatus();
+    cargarUsuariosMulti(c.usuarios ? c.usuarios.split(',') : [], c.fila, c.distribucion);
+    cargarFormulariosEnSelect(c.formularioId);
+
+    document.getElementById('contenedor-lista-campanas').style.display = "none";
+    document.getElementById('contenedor-editor-campana').style.display = "block";
+  }
+
+  function cargarFormulariosEnSelect(seleccionado = "") {
+    google.script.run.withSuccessHandler(function (formularios) {
+      let html = '<option value="">Ninguno</option>';
+      formularios.forEach(f => { html += `<option value="${f.nombre}" ${seleccionado === f.nombre ? 'selected' : ''}>${f.nombre}</option>`; });
+      document.getElementById('campana-form-id').innerHTML = html;
+    }).obtenerFormularios();
+  }
+
+  function procesarCampana() {
+    const tipoCampana = document.getElementById('campana-tipo-direccion') ? document.getElementById('campana-tipo-direccion').value : "Saliente";
+    const tipoAsignacion = document.getElementById('campana-tipo-asignacion').value;
+
+    let distribucionObj = {};
+    if (tipoCampana === 'Saliente' && tipoAsignacion === 'Manual') {
+      document.querySelectorAll('.dist-input-rango').forEach(input => {
+        distribucionObj[input.dataset.user] = input.value;
+      });
+    }
+
+    const data = {
+      fila: document.getElementById('campana-fila').value,
+      nombre: document.getElementById('campana-nombre').value,
+      descripcion: document.getElementById('campana-descripcion').value,
+      dialogo: document.getElementById('campana-dialogo').value,
+      fecha: document.getElementById('campana-fecha').value,
+      fechaFin: document.getElementById('campana-fecha-fin').value,
+      meta: document.getElementById('campana-meta').value,
+      sla: document.getElementById('campana-sla').value,
+      formularioId: document.getElementById('campana-form-id').value,
+      reporteId: document.getElementById('campana-reporte-id').value,
+      columnasVisibles: document.getElementById('campana-columnas-visibles').value,
+      estatus: document.getElementById('campana-estatus').checked ? "Activa" : "Finalizada",
+      usuarios: Array.from(document.querySelectorAll('.user-checkbox:checked')).map(cb => cb.value),
+      tipoCampana: tipoCampana,
+      tipoAsignacion: tipoCampana === 'Entrante' ? 'Ninguna' : tipoAsignacion,
+      distribucion: JSON.stringify(distribucionObj)
+    };
+
+    if (!data.nombre) return alert("Por favor ingresa un nombre para la campaña.");
+
+    mostrarCarga("Guardando campaña...");
+    google.script.run.withSuccessHandler(function () {
+      ocultarCarga();
+      document.getElementById('contenedor-editor-campana').style.display = "none";
+      document.getElementById('contenedor-lista-campanas').style.display = "block";
+      cargarCampanas();
+    }).guardarOActualizarCampana(data);
+  }
+
+  function verEstadisticas(index) {
+    const c = DATOS_CAMPANAS[index];
+    document.getElementById('stats-nombre-campana').innerText = c.nombre;
+    document.getElementById('contenedor-lista-campanas').style.display = "none";
+    document.getElementById('contenedor-stats-campana').style.display = "block";
+
+    const colIncidencias = document.getElementById('col-stat-incidencias');
+    if (colIncidencias) {
+      colIncidencias.style.display = (c.tipoAsignacion === 'Incidencias') ? 'block' : 'none';
+    }
+
+    document.getElementById('tabla-stats-operadores').innerHTML = '<tr><td colspan="5" class="text-center">Cargando datos...</td></tr>';
+
+    if (INTERVALO_ESTADISTICAS) clearInterval(INTERVALO_ESTADISTICAS);
+    cargarDataEstadisticas(c.nombre);
+
+    INTERVALO_ESTADISTICAS = setInterval(() => {
+      cargarDataEstadisticas(c.nombre);
+    }, 60000);
+  }
+
+  function cargarDataEstadisticas(nombreCampana) {
+    google.script.run.withSuccessHandler(function (s) {
+      document.getElementById('val-exitosas').innerText = s.exitosas;
+      document.getElementById('val-fallidas').innerText = s.fallidas;
+
+      document.getElementById('val-total-realizadas').innerText = s.totalRealizadas !== undefined ? s.totalRealizadas : s.total;
+      document.getElementById('val-efectividad-gestiones').innerText = s.efectividadGestiones + "%";
+      document.getElementById('val-total-data').innerText = s.totalData || 0;
+      document.getElementById('val-efectividad').innerText = s.efectividad + "%";
+
+      const valIncAbarcadas = document.getElementById('val-incidencias-abarcadas');
+      if (valIncAbarcadas) valIncAbarcadas.innerText = s.total;
+
+      const tbody = document.getElementById('tabla-stats-operadores');
+      if (s.operadores && s.operadores.length > 0) {
+        tbody.innerHTML = s.operadores.map(op => `
+              <tr>
+                  <td class="fw-bold">${op.nombre}</td>
+                  <td class="text-center text-success fw-bold">${op.exitosas}</td>
+                  <td class="text-center text-danger fw-bold">${op.fallidas}</td>
+                  <td class="text-center fw-bold">${op.total}</td>
+                  <td class="text-center text-primary fw-bold">${op.efectividad}%</td>
+              </tr>
+          `).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No hay gestiones registradas aún.</td></tr>';
+      }
+    }).obtenerEstadisticasLlamadas(nombreCampana);
+  }
+
+  function confirmarBorrado(fila, nombre) {
+    if (confirm("¿Eliminar campaña: " + nombre + "?")) google.script.run.withSuccessHandler(cargarCampanas).eliminarCampanaPorFila(fila);
+  }
+
+  function actualizarTextoEstatus() { document.getElementById('texto-estatus').innerText = document.getElementById('campana-estatus').checked ? "Activa" : "Finalizada"; }
+
+  function cargarFormularios() {
+    const tabla = document.getElementById('tabla-formularios-body');
+    if (!tabla) return;
+
+    if (tabla.innerHTML.trim() === '') {
+      tabla.innerHTML = '<tr><td colspan="2" class="text-center">Cargando...</td></tr>';
+    }
+
+    google.script.run.withSuccessHandler(function (datos) {
+      DATOS_FORMULARIOS = datos;
+      tabla.innerHTML = datos.map((f, i) => `
+        <tr><td class="fw-bold">${f.nombre}</td><td class="text-end">
+          <button class="btn-preview-view" title="Probar Formulario (Nueva Pestaña)" onclick="abrirPreviewEnNuevaPestana('${f.nombre}')"><i class="fas fa-external-link-alt"></i></button>
+          <button class="btn-duplicate-item" title="Duplicar Formulario" onclick="duplicarFormulario(${i})"><i class="fas fa-copy"></i></button>
+          <button class="btn-edit-pencil" title="Editar" onclick="mostrarEditorForm(${i})"><i class="fas fa-pencil-alt"></i></button>
+          ${ROL.toLowerCase() !== 'analista' ? `<button class="btn-delete-item" title="Eliminar" onclick="confirmarBorradoForm(${f.fila}, '${f.nombre}')"><i class="fas fa-trash-alt"></i></button>` : ''}
+        </td></tr>`).join('') || '<tr><td colspan="2" class="text-center">No hay formularios</td></tr>';
+    }).obtenerFormularios();
+  }
+
+  function duplicarFormulario(index) {
+    const f = DATOS_FORMULARIOS[index];
+    document.getElementById('contenedor-lista-formularios').style.display = "none";
+    document.getElementById('contenedor-editor-formulario').style.display = "block";
+    document.getElementById('form-fila').value = "";
+    document.getElementById('nuevo-form-nombre').value = f.nombre + " (Copia)";
+
+    let parsed = JSON.parse(f.campos || "[]");
+    if (Array.isArray(parsed)) {
+      CAMPOS_FORMULARIO = parsed;
+      SECCIONES_FORMULARIO = [];
+    } else {
+      CAMPOS_FORMULARIO = parsed.campos || [];
+      SECCIONES_FORMULARIO = parsed.secciones || [];
+    }
+
+    renderizarSeccionesForm();
+    renderizarCampos();
+  }
+
+  function abrirPreviewEnNuevaPestana(nombre) {
+    mostrarCarga("Abriendo vista previa...");
+    google.script.run.withSuccessHandler(function (url) {
+      ocultarCarga();
+      window.open(url + "?preview=" + encodeURIComponent(nombre), "_blank");
+    }).getAppUrl();
+  }
+
+  function mostrarEditorForm(index = null) {
+    document.getElementById('contenedor-lista-formularios').style.display = "none";
+    document.getElementById('contenedor-editor-formulario').style.display = "block";
+    if (index !== null) {
+      const f = DATOS_FORMULARIOS[index];
+      document.getElementById('form-fila').value = f.fila;
+      document.getElementById('nuevo-form-nombre').value = f.nombre;
+
+      let parsed = JSON.parse(f.campos || "[]");
+      if (Array.isArray(parsed)) {
+        CAMPOS_FORMULARIO = parsed;
+        SECCIONES_FORMULARIO = [];
+      } else {
+        CAMPOS_FORMULARIO = parsed.campos || [];
+        SECCIONES_FORMULARIO = parsed.secciones || [];
+      }
+    } else {
+      document.getElementById('form-fila').value = "";
+      document.getElementById('nuevo-form-nombre').value = "";
+      CAMPOS_FORMULARIO = [];
+      SECCIONES_FORMULARIO = [];
+    }
+    renderizarSeccionesForm();
+    renderizarCampos();
+  }
+
+  function renderizarSeccionesForm() {
+    const list = document.getElementById('lista-secciones-form');
+    if (!list) return;
+    if (SECCIONES_FORMULARIO.length === 0) {
+      list.innerHTML = '<p class="small text-muted mb-0">Sin secciones.</p>';
+    } else {
+      list.innerHTML = SECCIONES_FORMULARIO.map((s, i) => `
+        <div class="d-flex justify-content-between align-items-center bg-white p-2 border rounded mb-1 shadow-sm">
+          <span class="small fw-bold"><i class="fas fa-folder text-warning me-2"></i>${s.nombre}</span>
+          <button class="btn btn-sm text-danger p-0 px-1" onclick="eliminarSeccionForm(${i})" title="Eliminar Sección"><i class="fas fa-trash"></i></button>
+        </div>
+      `).join('');
+    }
+    actualizarSelectorSecciones();
+  }
+
+  function agregarSeccionForm() {
+    const nombre = document.getElementById('nueva-seccion-nombre').value.trim();
+    if (!nombre) return alert("Escribe un nombre para la sección.");
+    const id = "sec_" + Date.now();
+    SECCIONES_FORMULARIO.push({ id: id, nombre: nombre });
+    document.getElementById('nueva-seccion-nombre').value = "";
+    renderizarSeccionesForm();
+  }
+
+  function eliminarSeccionForm(index) {
+    const secId = SECCIONES_FORMULARIO[index].id;
+    // Removemos la sección de cualquier campo que la tuviera
+    CAMPOS_FORMULARIO.forEach(c => {
+      if (c.seccion === secId) delete c.seccion;
+    });
+    SECCIONES_FORMULARIO.splice(index, 1);
+    renderizarSeccionesForm();
+    renderizarCampos();
+  }
+
+  function actualizarSelectorSecciones() {
+    const selector = document.getElementById('campo-seccion');
+    if (!selector) return;
+    const valorActual = selector.value;
+    selector.innerHTML = '<option value="">[Sin Sección - Siempre Visible]</option>' +
+      SECCIONES_FORMULARIO.map(s => `<option value="${s.id}">${s.nombre}</option>`).join('');
+    selector.value = valorActual;
+  }
+
+  function verificarDependenciaTerritorio() {
+    const fuente = document.getElementById('campo-territorio-fuente').value;
+    document.getElementById('wrapper-depende-de').style.display = (fuente !== '0') ? "block" : "none";
+  }
+
+  function actualizarOpcionesDependientes(idDisparador) {
+    const selectsTerritorio = document.querySelectorAll('.territory-select');
+
+    // Helper: Build the filter chain traversing upwards
+    function getFilterChain(fieldId) {
+      let filters = [];
+      let currentId = fieldId;
+      while (currentId) {
+        const input = document.querySelector(`.territory-select[data-id="${currentId}"]`);
+        if (!input) break;
+        const colIndex = parseInt(input.dataset.fuente, 10);
+        if (input.value) filters.push({ colIndex, val: input.value });
+        currentId = input.dataset.depende;
+      }
+      return filters;
+    }
+
+    const inputDisparador = document.querySelector(`.territory-select[data-id="${idDisparador}"]`);
+    const valorPadre = inputDisparador ? inputDisparador.value : "";
+
+    selectsTerritorio.forEach(sel => {
+      if (sel.dataset.depende === idDisparador) {
+        sel.innerHTML = '<option value="">Seleccione...</option>';
+        sel.value = "";
+
+        if (valorPadre) {
+          const pestana = sel.dataset.pestana || "Estados";
+          const rawData = (window.FUENTES_DATOS && window.FUENTES_DATOS[pestana]) ? window.FUENTES_DATOS[pestana] : (window.ESTADOS_DATA || []);
+          if (!Array.isArray(rawData) || rawData.length === 0) return;
+
+          const filters = getFilterChain(idDisparador);
+          let validRows = rawData;
+          for (let f of filters) {
+            validRows = validRows.filter(r => r[f.colIndex] == f.val);
+          }
+
+          const targetCol = parseInt(sel.dataset.fuente, 10);
+          const uniques = [...new Set(validRows.map(row => row[targetCol]).filter(Boolean))].sort();
+          sel.innerHTML += uniques.map(e => `<option value="${e}">${e}</option>`).join('');
+        }
+
+        // Cascading reset downward
+        actualizarOpcionesDependientes(sel.dataset.id);
+      }
+    });
+  }
+
+  function habilitarInputCampo(tipo) {
+    CAMPO_EDITANDO_INDEX = null;
+    TIPO_CAMPO_PENDIENTE = tipo;
+    document.getElementById('config-campo-nuevo').style.display = "block";
+    document.getElementById('label-tipo-nuevo').innerText = "Configurar: " + tipo;
+    document.getElementById('input-label-nuevo').value = "";
+    document.getElementById('campo-obligatorio').checked = false;
+    document.getElementById('btn-confirmar-campo').innerText = "Añadir al Formulario";
+
+    // Resetear configuraciones avanzadas
+    document.getElementById('campo-seccion').value = "";
+    document.getElementById('campo-min-length').value = "";
+    document.getElementById('campo-max-length').value = "";
+    document.getElementById('campo-guion-contenido').value = "";
+    document.getElementById('campo-guion-confirmacion').checked = false;
+
+    // Lógica de visualización condicional de UI
+    const isTerritorio = (tipo === 'select_busqueda');
+    const esMultiple = (tipo === 'checkbox' || tipo === 'radio');
+
+    document.getElementById('config-territorio-container').style.display = isTerritorio ? "block" : "none";
+    document.getElementById('opciones-multiples-container').style.display = esMultiple ? "block" : "none";
+    document.getElementById('btn-mas-opciones').style.display = esMultiple ? "block" : "none";
+    document.getElementById('opciones-cascada-container').style.display = (tipo === 'cascada' || esMultiple) ? "block" : "none";
+    document.getElementById('config-min-length').style.display = (tipo === 'texto' || tipo === 'textarea' || tipo === 'numerico') ? "block" : "none";
+    document.getElementById('config-max-length').style.display = (tipo === 'texto' || tipo === 'textarea' || tipo === 'numerico') ? "block" : "none";
+    document.getElementById('config-guion-container').style.display = (tipo === 'guion') ? "block" : "none";
+    document.getElementById('config-doc-container').style.display = (tipo === 'documento_identidad') ? "block" : "none";
+
+    if (isTerritorio) {
+      document.getElementById('campo-territorio-pestana').value = "Estados";
+      document.getElementById('campo-territorio-fuente').value = "0";
+      document.getElementById('campo-territorio-depende').value = "";
+      verificarDependenciaTerritorio();
+      // Poblar el "Depende de" con otros select_busqueda previos
+      const selectorDep = document.getElementById('campo-territorio-depende');
+      selectorDep.innerHTML = '<option value="">[Sin dependencia]</option>' +
+        CAMPOS_FORMULARIO.filter(c => c.tipo === 'select_busqueda').map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+    }
+
+    // Si es tipo guion, obligatoriedad no aplica igual
+    document.getElementById('container-campo-obligatorio').style.display = (tipo === 'guion') ? "none" : "block";
+
+    if (esMultiple) { document.getElementById('multiples-inputs-list').innerHTML = ""; agregarOpcionMultipleInput(); }
+    if (tipo === 'cascada') { document.getElementById('ivr-options-list').innerHTML = ""; agregarOpcionCascada(); agregarOpcionCascada(); }
+  }
+
+  function editarCampoForm(index) {
+    CAMPO_EDITANDO_INDEX = index;
+    const campo = CAMPOS_FORMULARIO[index];
+    TIPO_CAMPO_PENDIENTE = campo.tipo;
+
+    document.getElementById('config-campo-nuevo').style.display = "block";
+    document.getElementById('label-tipo-nuevo').innerText = "Editando: " + campo.tipo;
+    document.getElementById('input-label-nuevo').value = campo.label;
+    document.getElementById('campo-obligatorio').checked = campo.obligatorio || false;
+    document.getElementById('btn-confirmar-campo').innerText = "Guardar Cambios";
+
+    // Cargar configuraciones avanzadas
+    document.getElementById('campo-seccion').value = campo.seccion || "";
+    document.getElementById('campo-min-length').value = campo.minLength || "";
+    document.getElementById('campo-max-length').value = campo.maxLength || "";
+    document.getElementById('campo-guion-contenido').value = campo.contenido || "";
+    document.getElementById('campo-guion-confirmacion').checked = campo.requiereConfirmacion || false;
+
+    const isTerritorio = (campo.tipo === 'select_busqueda');
+    const esMultiple = (campo.tipo === 'checkbox' || campo.tipo === 'radio');
+
+    document.getElementById('config-territorio-container').style.display = isTerritorio ? "block" : "none";
+    document.getElementById('opciones-multiples-container').style.display = esMultiple ? "block" : "none";
+    document.getElementById('btn-mas-opciones').style.display = esMultiple ? "block" : "none";
+    document.getElementById('opciones-cascada-container').style.display = (campo.tipo === 'cascada' || esMultiple) ? "block" : "none";
+    document.getElementById('config-min-length').style.display = (campo.tipo === 'texto' || campo.tipo === 'textarea' || campo.tipo === 'numerico') ? "block" : "none";
+    document.getElementById('config-max-length').style.display = (campo.tipo === 'texto' || campo.tipo === 'textarea' || campo.tipo === 'numerico') ? "block" : "none";
+    document.getElementById('config-guion-container').style.display = (campo.tipo === 'guion') ? "block" : "none";
+    document.getElementById('config-doc-container').style.display = (campo.tipo === 'documento_identidad') ? "block" : "none";
+    document.getElementById('container-campo-obligatorio').style.display = (campo.tipo === 'guion') ? "none" : "block";
+
+    if (isTerritorio) {
+      document.getElementById('campo-territorio-pestana').value = campo.nombrePestana || "Estados";
+      document.getElementById('campo-territorio-fuente').value = campo.fuenteTerritorio || "0";
+      verificarDependenciaTerritorio();
+      const selectorDep = document.getElementById('campo-territorio-depende');
+      selectorDep.innerHTML = '<option value="">[Sin dependencia]</option>' +
+        CAMPOS_FORMULARIO.filter((c, i) => i < index && c.tipo === 'select_busqueda').map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+      selectorDep.value = campo.dependeDe || "";
+    }
+
+    if (esMultiple) {
+      document.getElementById('multiples-inputs-list').innerHTML = "";
+      if (campo.opciones) {
+        campo.opciones.forEach(opt => {
+          const div = document.createElement('div');
+          div.className = "col-12 check-opt-row";
+          div.innerHTML = `<input type="text" class="form-control form-control-sm opt-multi-val" placeholder="Opción..." value="${opt}"><button class="btn btn-sm text-danger ms-2" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>`;
+          document.getElementById('multiples-inputs-list').appendChild(div);
+        });
+      }
+    }
+
+    if (campo.tipo === 'cascada' || esMultiple) {
+      document.getElementById('ivr-options-list').innerHTML = "";
+      if (campo.saltos && campo.saltos.length > 0) {
+        campo.saltos.forEach(salto => {
+          agregarOpcionCascada(salto.opcion, salto.destino, salto.especiales || []);
+        });
+      } else {
+        agregarOpcionCascada();
+      }
+    }
+  }
+
+  function agregarOpcionMultipleInput() {
+    const div = document.createElement('div');
+    div.className = "col-12 check-opt-row";
+    div.innerHTML = `<input type="text" class="form-control form-control-sm opt-multi-val" placeholder="Opción..."><button class="btn btn-sm text-danger ms-2" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>`;
+    document.getElementById('multiples-inputs-list').appendChild(div);
+  }
+
+  function agregarOpcionCascada(valor = "", destino = "", especiales = []) {
+    const div = document.createElement('div');
+    div.className = "ivr-row border rounded p-2 mb-2 bg-white shadow-sm";
+    let optionsHTML = `<option value="">Siguiente</option><option value="Finalizar" ${destino === 'Finalizar' ? 'selected' : ''}>Finalizar</option>`;
+    CAMPOS_FORMULARIO.forEach(c => { optionsHTML += `<option value="${c.id}" ${destino === c.id ? 'selected' : ''}>Ir a: ${c.label}</option>`; });
+
+    div.innerHTML = `
+      <div class="row g-2 align-items-center mb-2">
+        <div class="col-5"><input type="text" class="form-control form-control-sm ivr-val" placeholder="Nombre de Opción" value="${valor}"></div>
+        <div class="col-5"><select class="form-select form-select-sm ivr-dest">${optionsHTML}</select></div>
+        <div class="col-2 text-end"><button class="btn btn-sm text-danger" onclick="this.parentElement.parentElement.parentElement.remove()"><i class="fas fa-trash"></i></button></div>
+      </div>
+      <div class="bg-light p-2 rounded border-start border-primary border-4">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="small fw-bold text-primary"><i class="fas fa-magic me-1"></i> Super Reglas</span>
+          <button class="btn btn-xs btn-primary py-0 px-2" style="font-size:0.7rem;" onclick="agregarReglaEspecial(this)"><i class="fas fa-plus"></i> Regla</button>
+        </div>
+        <div class="especiales-container"></div>
+      </div>`;
+
+    document.getElementById('ivr-options-list').appendChild(div);
+    const container = div.querySelector('.especiales-container');
+    especiales.forEach(e => agregarReglaEspecial(null, container, e.accion, e.campos));
+  }
+
+  function agregarReglaEspecial(btn, containerManual = null, accion = "ocultar", campos = []) {
+    const container = containerManual || btn.parentElement.nextElementSibling;
+    const div = document.createElement('div');
+    div.className = "row g-1 mb-1 align-items-center regla-especial";
+
+    let camposOptions = "";
+    CAMPOS_FORMULARIO.forEach(c => {
+      camposOptions += `<option value="${c.id}" ${campos.includes(c.id) ? 'selected' : ''}>Campo: ${c.label}</option>`;
+    });
+    SECCIONES_FORMULARIO.forEach(s => {
+      camposOptions += `<option value="${s.id}" ${campos.includes(s.id) ? 'selected' : ''}>Sección: ${s.nombre}</option>`;
+    });
+
+    div.innerHTML = `
+      <div class="col-4">
+        <select class="form-select form-select-sm esp-accion">
+          <option value="ocultar" ${accion === 'ocultar' ? 'selected' : ''}>Ocultar</option>
+          <option value="requerir" ${accion === 'requerir' ? 'selected' : ''}>Obligatorio</option>
+          <option value="mostrar_seccion" ${accion === 'mostrar_seccion' ? 'selected' : ''}>Mostrar Sec/Camp</option>
+          <option value="ocultar_seccion" ${accion === 'ocultar_seccion' ? 'selected' : ''}>Ocultar Sec/Camp</option>
+        </select>
+      </div>
+      <div class="col-7">
+        <select class="form-select form-select-sm esp-campos" multiple style="height: 31px; font-size: 0.7rem;">
+          ${camposOptions}
+        </select>
+      </div>
+      <div class="col-1 text-end">
+        <button class="btn btn-sm p-0 text-muted" onclick="this.parentElement.parentElement.remove()"><i class="fas fa-times"></i></button>
+      </div>`;
+    container.appendChild(div);
+  }
+
+  function confirmarAgregarCampo() {
+    const label = document.getElementById('input-label-nuevo').value;
+    if (!label) return alert("Escribe la pregunta");
+
+    let nuevoCampo = {
+      id: "campo_" + Date.now(),
+      tipo: TIPO_CAMPO_PENDIENTE,
+      label: label,
+      obligatorio: document.getElementById('campo-obligatorio').checked
+    };
+
+    // Recoger conf. avanzada
+    const seccion = document.getElementById('campo-seccion').value;
+    const minLength = document.getElementById('campo-min-length').value;
+    const maxLength = document.getElementById('campo-max-length').value;
+
+    if (seccion) nuevoCampo.seccion = seccion;
+    if (minLength) nuevoCampo.minLength = parseInt(minLength);
+    if (maxLength) nuevoCampo.maxLength = parseInt(maxLength);
+
+    if (TIPO_CAMPO_PENDIENTE === 'guion') {
+      nuevoCampo.contenido = document.getElementById('campo-guion-contenido').value;
+      nuevoCampo.requiereConfirmacion = document.getElementById('campo-guion-confirmacion').checked;
+      nuevoCampo.obligatorio = false; // Guion base no es obligatorio
+    }
+    if (['checkbox', 'radio'].includes(TIPO_CAMPO_PENDIENTE)) {
+      let opciones = [];
+      document.querySelectorAll('.opt-multi-val').forEach(input => { if (input.value.trim()) opciones.push(input.value.trim()); });
+      if (opciones.length === 0) return alert("Agrega opciones");
+      nuevoCampo.opciones = opciones;
+    }
+    if (TIPO_CAMPO_PENDIENTE === 'select_busqueda') {
+      nuevoCampo.nombrePestana = document.getElementById('campo-territorio-pestana').value;
+      nuevoCampo.fuenteTerritorio = document.getElementById('campo-territorio-fuente').value;
+      nuevoCampo.dependeDe = document.getElementById('campo-territorio-depende').value;
+    }
+    if (['cascada', 'checkbox', 'radio'].includes(TIPO_CAMPO_PENDIENTE)) {
+      let saltos = [];
+      document.querySelectorAll('.ivr-row').forEach(row => {
+        let v = row.querySelector('.ivr-val').value;
+        let d = row.querySelector('.ivr-dest').value;
+        let especiales = [];
+        row.querySelectorAll('.regla-especial').forEach(reg => {
+          let acc = reg.querySelector('.esp-accion').value;
+          let cmps = Array.from(reg.querySelector('.esp-campos').selectedOptions).map(o => o.value);
+          if (cmps.length > 0) especiales.push({ accion: acc, campos: cmps });
+        });
+        if (v) saltos.push({ opcion: v, destino: d, especiales: especiales });
+      });
+      nuevoCampo.saltos = saltos;
+    }
+
+    if (CAMPO_EDITANDO_INDEX !== null) {
+      nuevoCampo.id = CAMPOS_FORMULARIO[CAMPO_EDITANDO_INDEX].id;
+      CAMPOS_FORMULARIO[CAMPO_EDITANDO_INDEX] = nuevoCampo;
+      CAMPO_EDITANDO_INDEX = null;
+    } else {
+      CAMPOS_FORMULARIO.push(nuevoCampo);
+    }
+
+    cancelarNuevoCampo();
+    renderizarCampos();
+  }
+
+  function renderizarFormularioOperador(campos) {
+    const cont = document.getElementById('op-formulario-dinamico');
+    if (!campos || campos.length === 0) {
+      cont.innerHTML = '<div class="alert alert-warning">Esta campaña no tiene un formulario de captura asignado.</div>';
+      return;
+    }
+
+    // Agrupar campos por sección
+    const camposPorSeccion = { "sin_seccion": [] };
+    if (typeof SECCIONES_FORMULARIO !== 'undefined') {
+      SECCIONES_FORMULARIO.forEach(s => camposPorSeccion[s.id] = { nombre: s.nombre, campos: [] });
+    }
+
+    campos.forEach(c => {
+      if (c.seccion && camposPorSeccion[c.seccion]) {
+        camposPorSeccion[c.seccion].campos.push(c);
+      } else {
+        camposPorSeccion["sin_seccion"].push(c);
+      }
+    });
+
+    let htmlTotal = '';
+
+    // Función auxiliar para renderizar un campo
+    const renderCampo = (c) => {
+      const minLengthAttr = c.minLength ? `minlength="${c.minLength}"` : '';
+      const maxLengthAttr = c.maxLength ? `maxlength="${c.maxLength}"` : '';
+
+      let html = `<div class="mb-4 op-campo-wrapper" id="wrap_${c.id}" data-id="${c.id}" data-req="${c.obligatorio}"><label class="form-label fw-bold small">${c.label} ${c.obligatorio ? '<span class="text-danger">*</span>' : ''}</label>`;
+
+      if (['texto', 'telefono', 'correo'].includes(c.tipo)) {
+        html += `<input type="text" class="form-control custom-form-control field-data" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" ${minLengthAttr} ${maxLengthAttr} oninput="checkearSecuencia()">`;
+      } else if (c.tipo === 'textarea') {
+        html += `<textarea class="form-control custom-form-control field-data" rows="3" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" ${minLengthAttr} ${maxLengthAttr} oninput="checkearSecuencia()"></textarea>`;
+      } else if (c.tipo === 'fecha') {
+        html += `<input type="date" class="form-control custom-form-control field-data" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" onchange="checkearSecuencia()">`;
+      } else if (c.tipo === 'numerico') {
+        html += `<input type="text" inputmode="numeric" class="form-control custom-form-control field-data" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" ${minLengthAttr} ${maxLengthAttr} oninput="this.value = this.value.replace(/[^0-9]/g, ''); checkearSecuencia()">`;
+      } else if (c.tipo === 'porcentaje') {
+        html += `<div class="input-group"><input type="number" class="form-control custom-form-control field-data" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" min="0" max="100" oninput="checkearSecuencia()"><span class="input-group-text bg-light">%</span></div>`;
+      } else if (c.tipo === 'radio' || c.tipo === 'checkbox') {
+        html += `<div class="d-flex flex-wrap gap-3 mt-1">` + c.opciones.map((o, idx) => {
+          const salto = (c.saltos || []).find(s => s.opcion === o);
+          const dest = salto ? salto.destino : "";
+          const esp = JSON.stringify(salto ? salto.especiales : []);
+          return `
+          <div class="form-check">
+            <input class="form-check-input field-data-check" type="${c.tipo}" name="${c.label}" id="${c.id}_${idx}" value="${o}" data-label="${c.label}" data-id="${c.id}" data-dest="${dest}" data-especiales='${esp}' onchange="checkearSecuencia()">
+            <label class="form-check-label small" for="${c.id}_${idx}">${o}</label>
+          </div>`;
+        }).join('') + `</div>`;
+      } else if (c.tipo === 'select_busqueda') {
+        const pestana = c.nombrePestana || "Estados";
+        const colIndex = parseInt(c.fuenteTerritorio || "0", 10);
+        const dependeDe = c.dependeDe || "";
+        let opcionesHtml = '<option value="">Seleccione...</option>';
+
+        // Carga inicial solo si no depende de nada (es nivel raíz)
+        if (!dependeDe) {
+          const rawData = (window.FUENTES_DATOS && window.FUENTES_DATOS[pestana]) ? window.FUENTES_DATOS[pestana] : (window.ESTADOS_DATA || []);
+          if (Array.isArray(rawData) && rawData.length > 0) {
+            const uniques = [...new Set(rawData.map(row => row[colIndex]).filter(Boolean))].sort();
+            opcionesHtml += uniques.map(e => `<option value="${e}">${e}</option>`).join('');
+          }
+        }
+
+        html += `<select class="form-select custom-form-control field-data territory-select" 
+                  data-label="${c.label}" 
+                  data-req="${c.obligatorio}" 
+                  data-id="${c.id}" 
+                  data-pestana="${pestana}"
+                  data-fuente="${colIndex}" 
+                  data-depende="${dependeDe}"
+                  onchange="actualizarOpcionesDependientes('${c.id}'); checkearSecuencia()">
+                  ${opcionesHtml}
+                 </select>`;
+      } else if (c.tipo === 'documento_identidad') {
+        html += `<div class="d-flex">
+                   <select class="form-select custom-form-control w-auto me-1 field-data-prefix" id="pref_${c.id}">
+                     <option value="V-">V-</option><option value="E-">E-</option><option value="J-">J-</option><option value="G-">G-</option>
+                   </select>
+                   <input type="text" inputmode="numeric" class="form-control custom-form-control field-data-doc" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" oninput="this.value = this.value.replace(/[^0-9]/g, ''); checkearSecuencia()">
+                 </div>`;
+      } else if (c.tipo === 'telefono_ve') {
+        html += `<div class="d-flex">
+                   <select class="form-select custom-form-control w-auto me-1 field-data-prefix" id="pref_${c.id}" onchange="checkearSecuencia()">
+                     <option value="">Prefijo</option>
+                     <optgroup label="Móvil">
+                       ${PREFIJOS_VE.movil.map(p => `<option value="${p}">${p}</option>`).join('')}
+                     </optgroup>
+                     <optgroup label="Fijo">
+                       ${PREFIJOS_VE.fijo.map(p => `<option value="${p}">${p}</option>`).join('')}
+                     </optgroup>
+                   </select>
+                   <input type="text" inputmode="numeric" class="form-control custom-form-control field-data-doc" placeholder="7 dígitos" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" oninput="procesarInputTelefonoVE(this, 'pref_${c.id}')">
+                 </div>`;
+      } else if (c.tipo === 'guion') {
+        html += `<div class="p-3 mb-2 bg-light border border-primary border-start-0 border-end-0 border-bottom-0 border-3 rounded shadow-sm">
+                   <p class="mb-2 text-dark" style="font-size: 0.95rem; line-height: 1.5;"><i class="fas fa-comment-dots text-primary me-2"></i>${c.contenido || ''}</p>
+                 `;
+        if (c.requiereConfirmacion) {
+          html += `<div class="form-check mt-3">
+                     <input class="form-check-input field-data-check" type="checkbox" data-label="Confirmar lectura: ${c.label}" data-req="true" data-id="${c.id}" onchange="checkearSecuencia()">
+                     <label class="form-check-label small fw-bold text-primary">He leído esta información al cliente.</label>
+                   </div>`;
+        }
+        html += `</div>`;
+      } else if (c.tipo === 'cascada') {
+        html += `<select class="form-select custom-form-control field-data" data-label="${c.label}" data-req="${c.obligatorio}" data-id="${c.id}" onchange="checkearSecuencia()">
+                  <option value="" data-dest="" data-especiales="[]">Seleccione...</option>
+                  ${c.saltos.map(s => `<option value="${s.opcion}" data-dest="${s.destino}" data-especiales='${JSON.stringify(s.especiales || [])}'>${s.opcion}</option>`).join('')}
+                </select>`;
+      }
+      html += `</div>`;
+      return html;
+    };
+
+    // Renderizar campos sin sección primero
+    if (camposPorSeccion["sin_seccion"].length > 0) {
+      htmlTotal += camposPorSeccion["sin_seccion"].map(renderCampo).join('');
+    }
+
+    // Renderizar secciones (ocultas por defecto si se desea, o visibles si no hay reglas. Dejémoslas visibles y que CSS/JS las oculte si es necesario)
+    Object.keys(camposPorSeccion).forEach(secId => {
+      if (secId !== "sin_seccion" && camposPorSeccion[secId].campos.length > 0) {
+        htmlTotal += `
+          <div class="op-seccion-wrapper card mb-4 shadow-sm" id="wrap_sec_${secId}" data-id="${secId}">
+            <div class="card-header bg-white py-2">
+              <h6 class="mb-0 fw-bold text-primary"><i class="fas fa-folder-open me-2"></i>${camposPorSeccion[secId].nombre}</h6>
+            </div>
+            <div class="card-body py-3">
+              ${camposPorSeccion[secId].campos.map(renderCampo).join('')}
+            </div>
+          </div>
+        `;
+      }
+    });
+
+    cont.innerHTML = htmlTotal;
+
+    setTimeout(evaluarReglasIntegrales, 50);
+    setTimeout(evaluarReglasIntegrales, 200);
+    setTimeout(evaluarReglasIntegrales, 500);
+  }
+
+  function renderizarCampos() {
+    const cont = document.getElementById('contenedor-campos-dinamicos');
+    if (CAMPOS_FORMULARIO.length === 0) { cont.innerHTML = '<p class="text-muted text-center py-5">Sin campos.</p>'; return; }
+    cont.innerHTML = CAMPOS_FORMULARIO.map((c, i) => {
+      let inputHTML = "";
+      if (c.tipo === 'cascada') {
+        inputHTML = `<div class="row g-1">` + c.saltos.map(s => {
+          let badgeAcc = s.especiales && s.especiales.length > 0 ? ` <i class="fas fa-bolt text-warning" title="Tiene Reglas"></i>` : '';
+          return `<div class="col-6 small"><span class="badge bg-light text-dark border w-100">${s.opcion} ➔ ${s.destino || 'Sig.'}${badgeAcc}</span></div>`;
+        }).join('') + `</div>`;
+      } else if (['checkbox', 'radio'].includes(c.tipo)) {
+        inputHTML = `<div class="d-flex flex-wrap gap-2">` + c.opciones.map(o => `<div class="form-check"><input class="form-check-input" type="${c.tipo}" disabled> <label class="small">${o}</label></div>`).join('') + `</div>`;
+      } else if (c.tipo === 'select_busqueda') {
+        inputHTML = `<select class="form-select form-select-sm" disabled><option>Buscar opción (Desplegable)...</option></select>`;
+      } else if (c.tipo === 'guion') {
+        inputHTML = `<div class="p-2 bg-warning bg-opacity-10 border-start border-warning border-4 small text-muted"><i class="fas fa-comment-dots me-2"></i> Bloque de lectura para operador</div>`;
+      } else if (c.tipo === 'textarea') {
+        inputHTML = `<textarea class="form-control form-control-sm" rows="2" placeholder="Área de texto largo" readonly></textarea>`;
+      } else if (c.tipo === 'documento_identidad') {
+        inputHTML = `<div class="d-flex"><select class="form-select form-select-sm w-auto me-1" disabled><option>V-</option></select><input type="text" class="form-control form-control-sm" placeholder="12345678" readonly></div>`;
+      } else if (c.tipo === 'telefono_ve') {
+        inputHTML = `<div class="d-flex"><select class="form-select form-select-sm w-auto me-1" disabled><option>0412</option></select><input type="text" class="form-control form-control-sm" placeholder="1234567" readonly></div>`;
+      } else if (c.tipo === 'porcentaje') {
+        inputHTML = `<div class="input-group input-group-sm"><input type="number" class="form-control" placeholder="0" readonly><span class="input-group-text">%</span></div>`;
+      } else {
+        inputHTML = `<input type="text" class="form-control form-control-sm" placeholder="Vista previa" readonly>`;
+      }
+
+      let seccionBadge = '';
+      if (c.seccion) {
+        const sec = SECCIONES_FORMULARIO.find(s => s.id === c.seccion);
+        if (sec) seccionBadge = `<span class="badge bg-secondary ms-2" style="font-size: 0.65rem;"><i class="fas fa-folder me-1"></i>${sec.nombre}</span>`;
+      }
+
+      return `<div class="tag-item">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="w-100 d-flex align-items-start">
+                    <i class="fas fa-grip-vertical text-muted me-3 mt-1 drag-handle" style="cursor: grab; font-size: 1.2rem;"></i>
+                    <div class="w-100">
+                      <div class="tag-label"><i class="fas fa-dot-circle text-primary me-2"></i>${c.label} ${c.obligatorio ? '<span class="text-danger">*</span>' : ''} ${seccionBadge}</div>
+                      <div class="preview-field-container">${inputHTML}</div>
+                    </div>
+                  </div>
+                  <div class="d-flex ms-2">
+                    <button class="btn btn-sm btn-outline-primary border-0" title="Editar" onclick="editarCampoForm(${i})"><i class="fas fa-edit"></i></button>
+                    <button class="btn btn-sm btn-outline-danger border-0 ms-1" title="Eliminar" onclick="CAMPOS_FORMULARIO.splice(${i},1);renderizarCampos()"><i class="fas fa-trash"></i></button>
+                  </div>
+                </div>
+              </div>`;
+    }).join('');
+
+    new Sortable(cont, {
+      animation: 150,
+      handle: '.drag-handle',
+      onEnd: function (evt) {
+        const itemEl = CAMPOS_FORMULARIO.splice(evt.oldIndex, 1)[0];
+        CAMPOS_FORMULARIO.splice(evt.newIndex, 0, itemEl);
+      }
+    });
+  }
+
+  function guardarFormulario() {
+    const nombre = document.getElementById('nuevo-form-nombre').value, fila = document.getElementById('form-fila').value;
+    if (!nombre || CAMPOS_FORMULARIO.length === 0) return alert("Faltan datos");
+
+    mostrarCarga("Guardando formulario...");
+    const payload = { campos: CAMPOS_FORMULARIO, secciones: SECCIONES_FORMULARIO || [] };
+
+    google.script.run.withSuccessHandler(function () {
+      ocultarCarga();
+      mostrarSeccion('formularios');
+      cargarFormularios(); // Fuerza la recarga del caché local
+    }).guardarNuevoFormulario(nombre, payload, fila);
+  }
+
+  function confirmarBorradoForm(fila, nombre) {
+    if (confirm("¿Eliminar formulario: " + nombre + "?")) google.script.run.withSuccessHandler(cargarFormularios).eliminarFormulario(fila);
+  }
+
+  function cancelarNuevoCampo() { CAMPO_EDITANDO_INDEX = null; document.getElementById('config-campo-nuevo').style.display = "none"; }
+  function cancelarEdicionForm() { document.getElementById('contenedor-lista-formularios').style.display = "block"; document.getElementById('contenedor-editor-formulario').style.display = "none"; }
+
+  function guardarUsuario() {
+    const fila = document.getElementById('nuevo-user-fila').value;
+    const u = document.getElementById('nuevo-user-nombre').value;
+    const p = document.getElementById('nuevo-user-pass').value;
+    const r = document.getElementById('nuevo-user-rol').value;
+    const t = document.getElementById('nuevo-user-turno').value;
+    const pr = document.getElementById('nuevo-user-permiso-reporte').checked ? "S" : "N";
+
+    if (!u || !p) return alert("Por favor, llena los campos de usuario y contraseña.");
+
+    mostrarCarga("Guardando usuario...");
+    if (fila) {
+      google.script.run.withSuccessHandler(function (res) {
+        ocultarCarga();
+        if (res.success) {
+          alert("Usuario actualizado exitosamente");
+          cancelarEdicionUsuario();
+          cargarUsuariosAdministrador();
+        } else {
+          alert("Error: " + res.mensaje);
+        }
+      }).actualizarUsuario(fila, u, p, r, t, pr);
+    } else {
+      google.script.run.withSuccessHandler(function () {
+        ocultarCarga();
+        alert("Usuario Registrado Exitosamente");
+        cancelarEdicionUsuario();
+        cargarUsuariosAdministrador();
+      }).guardarNuevoUsuario(u, p, r, t, pr);
+    }
+  }
+
+  function prepararEdicionUsuario(fila, u, p, r, t) {
+    document.getElementById('nuevo-user-fila').value = fila;
+    document.getElementById('nuevo-user-nombre').value = u;
+    document.getElementById('nuevo-user-pass').value = p;
+    document.getElementById('nuevo-user-rol').value = r;
+    document.getElementById('nuevo-user-turno').value = t ? t.toLowerCase() : "mañana";
+    document.getElementById('nuevo-user-permiso-reporte').checked = (arguments[5] === true || arguments[5] === "S");
+
+    document.getElementById('titulo-form-usuario').innerHTML = '<i class="fas fa-user-edit me-2"></i>Editar Usuario: ' + u;
+    document.getElementById('btn-guardar-usuario').innerHTML = '<i class="fas fa-save me-2"></i> Actualizar';
+    document.getElementById('btn-cancelar-edicion-usuario').style.display = 'block';
+  }
+
+  function cancelarEdicionUsuario() {
+    document.getElementById('nuevo-user-fila').value = "";
+    document.getElementById('nuevo-user-nombre').value = "";
+    document.getElementById('nuevo-user-pass').value = "";
+    document.getElementById('nuevo-user-rol').value = "admin";
+    document.getElementById('nuevo-user-turno').value = "mañana";
+    document.getElementById('nuevo-user-permiso-reporte').checked = false;
+
+    document.getElementById('titulo-form-usuario').innerHTML = '<i class="fas fa-user-plus me-2"></i>Crear Nuevo Usuario';
+    document.getElementById('btn-guardar-usuario').innerHTML = '<i class="fas fa-save me-2"></i> Registrar';
+    document.getElementById('btn-cancelar-edicion-usuario').style.display = 'none';
+  }
+
+  function cargarUsuariosAdministrador() {
+    const tabla = document.getElementById('tabla-usuarios-body');
+    if (!tabla) return;
+
+    if (tabla.innerHTML.trim() === '') {
+      tabla.innerHTML = '<tr><td colspan="5" class="text-center">Cargando usuarios...</td></tr>';
+    }
+
+    google.script.run.withSuccessHandler(function (datos) {
+      tabla.innerHTML = datos.map((u) => `
+        <tr>
+          <td class="fw-bold">${u.usuario}</td>
+          <td>${u.password}</td>
+          <td><span class="badge-role">${u.rol}</span></td>
+          <td><span class="badge bg-light text-dark border">${u.turno ? u.turno.toUpperCase() : 'NO ASIGNADO'}</span></td>
+          <td class="text-center"><i class="fas ${u.permisoReporte ? 'fa-check-circle text-success' : 'fa-times-circle text-danger'}"></i></td>
+          <td class="text-end">
+            <button class="btn-edit-pencil" title="Editar" onclick="prepararEdicionUsuario(${u.fila}, '${u.usuario}', '${u.password}', '${u.rol}', '${u.turno}', ${u.permisoReporte})"><i class="fas fa-pencil-alt"></i></button>
+            <button class="btn-delete-item" title="Eliminar" onclick="confirmarBorradoUsuario(${u.fila}, '${u.usuario}')"><i class="fas fa-trash-alt"></i></button>
+          </td>
+        </tr>`).join('') || '<tr><td colspan="6" class="text-center">No hay usuarios registrados</td></tr>';
+    }).obtenerTodosLosUsuarios();
+  }
+
+  function confirmarBorradoUsuario(fila, nombre) {
+    if (confirm("¿Seguro que deseas eliminar al usuario: " + nombre + "?")) {
+      mostrarCarga("Eliminando usuario...");
+      google.script.run.withSuccessHandler(function (res) {
+        ocultarCarga();
+        if (res.success) {
+          cargarUsuariosAdministrador();
+        } else {
+          alert("No se pudo eliminar el usuario.");
+        }
+      }).eliminarUsuario(fila);
+    }
+  }
+
+  function regresarALista() {
+    if (INTERVALO_ESTADISTICAS) {
+      clearInterval(INTERVALO_ESTADISTICAS);
+      INTERVALO_ESTADISTICAS = null;
+    }
+    document.getElementById('contenedor-lista-campanas').style.display = "block";
+    document.getElementById('contenedor-stats-campana').style.display = "none";
+    document.getElementById('contenedor-data-campana').style.display = "none";
+    document.getElementById('contenedor-reporte-campana').style.display = "none";
+    document.getElementById('contenedor-editor-campana').style.display = "none";
+  }
+
+  function volverACampanasOperador() {
+    mostrarSeccionOperador('mis-campanas');
+  }
+
+  function inicializarApp() {
+    if (typeof PREVIEW_FORM_NAME !== 'undefined' && PREVIEW_FORM_NAME !== "") {
+      document.getElementById('login-page').style.display = "none";
+      document.getElementById('home-page').style.display = "block";
+
+      const sidebarAdmin = document.getElementById('sidebar-admin');
+      const sidebarOp = document.getElementById('sidebar-operador');
+      if (sidebarAdmin) sidebarAdmin.style.display = "none";
+      if (sidebarOp) sidebarOp.style.display = "none";
+      document.querySelector('.main-content').style.marginLeft = "0";
+
+      document.getElementById('vista-admin').style.display = "none";
+      document.getElementById('vista-operador').style.display = "block";
+      document.getElementById('seccion-mis-campanas').style.display = "none";
+      document.getElementById('seccion-gestion-llamada').style.display = "block";
+
+      document.getElementById('header-campana-unica').style.display = "block";
+      document.getElementById('nombre-campana-cabecera').innerText = "VISTA PREVIA: " + PREVIEW_FORM_NAME;
+      document.getElementById('btn-volver-operador').style.display = "none";
+      document.getElementById('contador-registros-operador').innerText = "MODO PRUEBA";
+      document.getElementById('op-dialogo-texto').innerText = "Diálogo de prueba. Aquí el operador vería el guion asignado a la campaña.";
+      document.getElementById('op-cliente-info').innerHTML = '<div class="alert alert-info py-2 small m-0">Datos simulados. Usa el botón de buscar o escribe algo para probar.</div>';
+
+      window.buscarPorTelefono = function () {
+        const tel = document.getElementById('busqueda-telefono').value.trim() || "12345678";
+        document.getElementById('op-cliente-info').innerHTML = `
+              <div class="data-item-row"><span class="data-item-label">Teléfono:</span><span class="data-item-value info-cliente-val" data-key="Teléfono">${tel}</span></div>
+              <div class="data-item-row"><span class="data-item-label">Nombre:</span><span class="data-item-value info-cliente-val" data-key="Nombre">Cliente de Prueba</span></div>
+          `;
+      };
+
+      window.finalizarGestion = function () {
+        let error = false;
+        const camposInputs = document.querySelectorAll('.field-data');
+        camposInputs.forEach(i => {
+          if (!i.disabled && i.dataset.req === "true" && !i.value) error = true;
+        });
+        if (error) return alert("Aún hay campos obligatorios vacíos.");
+
+        alert("¡Excelente! Las reglas de negocio se completaron. (Esto es una prueba, no se guardó en Drive).");
+        document.querySelectorAll('.field-data').forEach(i => i.value = "");
+        document.querySelectorAll('.field-data-check').forEach(i => i.checked = false);
+        checkearSecuencia();
+      };
+
+      mostrarCarga("Cargando formulario de prueba...");
+      google.script.run.withSuccessHandler(function (data) {
+        ocultarCarga();
+        const campos = Array.isArray(data) ? data : (data.campos || []);
+        SECCIONES_FORMULARIO = Array.isArray(data) ? [] : (data.secciones || []);
+        CAMPOS_FORM_ACTUAL = campos;
+        renderizarFormularioOperador(campos);
+      }).obtenerFormularioPorNombre(PREVIEW_FORM_NAME);
+
+    } else {
+      verificarSesion();
+    }
+  }
+
+  function verificarSesion() {
+    const savedUser = localStorage.getItem('usuario_briana');
+    const savedRol = localStorage.getItem('rol_briana');
+    const savedExt = localStorage.getItem('extension_briana');
+
+    if (savedUser && savedRol) {
+      ROL = savedRol;
+      USUARIO_ACTUAL = savedUser;
+
+      document.getElementById('login-page').style.display = "none";
+      document.getElementById('home-page').style.display = "block";
+
+      iniciarEscuchaRefresco();
+
+      if (ROL === "admin" || ROL.toLowerCase() === "analista") {
+        document.getElementById('sidebar-admin').style.display = "flex";
+        document.getElementById('vista-admin').style.display = "block";
+        document.getElementById('label-rol-admin').innerText = (ROL.toLowerCase() === "analista" ? "ANALISTA: " : "ADMIN: ") + USUARIO_ACTUAL;
+
+        if (ROL.toLowerCase() === "analista") {
+          document.getElementById('btn-nav-usuarios').style.display = "none";
+        } else {
+          document.getElementById('btn-nav-usuarios').style.display = "flex";
+        }
+
+        mostrarSeccion('campanas-salientes');
+      } else {
+        document.getElementById('sidebar-operador').style.display = "flex";
+        document.getElementById('vista-operador').style.display = "block";
+        document.getElementById('label-rol-operador').innerText = "OPERADOR: " + USUARIO_ACTUAL;
+
+        const labelExt = document.getElementById('label-extension-operador');
+        if (labelExt) {
+          const storedExt = localStorage.getItem('extension_briana');
+          labelExt.innerText = "EXTENSIÓN: " + (storedExt || "N/A");
+          labelExt.style.setProperty('display', 'block', 'important');
+        }
+
+        mostrarSeccionOperador('mis-campanas');
+      }
+    }
+  }
+
+  function seleccionarTodosUsuarios() {
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    checkboxes.forEach(cb => {
+      if (cb.closest('.usuario-item').style.display !== 'none') {
+        cb.checked = true;
+      }
+    });
+    actualizarListaDistribucion();
+  }
+
+  function deseleccionarTodosUsuarios() {
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    checkboxes.forEach(cb => {
+      if (cb.closest('.usuario-item').style.display !== 'none') {
+        cb.checked = false;
+      }
+    });
+    actualizarListaDistribucion();
+  }
+
+  function seleccionarPorTurno(turnoBuscado) {
+    const checkboxes = document.querySelectorAll('.user-checkbox');
+    checkboxes.forEach(cb => {
+      if (cb.closest('.usuario-item').style.display !== 'none') {
+        cb.checked = (cb.dataset.turno === turnoBuscado);
+      }
+    });
+    actualizarListaDistribucion();
+  }
+
+  function finalizarPersonaCompleta() {
+    // Ocultar incidencias y botón
+    document.getElementById('tarjeta-incidencias').style.display = 'none';
+    document.getElementById('contenedor-finalizar-persona').style.display = 'none';
+
+    const btnGeneral = document.getElementById('btn-respuesta-general');
+    if (btnGeneral) btnGeneral.style.display = 'none';
+
+    // Limpiar buscador y panel de cliente
+    document.getElementById('busqueda-telefono').value = "";
+    document.getElementById('op-cliente-info').innerHTML = '<p class="text-muted text-center py-3 m-0">Ingresa un teléfono para ver los datos</p>';
+
+    // Rehabilitar botón de siguiente (por si lo usas)
+    document.getElementById('btn-siguiente-registro').disabled = false;
+
+    // Limpiar variables
+    REGISTROS_INCIDENCIAS_ACTUALES = [];
+    INCIDENCIAS_RESUELTAS = [];
+    RESPUESTA_GENERAL_ACTIVA = false;
+
+    alert("Se ha finalizado completamente con este cliente. Puedes buscar el siguiente.");
+  }
+
+  // --- ANALISIS MULTI CAMPANA ---
+  function abrirModalAnalisisContactos() {
+    const contenedor = document.getElementById('lista-campanas-analisis');
+    if (!DATOS_CAMPANAS || DATOS_CAMPANAS.length === 0) {
+      contenedor.innerHTML = "<p class='text-muted'>No hay campañas disponibles para analizar.</p>";
+    } else {
+      contenedor.innerHTML = DATOS_CAMPANAS.map((c, idx) => `
+        <div class="form-check mb-2">
+          <input class="form-check-input check-analisis-campana" type="checkbox" value="${c.nombre}" id="chk_analisis_${idx}">
+          <label class="form-check-label fw-bold" for="chk_analisis_${idx}">
+            ${c.nombre} <span class="badge bg-primary ms-2">${c.tipoCampana || 'Saliente'}</span>
+          </label>
+        </div>
+      `).join('');
+    }
+    const modal = new bootstrap.Modal(document.getElementById('modalAnalisisContactos'));
+    modal.show();
+  }
+
+  function marcarTodasAnalisis(marcar) {
+    document.querySelectorAll('.check-analisis-campana').forEach(chk => chk.checked = marcar);
+  }
+
+  function ejecutarAnalisisMultiCampana() {
+    const seleccionadas = Array.from(document.querySelectorAll('.check-analisis-campana:checked')).map(chk => chk.value);
+    if (seleccionadas.length === 0) {
+      alert("Debes seleccionar al menos una campaña.");
+      return;
+    }
+
+    const separarPorPersona = document.getElementById('modo_separar').checked;
+    const cruzarConBase = document.getElementById('fuente_issabel') ? document.getElementById('fuente_issabel').checked : false;
+    const intentosIssabel = cruzarConBase ? parseInt(document.getElementById('input_intentos_issabel').value) || 0 : 0;
+
+    mostrarCarga("Generando cruce masivo. Por favor espera...");
+
+    google.script.run.withSuccessHandler(function (respuesta) {
+      ocultarCarga();
+      if (!respuesta || respuesta.error) {
+        alert("Ocurrió un error o no hay datos suficientes: " + (respuesta ? respuesta.error : "Desconocido"));
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+
+      if (respuesta.resumen && respuesta.resumen.length > 0) {
+        const wsResumen = XLSX.utils.aoa_to_sheet(respuesta.resumen);
+        XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen Global");
+      }
+
+      if (respuesta.detalle && respuesta.detalle.length > 0) {
+        const wsDetalle = XLSX.utils.aoa_to_sheet(respuesta.detalle);
+        XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle por Fechas");
+      }
+
+      XLSX.writeFile(wb, `Analisis_Contactos_${new Date().getTime()}.xlsx`);
+
+      const modalElement = document.getElementById('modalAnalisisContactos');
+      const modal = bootstrap.Modal.getInstance(modalElement);
+      if (modal) modal.hide();
+
+    }).generarReporteAnalisisContactos(seleccionadas, separarPorPersona, cruzarConBase, intentosIssabel);
+  }
+
+  function toggleIssabelInput() {
+    const cruzar = document.getElementById('fuente_issabel') && document.getElementById('fuente_issabel').checked;
+    const cont = document.getElementById('contenedor-issabel-intentos');
+    if (cont) cont.style.display = cruzar ? 'block' : 'none';
+  }
+
+  // --- REPORTE ESTADISTICO PERSONALIZADO ---
+  function abrirModalReporteEstadistico() {
+    const contenedor = document.getElementById('lista-campanas-reporte');
+    if (!DATOS_CAMPANAS || DATOS_CAMPANAS.length === 0) {
+      contenedor.innerHTML = "<p class='text-muted'>No hay campañas disponibles.</p>";
+    } else {
+      contenedor.innerHTML = DATOS_CAMPANAS.map((c, idx) => `
+        <div class="form-check mb-1">
+          <input class="form-check-input check-reporte-campana" type="checkbox" value="${c.nombre}" id="chk_rep_${idx}" checked>
+          <label class="form-check-label small" for="chk_rep_${idx}">
+            ${c.nombre}
+          </label>
+        </div>
+      `).join('');
+    }
+    const modal = new bootstrap.Modal(document.getElementById('modalReporteEstadistico'));
+    modal.show();
+  }
+
+  function marcarTodasReporte(marcar) {
+    document.querySelectorAll('.check-reporte-campana').forEach(chk => chk.checked = marcar);
+  }
+
+  function ejecutarDescargaReporteEstadistico() {
+    const seleccionadas = Array.from(document.querySelectorAll('.check-reporte-campana:checked')).map(chk => chk.value);
+    const fInicio = document.getElementById('rep-fecha-inicio').value;
+    const fFin = document.getElementById('rep-fecha-fin').value;
+
+    if (seleccionadas.length === 0) return alert("Selecciona al menos una campaña.");
+    if (!fInicio || !fFin) return alert("Selecciona el rango de fechas.");
+
+    mostrarCarga("Procesando reporte estadístico...");
+
+    google.script.run.withSuccessHandler(function (res) {
+      ocultarCarga();
+      if (res.error) return alert("Error: " + res.error);
+
+      if (res.resumen.length <= 1 && res.detalle.length <= 1) {
+        alert("No se encontraron gestiones en el rango de fechas seleccionado.");
+        return;
+      }
+
+      const wb = XLSX.utils.book_new();
+      const wsRes = XLSX.utils.aoa_to_sheet(res.resumen);
+      const wsDet = XLSX.utils.aoa_to_sheet(res.detalle);
+
+      XLSX.utils.book_append_sheet(wb, wsRes, "Resumen Global");
+      XLSX.utils.book_append_sheet(wb, wsDet, "Reporte Detallado");
+
+      XLSX.writeFile(wb, `Reporte_Estadistico_Briana_${fInicio}_al_${fFin}.xlsx`);
+
+      if (bootstrap.Modal.getInstance(document.getElementById('modalReporteEstadistico'))) {
+        bootstrap.Modal.getInstance(document.getElementById('modalReporteEstadistico')).hide();
+      }
+    }).obtenerDatosReporteExcel(seleccionadas, fInicio, fFin);
+  }
+
+  window.addEventListener('load', function () {
+    inicializarApp();
+    const pRep = localStorage.getItem('permiso_reporte_briana') === "S";
+    const btnRep = document.getElementById('btn-descargar-reporte-global');
+    if (btnRep) btnRep.style.display = pRep ? "inline-block" : "none";
+  });
+
+  // ===== REPORTE DE REACTIVACIÓN =====
+
+  const ESCALA_PRIORIDAD_FRONTEND = [
+    "No es el responsable",
+    "Renuncio a la responsabilidad",
+    "Numero equivocado",
+    "Numero no asignado",
+    "Numero suspendido",
+    "Otros"
+  ];
+
+  function abrirModalReactivacion() {
+    const modal = new bootstrap.Modal(document.getElementById('modalReactivacion'));
+    modal.show();
+
+    // Mostrar la escala de prioridad como badges numerados
+    const escalaEl = document.getElementById('escala-reactivacion-display');
+    if (escalaEl) {
+      escalaEl.innerHTML = ESCALA_PRIORIDAD_FRONTEND.map((e, i) => `
+        <span class="badge rounded-pill fw-bold" style="background:#ede9fe;color:#5b21b6;font-size:0.78rem;padding:6px 10px;">
+          <span style="background:#7c3aed;color:#fff;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:0.7rem;margin-right:5px;">${i + 1}</span>
+          ${e}
+        </span>`).join('');
+    }
+
+    // Cargar campañas con checkboxes
+    const contenedor = document.getElementById('lista-campanas-reactivacion');
+    contenedor.innerHTML = '<div class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin me-2"></i>Cargando campañas…</div>';
+
+    google.script.run.withSuccessHandler(function (campanas) {
+      if (!campanas || campanas.length === 0) {
+        contenedor.innerHTML = '<div class="text-muted text-center py-4">No hay campañas disponibles.</div>';
+        return;
+      }
+
+      const vistaActual = typeof VISTA_CAMPANAS_ACTUAL !== 'undefined' ? VISTA_CAMPANAS_ACTUAL : 'Salientes';
+      const filtradas = campanas.filter(c => (c.tipoCampana || 'Saliente') === vistaActual || vistaActual === 'Salientes');
+
+      contenedor.innerHTML = filtradas.map((c, i) => `
+        <div class="p-3 rounded-3 border" style="background:#fafafa;cursor:pointer;" onclick="this.querySelector('input').click()">
+          <div class="form-check m-0 d-flex align-items-center gap-2">
+            <input class="form-check-input reac-check flex-shrink-0" type="checkbox" 
+                   value="${c.nombre}" id="reac_chk_${i}" 
+                   onchange="actualizarBadgeReactivacion()" style="width:18px;height:18px;cursor:pointer;">
+            <label for="reac_chk_${i}" class="form-check-label fw-bold w-100" style="cursor:pointer;">
+              <div style="font-size:0.9rem;color:#1e293b;">${c.nombre}</div>
+              <small class="text-muted" style="font-size:0.75rem;">${c.tipoAsignacion || 'Issabel'} · ${c.estatus}</small>
+            </label>
+          </div>
+        </div>`).join('');
+
+      actualizarBadgeReactivacion();
+    }).obtenerCampanas();
+  }
+
+  function seleccionarTodasReactivacion() {
+    document.querySelectorAll('.reac-check').forEach(chk => chk.checked = true);
+    actualizarBadgeReactivacion();
+  }
+
+  function deseleccionarTodasReactivacion() {
+    document.querySelectorAll('.reac-check').forEach(chk => chk.checked = false);
+    actualizarBadgeReactivacion();
+  }
+
+  function actualizarBadgeReactivacion() {
+    const total = document.querySelectorAll('.reac-check:checked').length;
+    const badge = document.getElementById('badge-campanas-reactivacion');
+    if (badge) badge.textContent = total + ' seleccionada' + (total !== 1 ? 's' : '');
+  }
+
+  function descargarReporteReactivacion() {
+    const seleccionadas = Array.from(document.querySelectorAll('.reac-check:checked')).map(c => c.value);
+    if (seleccionadas.length === 0) {
+      alert('Selecciona al menos una campaña para generar el reporte.');
+      return;
+    }
+
+    const btn = document.getElementById('btn-descargar-reactivacion');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generando…';
+
+    google.script.run
+      .withSuccessHandler(function (data) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-file-excel me-2"></i>Descargar Reporte Excel';
+
+        if (!data || data.error) {
+          alert('Error: ' + (data ? data.error : 'Sin respuesta del servidor.'));
+          return;
+        }
+
+        if (data.length <= 1) {
+          alert('No se encontraron contactos reactivables con los criterios actuales en las campañas seleccionadas.');
+          return;
+        }
+
+        // Generar el Excel con XLSX
+        const ws = XLSX.utils.aoa_to_sheet(data);
+
+        // Estilo del encabezado (negrita, fondo violeta)
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = range.s.c; C <= range.e.c; C++) {
+          const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
+          if (!ws[cellAddr]) continue;
+          ws[cellAddr].s = {
+            fill: { fgColor: { rgb: "7C3AED" } },
+            font: { bold: true, color: { rgb: "FFFFFF" } },
+            alignment: { horizontal: "center" }
+          };
+        }
+
+        // Autofit column widths
+        const colWidths = data[0].map((_, ci) =>
+          ({ wch: Math.min(40, Math.max(15, ...data.map(row => (row[ci] || '').toString().length))) })
+        );
+        ws['!cols'] = colWidths;
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Reactivación');
+
+        const fecha = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `Reporte_Reactivacion_${fecha}.xlsx`);
+
+        // Cerrar modal
+        const modalEl = document.getElementById('modalReactivacion');
+        if (bootstrap.Modal.getInstance(modalEl)) {
+          bootstrap.Modal.getInstance(modalEl).hide();
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-file-excel me-2"></i>Descargar Reporte Excel';
+        alert('Error al conectar con el servidor: ' + err.message);
+      })
+      .obtenerReporteReactivacion(seleccionadas);
+  }
+
+  // ===== FIN REPORTE DE REACTIVACIÓN =====
+
+  // ===== PANEL DE SUPERVISOR =====
+  function cargarPanelSupervisor(silencioso = false) {
+    if (!silencioso) mostrarCarga("Cargando panel de supervisor...");
+
+    google.script.run.withSuccessHandler(function (data) {
+      if (!silencioso) ocultarCarga();
+
+      if (data.error) {
+        alert("Error: " + data.error);
+        return;
+      }
+
+      // Actualizar métricas globales
+      document.getElementById('sup-llamadas-hoy').innerText = data.metricasGlobales.llamadasHoy || 0;
+      document.getElementById('sup-exitosas-hoy').innerText = data.metricasGlobales.exitosasHoy || 0;
+      document.getElementById('sup-fallidas-hoy').innerText = data.metricasGlobales.fallidasHoy || 0;
+      document.getElementById('sup-efectividad-hoy').innerText = data.metricasGlobales.efectividadHoy + "%";
+
+      // Actualizar operadores activos
+      const listaOps = document.getElementById('lista-operadores-activos');
+      if (data.operadoresActivos && data.operadoresActivos.length > 0) {
+        listaOps.innerHTML = data.operadoresActivos.map(op => `
+        <div class="badge-role" style="background: linear-gradient(135deg, #10b981, #34d399);">
+          <i class="fas fa-user me-1"></i>${op.usuario}
+          <small class="d-block text-white-50">${op.extension}</small>
+        </div>
+      `).join('');
+      } else {
+        listaOps.innerHTML = '<p class="text-muted small">No hay operadores conectados</p>';
+      }
+
+      // Actualizar campañas activas
+      const listaCamps = document.getElementById('lista-campanas-activas-supervisor');
+      if (data.campanasActivas && data.campanasActivas.length > 0) {
+        listaCamps.innerHTML = data.campanasActivas.map(c => `
+        <div class="badge bg-success mb-1 d-block">
+          <i class="fas fa-bullhorn me-1"></i>${c.nombre}
+        </div>
+      `).join('');
+      } else {
+        listaCamps.innerHTML = '<p class="text-muted small">No hay campañas activas</p>';
+      }
+
+      // Actualizar últimas gestiones
+      const listaGest = document.getElementById('lista-ultimas-gestiones');
+      if (data.ultimosRegistros && data.ultimosRegistros.length > 0) {
+        listaGest.innerHTML = data.ultimosRegistros.map(g => `
+        <div class="d-flex justify-content-between border-bottom py-2">
+          <div>
+            <small class="text-muted d-block">${g.usuario}</small>
+            <span class="badge bg-${g.resultado === 'exitosa' ? 'success' : 'danger'}">${g.resultado}</span>
+          </div>
+          <small class="text-muted">${g.fecha}</small>
+        </div>
+      `).join('');
+      } else {
+        listaGest.innerHTML = '<p class="text-muted small">Sin Gestiones recientes</p>';
+      }
+
+    }).withFailureHandler(function (err) {
+      if (!silencioso) ocultarCarga();
+      console.error("Error al cargar panel: " + err.message);
+    }).obtenerPanelSupervisor();
+  }
+
+  // ===== RANKING =====
+  function cargarRanking(tipo, fInicio = null, fFin = null) {
+    const titulo = document.getElementById('titulo-ranking');
+    if (tipo === 'daily') titulo.innerText = 'Ranking del Día';
+    else if (tipo === 'weekly') titulo.innerText = 'Ranking de la Semana';
+    else if (tipo === 'mensual') titulo.innerText = 'Ranking del Mes';
+    else if (tipo === 'historico') titulo.innerText = 'Ranking Histórico Total';
+    else if (tipo === 'rango') titulo.innerText = `Ranking por Rango (${fInicio || 'Inicio'} al ${fFin || 'Fin'})`;
+
+    mostrarCarga("Cargando ranking y estadísticas...");
+
+    google.script.run.withSuccessHandler(function (data) {
+      ocultarCarga();
+
+      const tbody = document.getElementById('tabla-ranking-body');
+
+      if (data.error) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${data.error}</td></tr>`;
+        return;
+      }
+
+      if (!data.ranking || data.ranking.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-muted text-center">No hay datos para el período seleccionado</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.ranking.map(r => {
+        let posicionClass = '';
+        if (r.posicion === 1) posicionClass = 'text-warning';
+        else if (r.posicion === 2) posicionClass = 'text-secondary';
+        else if (r.posicion === 3) posicionClass = 'text-danger';
+
+        return `
+        <tr>
+          <td><span class="fw-bold ${posicionClass}">#${r.posicion}</span></td>
+          <td>${r.usuario}</td>
+          <td class="text-center"><span class="badge bg-success">${r.exitosas}</span></td>
+          <td class="text-center"><span class="badge bg-danger">${r.fallidas}</span></td>
+          <td class="text-center"><span class="badge bg-primary">${r.total}</span></td>
+          <td class="text-center"><span class="badge bg-${parseFloat(r.efectividad) >= 50 ? 'success' : 'warning'}">${r.efectividad}%</span></td>
+        </tr>
+      `;
+      }).join('');
+
+    }).withFailureHandler(function (err) {
+      ocultarCarga();
+      alert("Error al cargar ranking: " + err.message);
+    }).obtenerRankingOperadores(tipo, fInicio, fFin);
+
+    // También cargar heatmap con los mismos filtros
+    cargarHeatmap(tipo, fInicio, fFin);
+  }
+
+  function cargarRankingRango() {
+    const fInicio = document.getElementById('ranking-fecha-inicio').value;
+    const fFin = document.getElementById('ranking-fecha-fin').value;
+
+    if (!fInicio && !fFin) {
+      alert("Por favor, seleccione al menos una fecha (Inicio o Fin) para filtrar el rango.");
+      return;
+    }
+
+    cargarRanking('rango', fInicio, fFin);
+  }
+
+  function cargarHeatmap(tipoRango = 'historico', fInicio = null, fFin = null) {
+    google.script.run.withSuccessHandler(function (data) {
+      const container = document.getElementById('heatmap-horarios');
+
+      if (data.error || !data.heatmap) {
+        container.innerHTML = '<p class="text-muted">No hay datos disponibles</p>';
+        return;
+      }
+
+      container.innerHTML = data.heatmap.map(h => {
+        const efectividad = parseFloat(h.efectividad);
+        const totalLlamadas = parseInt(h.total);
+
+        let bgColor1 = '';
+        let bgColor2 = '';
+
+        // Colores directos para evitar problemas con variables CSS no definidas
+        if (efectividad >= 60) { bgColor1 = '#10b981'; bgColor2 = '#059669'; } // Verde (Exito)
+        else if (efectividad >= 40) { bgColor1 = '#f59e0b'; bgColor2 = '#d97706'; } // Naranja (Advertencia)
+        else if (efectividad > 0) { bgColor1 = '#ef4444'; bgColor2 = '#dc2626'; } // Rojo (Peligro)
+        else { bgColor1 = '#e2e8f0'; bgColor2 = '#cbd5e1'; } // Gris claro (Sin efectividad o 0 llamadas)
+
+        const textColor = totalLlamadas > 0 && efectividad > 0 ? 'text-white' : 'text-dark';
+        const opacityClass = totalLlamadas === 0 ? 'opacity-50' : '';
+
+        return `
+        <div class="text-center p-2 rounded shadow-sm ${opacityClass}" style="min-width: 75px; background: linear-gradient(135deg, ${bgColor1}, ${bgColor2}); border: 1px solid rgba(0,0,0,0.05);">
+          <div class="${textColor} fw-bold" style="font-size: 0.85rem;">${h.hora}</div>
+          <div class="${textColor}" style="font-size: 0.7rem;">${h.total} llamadas</div>
+          <div class="badge bg-white text-dark mt-1 shadow-sm" style="font-size: 0.75rem;">${h.efectividad}%</div>
+        </div>
+      `;
+      }).join('');
+    }).obtenerHeatmapHorarios(null, tipoRango, fInicio, fFin);
+  }
+
+  // --- SISTEMA DE NOTIFICACIONES GLOBAL (TOASTS) ---
+  function showToast(mensaje, tipo = "info") {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999;';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    const colorClass = tipo === 'danger' ? 'bg-danger' : (tipo === 'success' ? 'bg-success' : 'bg-primary');
+    toast.className = `toast-briana show align-items-center text-white ${colorClass} border-0 mb-2`;
+    toast.style.cssText = 'min-width: 250px; padding: 15px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); animation: slideIn 0.3s ease-out; transition: opacity 0.5s ease;';
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">
+          <i class="fas ${tipo === 'danger' ? 'fa-exclamation-triangle' : 'fa-check-circle'} me-2"></i> ${mensaje}
+        </div>
+        <button type="button" class="btn-close btn-close-white ms-auto me-2" onclick="this.closest('.toast-briana').remove()"></button>
+      </div>
+    `;
+
+    container.appendChild(toast);
+    setTimeout(() => {
+      if (toast.parentElement) toast.style.opacity = '0';
+      setTimeout(() => { if (toast.parentElement) toast.remove(); }, 500);
+    }, 4000);
+  }
+</script>

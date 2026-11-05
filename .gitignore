@@ -1,0 +1,56 @@
+# ============================================================
+# .gitignore — NEXUS SYSTEM Monorepo
+# ============================================================
+
+# Dependencias
+node_modules/
+*/node_modules/
+*/*/node_modules/
+.pnpm-store/
+.pnp
+.pnp.js
+
+# Entornos y secretos (NUNCA commitear credenciales)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Clasp / Apps Script credenciales locales
+.clasp.json
+.clasprc.json
+
+# Builds, caches y frameworks
+.next/
+dist/
+build/
+out/
+.turbo/
+.vercel
+*.tsbuildinfo
+
+# Python (scripts de migración)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
