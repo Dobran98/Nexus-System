@@ -1,0 +1,22 @@
+{
+  "name": "@intranet/telemetry",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SDK para cálculo de latencia de flujo y auditoría del dispositivo Samsung",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.46.1",
+    "@intranet/database": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0"
+  }
+}

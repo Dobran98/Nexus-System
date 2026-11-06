@@ -1,0 +1,40 @@
+{
+  "name": "@nexus/attendance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App Next.js para marcado QR, biometría y geolocalización de asistencia",
+  "scripts": {
+    "dev": "next dev --port 3002",
+    "build": "next build",
+    "start": "next start --port 3002",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^14.2.18",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.46.1",
+    "@intranet/database": "workspace:*",
+    "@intranet/ui": "workspace:*",
+    "@intranet/auth": "workspace:*",
+    "@intranet/telemetry": "workspace:*",
+    "@intranet/utils": "workspace:*",
+    "zod": "^3.23.8",
+    "qrcode": "^1.5.4",
+    "qr-scanner": "^1.4.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/qrcode": "^1.5.5",
+    "tailwindcss": "^3.4.14",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "eslint": "^9.15.0",
+    "eslint-config-next": "^14.2.18"
+  }
+}
