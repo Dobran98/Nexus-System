@@ -280,3 +280,4 @@ Para garantizar la continuidad operativa gratuita y sin degradación de rendimie
 
 *Manual elaborado y certificado por la Dirección de Arquitectura de Sistemas.*  
 *NEXUS SYSTEM v2.0 — Todos los derechos reservados.*
+

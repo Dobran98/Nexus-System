@@ -283,3 +283,4 @@ else:
     print("Error: No se pudo generar el PDF.")
     print("STDOUT:", res.stdout)
     print("STDERR:", res.stderr)
+

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "admin-portal": {
+      "root": "apps/admin-portal",
+      "framework": "nextjs"
+    },
+    "calls-incidents": {
+      "root": "apps/calls-incidents",
+      "framework": "nextjs"
+    }
+  },
+  "rewrites": [
+    { "source": "/admin(.*)", "destination": { "service": "admin-portal" } },
+    { "source": "/llamadas(.*)", "destination": { "service": "calls-incidents" } },
+    { "source": "/(.*)", "destination": { "service": "admin-portal" } }
+  ]
+}
