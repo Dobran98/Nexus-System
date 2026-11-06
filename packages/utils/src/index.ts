@@ -262,3 +262,4 @@ export function formatLocalDate(
   const d = typeof date === 'string' ? new Date(date) : date;
   return new Intl.DateTimeFormat('es-VE', options).format(d);
 }
+

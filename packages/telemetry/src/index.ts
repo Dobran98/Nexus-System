@@ -190,3 +190,4 @@ export function formatDuration(totalSeconds: number): string {
 export function isIdleTimeExcessive(idleSeconds: number, benchmarkSeconds = 45): boolean {
   return idleSeconds > benchmarkSeconds;
 }
+

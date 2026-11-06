@@ -58,3 +58,4 @@ INSERT INTO public.config_variables (key, value, description) VALUES
 ON CONFLICT (key) DO UPDATE
   SET value       = EXCLUDED.value,
       description = EXCLUDED.description;
+

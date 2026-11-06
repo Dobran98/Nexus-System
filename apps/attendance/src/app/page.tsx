@@ -238,3 +238,4 @@ export default function AttendancePage() {
     </main>
   );
 }
+

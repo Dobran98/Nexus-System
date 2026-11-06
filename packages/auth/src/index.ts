@@ -170,3 +170,4 @@ export const PROTECTED_ROUTES: Record<string, UserRole[]> = {
   '/oriana/submit':   ['superadmin', 'data_analyst', 'multi_operator'],
   '/asistencia':      ['superadmin', 'supervisor', 'multi_operator'],
 };
+
