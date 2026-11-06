@@ -1,22 +1,28 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "version": 2,
-  "rewrites": [
-    { "source": "/asistencia/:path*", "destination": "/apps/attendance/:path*" },
-    { "source": "/oriana/:path*",     "destination": "/apps/oriana/:path*" },
-    { "source": "/llamadas/:path*",   "destination": "/apps/calls-incidents/:path*" },
-    { "source": "/admin/:path*",      "destination": "/apps/admin-portal/:path*" },
-    { "source": "/(.*)",              "destination": "/apps/admin-portal/$1" }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Frame-Options",           "value": "DENY" },
-        { "key": "X-Content-Type-Options",    "value": "nosniff" },
-        { "key": "Referrer-Policy",           "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy",        "value": "camera=(), microphone=(), geolocation=(self)" }
-      ]
+  "services": {
+    "admin-portal": {
+      "root": "apps/admin-portal",
+      "framework": "nextjs"
+    },
+    "attendance": {
+      "root": "apps/attendance",
+      "framework": "nextjs"
+    },
+    "calls-incidents": {
+      "root": "apps/calls-incidents",
+      "framework": "nextjs"
+    },
+    "oriana": {
+      "root": "apps/oriana",
+      "framework": "nextjs"
     }
+  },
+  "rewrites": [
+    { "source": "/asistencia/(.*)", "destination": { "service": "attendance" } },
+    { "source": "/oriana/(.*)", "destination": { "service": "oriana" } },
+    { "source": "/llamadas/(.*)", "destination": { "service": "calls-incidents" } },
+    { "source": "/admin/(.*)", "destination": { "service": "admin-portal" } },
+    { "source": "/(.*)", "destination": { "service": "admin-portal" } }
   ]
 }
