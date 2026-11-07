@@ -234,7 +234,7 @@ CREATE INDEX IF NOT EXISTS idx_call_int_assignment
 
 -- Índice parcial para análisis de llamadas efectivas
 CREATE INDEX IF NOT EXISTS idx_call_int_effective
-    ON public.call_interactions(operator_id, created_at::DATE)
+    ON public.call_interactions(operator_id, created_at)
     WHERE result = 'answered_effective';
 
 -- ──────────────────────────────────────────────────────────────

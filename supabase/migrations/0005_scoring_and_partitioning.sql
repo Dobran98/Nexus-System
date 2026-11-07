@@ -62,7 +62,10 @@ CREATE TRIGGER tr_eval_rules_updated_at
 -- Los pesos de cada role_type deben sumar 100%.
 -- ──────────────────────────────────────────────────────────────
 
--- Verificar que los pesos por role_type sumen 100 (excepto en seed inicial)
+-- Asegurar idempotencia eliminando el trigger y datos previos si existieran
+DROP TRIGGER IF EXISTS tr_validate_rule_weights ON public.dynamic_evaluation_rules;
+DELETE FROM public.dynamic_evaluation_rules WHERE role_type IN ('calls', 'oriana_analysis');
+
 -- Seed de reglas para Rol de Llamadas (total: 100%)
 INSERT INTO public.dynamic_evaluation_rules (
     role_type, metric_identifier, display_name,
@@ -977,7 +980,8 @@ BEGIN
     FROM   public.dynamic_evaluation_rules
     WHERE  role_type  = NEW.role_type
     AND    is_active  = TRUE
-    AND    id        != COALESCE(NEW.id, gen_random_uuid()); -- excluir la fila actual en UPDATE
+    AND    id        != COALESCE(NEW.id, gen_random_uuid())
+    AND    metric_identifier != NEW.metric_identifier; -- excluir la métrica actual en INSERT...ON CONFLICT / UPDATE
 
     -- Sumar el peso de la fila que se está insertando/actualizando
     v_total_weight := COALESCE(v_total_weight, 0) + NEW.weight_percentage;

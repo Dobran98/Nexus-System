@@ -110,7 +110,7 @@ export async function recordLatencyEvent(
 ): Promise<{ success: boolean; error?: string }> {
   const row = latencyEventToRow(event);
 
-  const { error } = await supabase
+  const { error } = await (supabase as any)
     .from('workflow_latency_logs')
     .insert(row);
 
