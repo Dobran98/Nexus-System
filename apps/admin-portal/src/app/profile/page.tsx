@@ -20,6 +20,7 @@ export default async function ProfilePage() {
     // Simula una edición ocurrida hace 3 días (faltan 4 días de bloqueo)
     last_profile_edit_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     profile_edit_count_week: 1,
+    avatar_url: null,
     created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
   };
