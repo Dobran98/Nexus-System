@@ -26,42 +26,51 @@ importers:
 
   apps/admin-portal:
     dependencies:
+      '@intranet/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@intranet/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@intranet/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       '@intranet/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@intranet/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       next:
-        specifier: ^14.1.0
+        specifier: ^14.2.18
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
-        specifier: ^18.2.0
+        specifier: ^18.3.1
         version: 18.3.1
       react-dom:
-        specifier: ^18.2.0
+        specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
       '@types/node':
-        specifier: ^20.11.0
-        version: 20.19.43
+        specifier: ^22.9.0
+        version: 22.20.5
       '@types/react':
-        specifier: ^18.2.0
+        specifier: ^18.3.12
         version: 18.3.31
       '@types/react-dom':
-        specifier: ^18.2.0
+        specifier: ^18.3.1
         version: 18.3.7(@types/react@18.3.31)
       autoprefixer:
-        specifier: ^10.4.17
+        specifier: ^10.4.20
         version: 10.6.2(postcss@8.5.32)
       postcss:
-        specifier: ^8.4.33
+        specifier: ^8.4.47
         version: 8.5.32
       tailwindcss:
-        specifier: ^3.4.1
+        specifier: ^3.4.14
         version: 3.4.19
       typescript:
-        specifier: ^5.3.3
+        specifier: ^5.6.3
         version: 5.9.3
 
   apps/attendance:
@@ -139,42 +148,51 @@ importers:
 
   apps/calls-incidents:
     dependencies:
+      '@intranet/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@intranet/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@intranet/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       '@intranet/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@intranet/utils':
+        specifier: workspace:*
+        version: link:../../packages/utils
       next:
-        specifier: ^14.1.0
+        specifier: ^14.2.18
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
-        specifier: ^18.2.0
+        specifier: ^18.3.1
         version: 18.3.1
       react-dom:
-        specifier: ^18.2.0
+        specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
       '@types/node':
-        specifier: ^20.11.0
-        version: 20.19.43
+        specifier: ^22.9.0
+        version: 22.20.5
       '@types/react':
-        specifier: ^18.2.0
+        specifier: ^18.3.12
         version: 18.3.31
       '@types/react-dom':
-        specifier: ^18.2.0
+        specifier: ^18.3.1
         version: 18.3.7(@types/react@18.3.31)
       autoprefixer:
-        specifier: ^10.4.17
+        specifier: ^10.4.20
         version: 10.6.2(postcss@8.5.32)
       postcss:
-        specifier: ^8.4.33
+        specifier: ^8.4.47
         version: 8.5.32
       tailwindcss:
-        specifier: ^3.4.1
+        specifier: ^3.4.14
         version: 3.4.19
       typescript:
-        specifier: ^5.3.3
+        specifier: ^5.6.3
         version: 5.9.3
 
   apps/oriana:
@@ -604,9 +622,6 @@ packages:
 
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
-
-  '@types/node@20.19.43':
-    resolution: {integrity: sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA==}
 
   '@types/node@22.20.5':
     resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
@@ -2620,10 +2635,6 @@ snapshots:
   '@types/json-schema@7.0.15': {}
 
   '@types/json5@0.0.29': {}
-
-  '@types/node@20.19.43':
-    dependencies:
-      undici-types: 6.21.0
 
   '@types/node@22.20.5':
     dependencies:
