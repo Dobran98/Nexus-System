@@ -3,6 +3,7 @@
 // Nexus System · packages/telemetry
 // =============================================================================
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@intranet/database';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -105,14 +106,14 @@ export function latencyEventToRow(event: LatencyEvent): WorkflowLatencyLog {
  * @param event    - Datos del evento de latencia
  */
 export async function recordLatencyEvent(
-  supabase: ReturnType<typeof import('@supabase/supabase-js').createClient<Database>>,
+  supabase: SupabaseClient<Database>,
   event: LatencyEvent
 ): Promise<{ success: boolean; error?: string }> {
   const row = latencyEventToRow(event);
 
-  const { error } = await (supabase as any)
+  const { error } = await supabase
     .from('workflow_latency_logs')
-    .insert(row);
+    .insert([row]);
 
   if (error) {
     console.error('[Telemetry] Error al registrar latencia:', error.message);
@@ -146,7 +147,7 @@ export function calculateIdleTimeBetweenCalls(
  * esta función es para auditoría explícita desde la capa de aplicación.
  */
 export async function recordAuditEntry(
-  supabase: ReturnType<typeof import('@supabase/supabase-js').createClient<Database>>,
+  supabase: SupabaseClient<Database>,
   payload: AuditPayload
 ): Promise<{ success: boolean; error?: string }> {
   const { error } = await (supabase as any)
