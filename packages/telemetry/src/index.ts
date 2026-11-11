@@ -113,7 +113,7 @@ export async function recordLatencyEvent(
 
   const { error } = await supabase
     .from('workflow_latency_logs')
-    .insert([row]);
+    .insert([row] as any);
 
   if (error) {
     console.error('[Telemetry] Error al registrar latencia:', error.message);
