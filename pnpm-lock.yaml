@@ -41,6 +41,9 @@ importers:
       '@intranet/utils':
         specifier: workspace:*
         version: link:../../packages/utils
+      lucide-react:
+        specifier: ^0.475.0
+        version: 0.475.0
       next:
         specifier: ^14.2.18
         version: 14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2396,6 +2399,11 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
+'lucide-react@0.475.0(react@18.3.1)':
+    resolution: {integrity: sha512-kUibNVsOA85W27b23kQ8c5/a/R0e39cZl3Yk7L8m0aF3M/5tS1G63G4z6xK5qZ68t8l6Z8O0R80vWz5M6d31w==}
+    peerDependencies:
+      react: '>=16.8'
+      
 snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
