@@ -14,6 +14,8 @@
     "@intranet/auth": "workspace:*",
     "@intranet/telemetry": "workspace:*",
     "@intranet/utils": "workspace:*",
+    "@supabase/ssr": "^0.5.2",
+    "@supabase/supabase-js": "^2.46.1",
     "lucide-react": "^0.475.0",
     "next": "^14.2.18",
     "react": "^18.3.1",

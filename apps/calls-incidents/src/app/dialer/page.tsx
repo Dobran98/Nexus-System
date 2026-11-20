@@ -1,45 +1,47 @@
 import React from 'react';
 import { GuidedDialer } from '@/components/GuidedDialer';
-import type { Database } from '@intranet/database';
+import { createSupabaseServerClient } from '@intranet/auth/server';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Discador Guiado — Nexus Calls & Incidents',
   description: 'Flujo de marcación y captura de interacciones en terminales celulares Samsung',
 };
 
-// Página Server Component en Next.js App Router
 export default async function DialerPage() {
-  // Mock o fetch del dispositivo asignado al operador en sesión
-  const mockDevice: Database['public']['Tables']['corporate_devices']['Row'] = {
-    id: 'b1a2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d',
-    assigned_user_id: 'a0000000-0000-0000-0000-000000000001',
-    imei: '358921104829104',
-    imei2: null,
-    phone_number: '+58 416-5550192',
-    model: 'Samsung Galaxy A15 Enterprise',
-    android_version: '14',
-    knox_version: '3.9',
-    knox_enrollment_id: 'KE-99201481',
-    battery_health_pct: 94,
-    storage_free_gb: 42.5,
-    status: 'assigned',
-    last_seen_at: new Date().toISOString(),
-    notes: 'Terminal asignado para turno mañana',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const mockAssignment: Database['public']['Tables']['call_assignments']['Row'] = {
-    id: 'f1e2d3c4-b5a6-4f5e-9d8c-7b6a5f4e3d2c',
-    campaign_id: 'c1b2a3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d',
-    operator_id: 'a0000000-0000-0000-0000-000000000001',
-    customer_phone: '04141234567',
-    customer_name: 'Comuna Socialista El Renacer - Vocero Principal',
-    priority: 1,
-    state: 'queued',
-    rescheduled_for: null,
-    assigned_at: new Date().toISOString(),
-  };
+  if (!user) redirect('/login');
+
+  // Obtener el dispositivo asignado al operador actual
+  const { data: device } = await supabase
+    .from('corporate_devices')
+    .select('*')
+    .eq('assigned_user_id', user.id)
+    .eq('status', 'assigned')
+    .single();
+
+  // Obtener la próxima asignación en cola para este operador
+  const { data: assignment } = await supabase
+    .from('call_assignments')
+    .select('*')
+    .eq('operator_id', user.id)
+    .eq('state', 'queued')
+    .order('priority', { ascending: true })
+    .limit(1)
+    .single();
+
+  if (!device) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <p className="text-slate-300 font-medium">No tienes un dispositivo asignado.</p>
+          <p className="text-slate-500 text-sm">Contacta a tu supervisor para que te asigne un terminal Samsung.</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
@@ -53,11 +55,10 @@ export default async function DialerPage() {
       </div>
 
       <GuidedDialer
-        currentOperatorId="a0000000-0000-0000-0000-000000000001"
-        assignedDevice={mockDevice}
-        initialAssignment={mockAssignment}
+        currentOperatorId={user.id}
+        assignedDevice={device}
+        initialAssignment={assignment ?? null}
       />
     </main>
   );
 }
-

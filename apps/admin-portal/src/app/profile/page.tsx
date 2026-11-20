@@ -1,28 +1,32 @@
 import React from 'react';
 import { ProfileRestrictionPanel } from '@/components/ProfileRestrictionPanel';
-import type { Database } from '@intranet/database';
+import { createSupabaseServerClient } from '@intranet/auth/server';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'Perfil y Gobernanza de Acceso — Nexus Admin Portal',
   description: 'Panel de perfil de usuario con control de cuota semanal de actualización',
 };
 
-// Página Server Component en Next.js App Router
 export default async function ProfilePage() {
-  // Mock o fetch del perfil de usuario autenticado
-  const mockProfile: Database['public']['Tables']['profiles']['Row'] = {
-    id: 'a0000000-0000-0000-0000-000000000001',
-    document_id: 'V-26910482',
-    full_name: 'Norly Ariza',
-    phone_number: '+58 414 1234567',
-    address: 'Urb. Montalbán II, Edif. Los Samanes, Piso 4, Apto 42, Caracas',
-    is_active: true,
-    // Simula una edición ocurrida hace 3 días (faltan 4 días de bloqueo)
-    last_profile_edit_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    profile_edit_count_week: 1,
-    created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-  };
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) redirect('/login');
+
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (error || !profile) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 flex items-center justify-center">
+        <p className="text-slate-400">Perfil no encontrado. Contacta al administrador.</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
@@ -35,8 +39,7 @@ export default async function ProfilePage() {
         </p>
       </div>
 
-      <ProfileRestrictionPanel initialProfile={mockProfile} />
+      <ProfileRestrictionPanel initialProfile={profile} />
     </main>
   );
 }
-

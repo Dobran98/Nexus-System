@@ -3,6 +3,13 @@
 // Nexus System · packages/auth
 // =============================================================================
 
+// NOTA: NO re-exportar server.ts aquí — contiene 'next/headers' que no es
+// compatible con contextos 'use client'. Importar directamente:
+//   import { createSupabaseBrowserClient } from '@intranet/auth/client'
+//   import { createSupabaseServerClient } from '@intranet/auth/server'
+
+export { createSupabaseBrowserClient } from './client';
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import type { Database } from '@intranet/database';
