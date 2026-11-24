@@ -1,0 +1,1592 @@
+// ─── ESTADO GLOBAL ──────────────────────────────────────────────────────────
+  let gConfig          = {};
+  let gVariables       = {};          // { MODO: [{ variable, etiqueta, tipo, obligatorio, padre }] }
+  let cUser            = {};          // { u, id, n, r, t }
+  let tCamps           = [];
+  let tVars            = [];          // variables en edición (config)
+  let tEmojis          = [];          // [{tipo, nombre, emoji}]
+  let tDest            = [];          // [{chatId, frecuencia, activo}]
+  let tInd             = [];          // [{indicador, modo}]
+  let contadorCampanas = 0;
+
+  // Escape HTML para inyectar texto dinámico de forma segura
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Paginación tablas
+  let currPage   = 1, totalP   = 1;
+  let currPageAn = 1, totalPAn = 1;
+
+  // Nuevas variables globales para Áreas, Reglas y Temporizador
+  let gAreas                = [];
+  let gRules                = {};
+  let gSuperRules           = { analistasTodos: true, todosModos: false };
+  let countdownTimer        = null;
+  let countdownSeconds      = 10;
+  let reportPendingPayload  = null;
+
+  // ─── PROMISIFIED API WRAPPER (PROXY) ───────────────────────────────────────
+  const api = new Proxy({}, {
+    get(target, prop) {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        return function(...args) {
+          return new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              [prop](...args);
+          });
+        };
+      }
+            return async function(...args) {
+        try {
+          const res = await fetch(`/api/${prop}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ args })
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            throw new Error(json.message || `Error HTTP ${res.status}`);
+          }
+          return json;
+        } catch (err) {
+          console.error(`Error al invocar API ${prop}:`, err);
+          throw err;
+        }
+      };
+    }
+  });
+
+  // ─── TOAST NOTIFICATIONS SYSTEM ───────────────────────────────────────────
+  function showToast(title, message, type = 'info', duration = 4000) {
+    let container = document.querySelector('.toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    let iconName = 'info';
+    if (type === 'success') iconName = 'check_circle';
+    else if (type === 'error') iconName = 'error';
+    else if (type === 'warning') iconName = 'warning';
+
+    toast.innerHTML = `
+      <div class="toast-icon">
+        <span class="material-symbols-outlined">${iconName}</span>
+      </div>
+      <div class="toast-content">
+        <div class="toast-title">${title}</div>
+        <div class="toast-message">${message}</div>
+      </div>
+      <button class="toast-close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <div class="toast-progress">
+        <div class="toast-progress-bar"></div>
+      </div>
+    `;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('show');
+    }, 10);
+
+    const progressBar = toast.querySelector('.toast-progress-bar');
+    progressBar.style.transition = `transform ${duration}ms linear`;
+    progressBar.style.transform = 'scaleX(0)';
+
+    let dismissTimeout;
+    const dismissToast = () => {
+      clearTimeout(dismissTimeout);
+      toast.classList.remove('show');
+      toast.classList.add('hide');
+      setTimeout(() => {
+        toast.remove();
+      }, 400);
+    };
+
+    toast.querySelector('.toast-close').addEventListener('click', dismissToast);
+    dismissTimeout = setTimeout(dismissToast, duration);
+  }
+
+  const toast = {
+    success: (msg, title = 'Éxito') => showToast(title, msg, 'success'),
+    error: (msg, title = 'Error') => showToast(title, msg, 'error'),
+    info: (msg, title = 'Información') => showToast(title, msg, 'info'),
+    warning: (msg, title = 'Advertencia') => showToast(title, msg, 'warning')
+  };
+
+  // Redirección de alerts nativos al sistema Toast
+  window.alert = function(msg) {
+    if (!msg) return;
+    const lower = msg.toLowerCase();
+    if (lower.includes('éxito') || lower.includes('exitosamente') || lower.includes('completado') || lower.includes('guardado')) {
+      toast.success(msg);
+    } else if (lower.includes('error') || lower.includes('falló') || lower.includes('falta') || lower.includes('incorrecta') || lower.includes('campo') || lower.includes('no hay')) {
+      toast.error(msg);
+    } else if (lower.includes('advertencia') || lower.includes('cuidado') || lower.includes('retardado') || lower.includes('duplicado') || lower.includes('ya existe') || lower.includes('ocupado')) {
+      toast.warning(msg);
+    } else {
+      toast.info(msg);
+    }
+  };
+
+  // ─── INICIALIZACIÓN ─────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', async function () {
+    // Tema persistente
+    if (localStorage.getItem('t') === 'l') document.body.classList.add('light-mode');
+
+    // Fechas de hoy en todos los date pickers
+    const hoy = new Date().toISOString().split('T')[0];
+    ['fechaReporte','exp-f1','exp-f2','dash-f1','dash-f2','word-f1','word-f2'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = hoy;
+    });
+
+    // Filtros de validación sin fecha preseleccionada
+    ['filter-date','filter-date-an'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+
+    // Cargar config inicial, áreas y reglas usando promesas
+    try {
+      gConfig = await api.obtenerConfiguracionVinculada();
+      gVariables = await api.obtenerTodasVariables();
+      fillS('exp-modo');
+      
+      // Cargar Áreas y Reglas
+      gAreas = await api.obtenerAreas();
+      const accessConfig = await api.obtenerReglasAcceso();
+      gRules = accessConfig.rules;
+      gSuperRules = accessConfig.superRules;
+    } catch (e) {
+      console.error('Error cargando configuración inicial:', e);
+      toast.error('No se pudo cargar la configuración de campañas del servidor.');
+    }
+
+    // Asegurar la correcta interacción del checkbox "Trabajé todo el día"
+    const chkDoble = document.querySelector('.chk-doble');
+    const chkInput = document.getElementById('chk-todoeldia');
+    if (chkDoble && chkInput) {
+      chkDoble.addEventListener('click', function (e) {
+        if (e.target !== chkInput) {
+          e.preventDefault(); // Evitar doble evento de navegador en etiquetas
+          chkInput.checked = !chkInput.checked;
+          chkInput.dispatchEvent(new Event('change'));
+        }
+      });
+
+      chkInput.addEventListener('change', function () {
+        if (chkInput.checked) {
+          chkDoble.classList.add('checked');
+        } else {
+          chkDoble.classList.remove('checked');
+        }
+      });
+    }
+  });
+
+  // Auto-mayúsculas en inputs de texto (excepto usuario/contraseña y campos de escritura libre)
+  document.addEventListener('input', function (e) {
+    if ((e.target.tagName === 'TEXTAREA' ||
+        (e.target.tagName === 'INPUT' && e.target.type === 'text')) &&
+        !['login-user','login-pass'].includes(e.target.id) &&
+        !e.target.classList.contains('free-text')) {
+      const s = e.target.selectionStart, f = e.target.selectionEnd;
+      e.target.value = e.target.value.toUpperCase();
+      e.target.setSelectionRange(s, f);
+    }
+  });
+
+  // Cerrar multi-selects al hacer clic fuera
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.ms-container')) {
+      document.querySelectorAll('.ms-dropdown').forEach(d => d.style.display = 'none');
+    }
+  });
+
+  // ─── TEMA ───────────────────────────────────────────────────────────────────
+  function toggleTheme() {
+    document.body.classList.toggle('light-mode');
+    localStorage.setItem('t', document.body.classList.contains('light-mode') ? 'l' : 'd');
+    toast.info('Tema de visualización actualizado.');
+  }
+
+  // ─── NAVEGACIÓN ─────────────────────────────────────────────────────────────
+  function navTo(id) {
+    document.querySelectorAll('.section-tab,.nav-item').forEach(e => e.classList.remove('active'));
+    document.getElementById('tab-' + id).classList.add('active');
+    document.getElementById('nav-' + id).classList.add('active');
+    if (id === 'validar')       loadTablaValidacion('REGULARES');
+    if (id === 'val-analistas') loadTablaValidacion('ANALISTAS');
+    if (id === 'dashboard')     loadDashboard();
+  }
+
+  // ─── LOGOUT ─────────────────────────────────────────────────────────────────
+  function logout() {
+    cUser = {}; tCamps = []; currPage = 1; currPageAn = 1;
+    contadorCampanas = 0;
+    document.getElementById('reportes-container').innerHTML = '';
+    ['login-user','login-pass'].forEach(i => document.getElementById(i).value = '');
+    document.getElementById('login-area-select').value = '';
+    document.getElementById('login-msg').innerText = '';
+    document.getElementById('user-role').innerText = '';
+    document.getElementById('user-turno').innerText = '';
+    document.getElementById('sidebar-name').innerText = '';
+    document.getElementById('sidebar-role').innerText = '';
+    document.getElementById('sidebar-turno').innerText = '';
+    const cbTodoElDia = document.getElementById('chk-todoeldia');
+    if (cbTodoElDia) {
+      cbTodoElDia.checked = false;
+      cbTodoElDia.dispatchEvent(new Event('change'));
+    }
+    document.querySelectorAll('.admin-only,.super-admin-only').forEach(e => e.classList.add('hidden'));
+    document.getElementById('app-main').classList.add('hidden');
+    document.getElementById('login-overlay').classList.remove('hidden');
+
+    document.getElementById('login-area-wrapper').classList.add('hidden');
+    toast.info('Sesión cerrada correctamente.');
+  }
+
+  // ─── LOGIN (con Selección de Área de Trabajo) ─────────────────────────────
+  async function doLogin() {
+    const u = document.getElementById('login-user').value.trim();
+    const p = document.getElementById('login-pass').value.trim();
+    if (!u || !p) return mostrarMsgLogin('Ingrese usuario y contraseña.');
+
+    const btn = document.getElementById('btn-login');
+    const loader = document.getElementById('loader-login');
+    btn.disabled = true; btn.innerText = '...'; loader.style.display = 'block';
+    document.getElementById('login-msg').innerText = '';
+
+    try {
+      const r = await api.validarUsuario(u, p);
+      btn.disabled = false; btn.innerText = 'Ingresar'; loader.style.display = 'none';
+      if (!r.success) return mostrarMsgLogin(r.message);
+
+      const rolUp = String(r.rol).toUpperCase();
+      const esAdmin = rolUp.includes('ADMIN');
+
+      if (!esAdmin) {
+        // Operadores y Analistas: Cargar y requerir selección de Área
+        window._datosLoginTemp = r;
+        
+        // Poblar selector de áreas
+        const areaSelect = document.getElementById('login-area-select');
+        areaSelect.innerHTML = '<option value="" disabled selected>Seleccione su área de trabajo...</option>';
+        gAreas.forEach(area => {
+          areaSelect.add(new Option(area.nombre, area.nombre));
+        });
+
+        document.getElementById('login-area-wrapper').classList.remove('hidden');
+        document.getElementById('btn-login').onclick = () => completarLoginArea(window._datosLoginTemp);
+        document.getElementById('btn-login').innerText = 'Confirmar Área';
+        toast.info('Por favor seleccione su área de trabajo para continuar.');
+      } else {
+        // Admin: login directo sin área
+        completarSesion(r, 'ADMIN');
+      }
+    } catch (e) {
+      btn.disabled = false; btn.innerText = 'Ingresar'; loader.style.display = 'none';
+      mostrarMsgLogin('Error de servidor. Intente nuevamente.');
+      toast.error('No se pudo verificar el usuario en el servidor.');
+      console.error(e);
+    }
+  }
+
+  function completarLoginArea(datosUsuario) {
+    const areaSeleccionada = document.getElementById('login-area-select').value;
+    if (!areaSeleccionada) {
+      return mostrarMsgLogin('Por favor seleccione un área de trabajo.');
+    }
+    completarSesion(datosUsuario, areaSeleccionada);
+  }
+
+  function completarSession(r, areaOId) {
+    completarSesion(r, areaOId);
+  }
+
+  function completarSesion(r, areaOId) {
+    cUser = { u: document.getElementById('login-user').value.trim(), id: areaOId, n: r.nombre, r: r.rol, t: r.turno };
+
+    document.getElementById('login-overlay').classList.add('hidden');
+    document.getElementById('app-main').classList.remove('hidden');
+
+    // Mostrar datos del usuario
+    document.getElementById('user-display').innerText = r.nombre;
+    document.getElementById('user-role').innerText    = r.rol;
+    document.getElementById('user-turno').innerText   = 'Área: ' + areaOId + ' | Turno: ' + r.turno;
+
+    document.getElementById('sidebar-name').innerText  = r.nombre;
+    const sbRole = document.getElementById('sidebar-role');
+    sbRole.innerText = r.rol;
+    document.getElementById('sidebar-turno').innerText = 'Turno: ' + r.turno;
+
+    const rolUp = String(r.rol).toUpperCase();
+    if (rolUp.includes('ADMIN')) {
+      sbRole.style.color = 'var(--danger)';
+      document.querySelectorAll('.super-admin-only').forEach(e => e.classList.remove('hidden'));
+    } else if (rolUp.includes('ANALISTA')) {
+      sbRole.style.color = 'var(--warning)';
+    } else {
+      sbRole.style.color = '#94a3b8';
+    }
+
+    if (rolUp.includes('ADMIN') || rolUp.includes('ANALISTA')) {
+      document.querySelectorAll('.admin-only').forEach(e => e.classList.remove('hidden'));
+      cargarListaUsuarios();
+    }
+
+    // Restaurar botón de login para próxima vez
+    document.getElementById('btn-login').onclick = doLogin;
+    document.getElementById('btn-login').innerText = 'Ingresar';
+    document.getElementById('login-area-wrapper').classList.add('hidden');
+
+    toast.success(`Bienvenido al sistema, ${r.nombre}.`);
+    loadCfg();
+  }
+
+  function mostrarMsgLogin(msg) {
+    document.getElementById('login-msg').innerText = msg;
+    toast.error(msg, 'Acceso Denegado');
+  }
+
+  // ─── CARGA DE CONFIGURACIÓN ──────────────────────────────────────────────────
+  async function loadCfg() {
+    try {
+      gConfig = await api.obtenerConfiguracionVinculada();
+      gVariables = await api.obtenerTodasVariables();
+      fillS('exp-modo');
+
+      // Modo select en config
+      const s = document.getElementById('cfg-modo-select');
+      if (s) {
+        s.innerHTML = '<option disabled selected>Seleccione un modo...</option>';
+        Object.keys(gConfig).forEach(k => s.add(new Option(k, k)));
+        s.add(new Option('Nuevo...', 'NUEVO'));
+      }
+
+      // Multi-selects de modos en tablas de validación
+      poblarMsDropdownModos(gConfig);
+
+      // Cargar Áreas
+      gAreas = await api.obtenerAreas();
+      renderAreasConfig();
+
+      // Cargar Reglas y Super Reglas
+      const accessConfig = await api.obtenerReglasAcceso();
+      gRules = accessConfig.rules;
+      gSuperRules = accessConfig.superRules;
+      renderRulesConfig();
+
+      // Cargar Repositorio de Emojis y Destinatarios de reportes
+      const emojis = await api.obtenerEmojis();
+      tEmojis = [];
+      Object.keys(emojis.modos || {}).forEach(n => tEmojis.push({ tipo: 'MODO', nombre: n, emoji: emojis.modos[n] }));
+      Object.keys(emojis.campanas || {}).forEach(n => tEmojis.push({ tipo: 'CAMPAÑA', nombre: n, emoji: emojis.campanas[n] }));
+      Object.keys(emojis.variables || {}).forEach(n => tEmojis.push({ tipo: 'VARIABLE', nombre: n, emoji: emojis.variables[n] }));
+      renderEmojis();
+
+      tDest = await api.obtenerDestinatarios();
+      renderDest();
+
+      tInd = await api.obtenerIndicadores();
+      renderInd();
+
+      // Reiniciar formulario de reporte
+      contadorCampanas = 0;
+      document.getElementById('reportes-container').innerHTML = '';
+      iniciarFormulario();
+    } catch (e) {
+      console.error('Error cargando config:', e);
+      toast.error('No se pudo cargar la configuración de campañas vinculadas.');
+    }
+  }
+
+  async function cargarListaUsuarios() {
+    try {
+      const users = await api.obtenerListaUsuarios();
+      const s = document.getElementById('dash-user');
+      if (s) {
+        s.innerHTML = '<option value="TODOS">Todos los Operadores</option>';
+        users.forEach(u => s.add(new Option(u.nombre, u.usuario)));
+      }
+      poblarMsDropdownOps(users);
+    } catch (e) {
+      console.error('Error cargando usuarios:', e);
+      toast.error('Error cargando la lista de usuarios en el panel.');
+    }
+  }
+
+  // Renderiza los inputs para editar nombres de Áreas
+  function renderAreasConfig() {
+    const container = document.getElementById('areas-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+    gAreas.forEach((area, index) => {
+      container.innerHTML += `
+        <div class="area-config-row">
+          <span style="font-weight:bold;color:var(--primary);font-size:13px;width:70px;">Área ${index + 1}:</span>
+          <input type="text" class="input-mini area-input-val" data-id="${area.id}" value="${area.nombre}" style="flex:1;text-transform:uppercase;">
+        </div>`;
+    });
+  }
+
+  // Renderiza las checkboxes de modos para cada Perfil
+  function renderRulesConfig() {
+    const adminCont = document.getElementById('rules-admin-container');
+    const analCont = document.getElementById('rules-analista-container');
+    const operCont = document.getElementById('rules-operador-container');
+    
+    if (!adminCont || !analCont || !operCont) return;
+    
+    adminCont.innerHTML = '';
+    analCont.innerHTML = '';
+    operCont.innerHTML = '';
+    
+    // Configurar checkboxes de Super Reglas
+    document.getElementById('sr-analistas-todos').checked = gSuperRules.analistasTodos;
+    document.getElementById('sr-todos-modos').checked     = gSuperRules.todosModos;
+    
+    const modos = Object.keys(gConfig);
+    
+    const buildCheckboxes = (container, role, list) => {
+      modos.forEach((modo, i) => {
+        const isChecked = list.includes('*') || list.includes(modo);
+        container.innerHTML += `
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" class="rule-chk-${role.toLowerCase()}" value="${modo}" ${isChecked ? 'checked' : ''}>
+            ${modo}
+          </label>`;
+      });
+    };
+    
+    buildCheckboxes(adminCont, 'ADMIN', gRules.ADMIN || []);
+    buildCheckboxes(analCont, 'ANALISTA', gRules.ANALISTA || []);
+    buildCheckboxes(operCont, 'OPERADOR', gRules.OPERADOR || []);
+  }
+
+  // Guardar configuración de Áreas de Trabajo
+  async function saveAreasConfig() {
+    const list = [];
+    document.querySelectorAll('.area-input-val').forEach(input => {
+      list.push({
+        id: input.getAttribute('data-id'),
+        nombre: input.value.toUpperCase().trim()
+      });
+    });
+    
+    const btn = document.querySelector('[onclick="saveAreasConfig()"]');
+    btn.disabled = true; btn.innerText = 'Guardando...';
+    document.getElementById('areas-cfg-msg').innerText = '';
+    
+    try {
+      const res = await api.guardarAreas(list);
+      btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">save</span> Guardar Nombres de Áreas';
+      if (res.success) {
+        toast.success(res.message);
+        loadCfg();
+      } else {
+        toast.error(res.message);
+      }
+    } catch (e) {
+      btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">save</span> Guardar Nombres de Áreas';
+      toast.error('Error al guardar áreas en el servidor.');
+    }
+  }
+
+  // Guardar configuración de Reglas de Acceso
+  async function saveRulesConfig() {
+    const getChks = role => {
+      return Array.from(document.querySelectorAll(`.rule-chk-${role}`))
+        .filter(chk => chk.checked)
+        .map(chk => chk.value);
+    };
+    
+    const rulesData = {
+      ADMIN: getChks('admin'),
+      ANALISTA: getChks('analista'),
+      OPERADOR: getChks('operador')
+    };
+    
+    const superRulesData = {
+      analistasTodos: document.getElementById('sr-analistas-todos').checked,
+      todosModos: document.getElementById('sr-todos-modos').checked
+    };
+    
+    const btn = document.querySelector('[onclick="saveRulesConfig()"]');
+    btn.disabled = true; btn.innerText = 'Guardando...';
+    document.getElementById('rules-cfg-msg').innerText = '';
+    
+    try {
+      const res = await api.guardarReglasAcceso(rulesData, superRulesData);
+      btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">save</span> Guardar Reglas de Acceso';
+      if (res.success) {
+        toast.success(res.message);
+        loadCfg();
+      } else {
+        toast.error(res.message);
+      }
+    } catch (e) {
+      btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">save</span> Guardar Reglas de Acceso';
+      toast.error('Error al guardar reglas de acceso.');
+    }
+  }
+
+  // ─── MULTI-SELECTS ──────────────────────────────────────────────────────────
+  function toggleMs(id) {
+    const el = document.getElementById(id);
+    const visible = el.style.display === 'block';
+    document.querySelectorAll('.ms-dropdown').forEach(d => d.style.display = 'none');
+    el.style.display = visible ? 'none' : 'block';
+  }
+
+  function updateMsText(dropId, textId, defaultText) {
+    const count = document.querySelectorAll(`#${dropId} input:checked`).length;
+    const el    = document.getElementById(textId);
+    if (count === 0) {
+      el.innerText = defaultText; el.style.fontWeight = 'normal'; el.style.color = '';
+    } else {
+      el.innerText = `${count} seleccionados`; el.style.fontWeight = 'bold'; el.style.color = 'var(--primary)';
+    }
+  }
+
+  function getSelectedMs(dropId) {
+    return Array.from(document.querySelectorAll(`#${dropId} input:checked`)).map(cb => cb.value.toUpperCase().trim());
+  }
+
+  function poblarMsDropdownModos(config) {
+    const msModos   = document.getElementById('ms-dropdown-modos');
+    const msModosAn = document.getElementById('ms-dropdown-modos-an');
+    if (msModos)   msModos.innerHTML   = '';
+    if (msModosAn) msModosAn.innerHTML = '';
+
+    Object.keys(config).forEach(k => {
+      const isAnalista = k.toUpperCase().includes('ANALISTA') || k.toUpperCase().includes('CUALITATIV');
+      const html = `<label class="ms-option"><input type="checkbox" value="${k}"
+        onchange="updateMsText('${isAnalista ? 'ms-dropdown-modos-an' : 'ms-dropdown-modos'}',
+        '${isAnalista ? 'ms-text-modos-an' : 'ms-text-modos'}', 'Todos los modos')"> ${k}</label>`;
+      if (isAnalista && msModosAn) msModosAn.innerHTML += html;
+      else if (msModos)            msModos.innerHTML   += html;
+    });
+  }
+
+  function poblarMsDropdownOps(users) {
+    const msOps   = document.getElementById('ms-dropdown-ops');
+    const msOpsAn = document.getElementById('ms-dropdown-ops-an');
+    if (msOps)   msOps.innerHTML   = '';
+    if (msOpsAn) msOpsAn.innerHTML = '';
+
+    users.forEach(u => {
+      const html = name => `<label class="ms-option"><input type="checkbox" value="${u.usuario}"
+        onchange="updateMsText('${name}', '${name.replace('dropdown','text')}', '${name.includes('an') ? 'Todos los analistas' : 'Todos los operadores'}')"> ${u.nombre}</label>`;
+      if (msOps)   msOps.innerHTML   += html('ms-dropdown-ops');
+      if (msOpsAn) msOpsAn.innerHTML += html('ms-dropdown-ops-an');
+    });
+  }
+
+  // ─── FORMULARIO DE REPORTES ─────────────────────────────────────────────────
+
+  function iniciarFormulario() {
+    document.getElementById('reportes-container').innerHTML = '';
+    contadorCampanas = 0;
+    agregarBloqueCampaña();
+  }
+
+  function agregarBloqueCampaña() {
+    contadorCampanas++;
+    const n         = contadorCampanas;
+    const container = document.getElementById('reportes-container');
+
+    const div     = document.createElement('div');
+    div.className = 'report-card col';
+    div.id        = `col-${n}`;
+
+    const btnEliminar = n > 1
+      ? `<button type="button" onclick="eliminarBloque(${n})" style="position:absolute;top:14px;right:14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--danger);border-radius:var(--r-full);width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;"><span class='material-symbols-outlined' style='font-size:16px;'>close</span></button>`
+      : '';
+
+    div.innerHTML = `
+      ${btnEliminar}
+      <h4>Registro ${n}</h4>
+      <div class="form-group">
+        <label>Modo de Trabajo</label>
+        <select class="modo-select" id="modo_${n}" required onchange="changeModo(${n})">
+          <option value="" disabled selected>Seleccione un modo...</option>
+        </select>
+      </div>
+
+      <div id="actividades_wrapper_${n}">
+        ${templateActRow(n, 1)}
+      </div>
+      <button type="button" class="btn btn-secondary btn-mini hidden" id="btn_add_act_${n}"
+        onclick="addActivityRow(${n})" style="margin-bottom:var(--sp-md);"><span class='material-symbols-outlined' style='font-size:15px;'>add</span> Añadir actividad</button>
+
+      <div id="cont_${n}">
+        <div class="form-group" id="ge_${n}">
+          <label id="lbl_efec_${n}">Llamadas Efectivas</label>
+          <input type="number" id="efectivas_${n}" min="0" placeholder="0">
+        </div>
+        <div class="form-group hidden" id="gd_${n}">
+          <label>Detalle</label>
+          <textarea id="detalle_${n}" rows="3" placeholder="Describa el detalle..."></textarea>
+        </div>
+        <div id="gv_${n}" class="hidden"></div>
+        <div id="gx_${n}" class="hidden">
+          <div class="form-group" id="gt_${n}"><label>Llamadas Totales Realizadas</label><input type="number" id="totales_${n}" placeholder="0"></div>
+          <div class="form-group" id="gi_${n}"><label>Cantidad de Incidencias Abarcadas</label><input type="number" id="incidencias_${n}" placeholder="0"></div>
+          <div class="form-group" id="ges_${n}"><label>Cantidad de Estados Abarcados</label><input type="text" id="estados_${n}"></div>
+          <div class="form-group" id="gm_${n}"><label>Cantidad de Municipios Abarcados</label><input type="text" id="municipios_${n}"></div>
+        </div>
+      </div>`;
+
+    container.appendChild(div);
+    fillModoSelect(n);
+  }
+
+  function templateActRow(n, rowId, isExtra = false) {
+    const reqExtra = isExtra ? 'required' : '';
+    return `
+      <div class="act-row" id="act_row_${n}_${rowId}">
+        ${isExtra ? `<button type="button" onclick="this.parentElement.remove()" style="position:absolute;top:10px;right:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:var(--danger);border-radius:var(--r-full);width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;"><span class='material-symbols-outlined' style='font-size:14px;'>close</span></button>` : ''}
+        <div class="form-group" style="margin-bottom:var(--sp-sm);">
+          <label id="lbl_campana_${n}_${rowId}">Campaña / Actividad</label>
+          <select id="campana_${n}_${rowId}" required onchange="changeCampanaRow(${n},${rowId})">
+            <option disabled selected>Seleccione...</option>
+          </select>
+          <input type="text" id="campana_other_${n}_${rowId}" class="hidden campana-other-input"
+            placeholder="Escriba nombre de actividad..." style="margin-top:6px;text-transform:uppercase;"
+            oninput="this.value=this.value.toUpperCase()">
+        </div>
+
+        <div id="analista_fields_${n}_${rowId}" class="hidden" style="margin-top:var(--sp-sm);">
+          <div style="display:flex;gap:var(--sp-md);flex-wrap:wrap;">
+            <div style="flex:1;min-width:120px;">
+              <label>Cant. Datos Analizados</label>
+              <input type="number" id="datos_analizados_${n}_${rowId}" min="0"
+                class="datos-analizados-input" placeholder="Ej: 15" ${reqExtra}>
+            </div>
+            <div style="flex:2;min-width:200px;">
+              <label>Descripción / Análisis</label>
+              <textarea id="desc_actividad_${n}_${rowId}" rows="1"
+                class="desc-actividad-input" placeholder="Describa la tarea..." ${reqExtra}></textarea>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function eliminarBloque(n) {
+    const col = document.getElementById(`col-${n}`);
+    if (col) col.remove();
+  }
+
+  function addActivityRow(n) {
+    const wrapper  = document.getElementById(`actividades_wrapper_${n}`);
+    const rowCount = wrapper.querySelectorAll('.act-row').length + 1;
+    const tmp      = document.createElement('div');
+    tmp.innerHTML  = templateActRow(n, rowCount, true);
+    wrapper.appendChild(tmp.firstElementChild);
+
+    const s = document.getElementById(`campana_${n}_${rowCount}`);
+    const m = document.getElementById(`modo_${n}`).value;
+    (gConfig[m] || []).forEach(c => s.add(new Option(c, c)));
+    s.add(new Option('Otros', 'Otros'));
+
+    const isAnalista = m.toUpperCase().includes('ANALISTA') || m.toUpperCase().includes('CUALITATIV');
+    if (isAnalista) document.getElementById(`analista_fields_${n}_${rowCount}`).classList.remove('hidden');
+  }
+
+  function changeCampanaRow(n, rowId) {
+    const val   = document.getElementById(`campana_${n}_${rowId}`).value;
+    const input = document.getElementById(`campana_other_${n}_${rowId}`);
+    if (val === 'Otros') { input.classList.remove('hidden'); input.required = true; }
+    else                  { input.classList.add('hidden');    input.required = false; }
+  }
+
+  function fillS(id) {
+    const s = document.getElementById(id);
+    if (!s) return;
+    s.innerHTML = id === 'exp-modo'
+      ? '<option value="TODOS">Todos</option>'
+      : '<option value="" disabled selected>Seleccione...</option>';
+    Object.keys(gConfig).forEach(k => s.add(new Option(k, k)));
+  }
+
+  // Filtrar los modos según reglas y super reglas
+  function fillModoSelect(n) {
+    const s   = document.getElementById(`modo_${n}`);
+    if (!s) return;
+    s.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
+
+    const rolUp = String(cUser.r || '').toUpperCase();
+
+    Object.keys(gConfig).forEach(k => {
+      const kUp = k.toUpperCase();
+      const esAnalistaMode = kUp.includes('ANALISTA') || kUp.includes('CUALITATIV');
+      
+      // 1. Bypass completo (Super Regla)
+      if (gSuperRules.todosModos) {
+        s.add(new Option(k, k));
+        return;
+      }
+      
+      // 2. Bypass de Analistas para todos (Super Regla)
+      if (esAnalistaMode && gSuperRules.analistasTodos) {
+        s.add(new Option(k, k));
+        return;
+      }
+      
+      // 3. Regla específica por Rol
+      const allowedModes = gRules[rolUp] || [];
+      if (allowedModes.includes('*') || allowedModes.includes(k)) {
+        s.add(new Option(k, k));
+      }
+    });
+  }
+
+  function changeModo(n) {
+    const m   = document.getElementById(`modo_${n}`).value;
+    const v   = m.toUpperCase();
+
+    const wrapper = document.getElementById(`actividades_wrapper_${n}`);
+    wrapper.innerHTML = templateActRow(n, 1);
+
+    const s = document.getElementById(`campana_${n}_1`);
+    (gConfig[m] || []).forEach(c => s.add(new Option(c, c)));
+    s.add(new Option('Otros', 'Otros'));
+
+    const ids       = { e: `efectivas_${n}`, d: `detalle_${n}`, t: `totales_${n}` };
+    const boxGen    = document.getElementById(`gx_${n}`);
+    const boxDet    = document.getElementById(`gd_${n}`);
+    const boxEfec   = document.getElementById(`ge_${n}`);
+    const btnAddAct = document.getElementById(`btn_add_act_${n}`);
+    const lblCamp   = document.getElementById(`lbl_campana_${n}_1`);
+    const anFields  = document.getElementById(`analista_fields_${n}_1`);
+    const dAnaliz   = document.getElementById(`datos_analizados_${n}_1`);
+    const dDesc     = document.getElementById(`desc_actividad_${n}_1`);
+
+    boxEfec.classList.remove('hidden'); document.getElementById(ids.e).required = true;
+    boxDet.classList.add('hidden');     document.getElementById(ids.d).required = false;
+    boxGen.classList.add('hidden');     document.getElementById(ids.t).required = false;
+    lblCamp.innerText = 'Campaña';
+    btnAddAct.classList.add('hidden');
+    anFields.classList.add('hidden');
+    dAnaliz.required = false;
+    dDesc.required   = false;
+
+    // Modos con variables de evaluación personalizadas
+    const gv = document.getElementById(`gv_${n}`);
+    gv.innerHTML = '';
+    gv.classList.add('hidden');
+
+    const varsCfg = (gVariables && gVariables[m]) || [];
+    if (varsCfg.length > 0) {
+      boxEfec.classList.add('hidden'); document.getElementById(ids.e).required = false;
+      boxDet.classList.remove('hidden');
+      boxGen.classList.add('hidden');
+      lblCamp.innerText = 'Campaña / Actividad';
+      btnAddAct.classList.add('hidden');
+      anFields.classList.add('hidden');
+      gv.classList.remove('hidden');
+      varsCfg.forEach((vv, idx) => {
+        const esNum = String(vv.tipo || 'NUMERO').toUpperCase() !== 'TEXTO';
+        const oblig = vv.obligatorio === true;
+        const req   = oblig ? ' <span style="color:var(--danger);">*</span>' : '';
+        const depNote = vv.padre ? ` <span style="color:var(--on-surface-variant);font-size:11px;">(depende de ${escHtml(vv.padre)})</span>` : '';
+        const fg = document.createElement('div');
+        fg.className = 'form-group';
+        fg.innerHTML = `<label>${escHtml(vv.etiqueta || vv.variable)}${req}${depNote}</label>` + (esNum
+          ? `<input type="number" id="var_${n}_${idx}" min="0" placeholder="0">`
+          : `<input type="text" id="var_${n}_${idx}" class="free-text" placeholder="...">`);
+        gv.appendChild(fg);
+      });
+      return;
+    }
+
+    if (v.includes('ANALISTA') || v.includes('CUALITATIV')) {
+      lblCamp.innerText = 'Actividad Realizada';
+      boxEfec.classList.add('hidden'); document.getElementById(ids.e).required = false;
+      boxDet.classList.add('hidden');  document.getElementById(ids.d).required = false;
+      btnAddAct.classList.remove('hidden');
+      anFields.classList.remove('hidden');
+      dAnaliz.required = true;
+      dDesc.required   = true;
+    } else if (v.includes('ESPECIAL') || v.includes('ESEQUIBO')) {
+      boxDet.classList.remove('hidden'); document.getElementById(ids.d).required = true;
+    } else if (v.includes('ISSABEL') || v.includes('ISABELL')) {
+      boxGen.classList.remove('hidden'); document.getElementById(ids.t).required = true;
+      document.getElementById(`gt_${n}`).classList.remove('hidden');
+      document.getElementById(`gi_${n}`).classList.add('hidden');
+      document.getElementById(`ges_${n}`).classList.add('hidden');
+      document.getElementById(`gm_${n}`).classList.add('hidden');
+    } else if (v.includes('1X10') || v.includes('INCIDENCIA')) {
+      boxGen.classList.remove('hidden'); document.getElementById(ids.t).required = true;
+      document.getElementById(`gt_${n}`).classList.remove('hidden');
+      document.getElementById(`gi_${n}`).classList.remove('hidden');
+      document.getElementById(`ges_${n}`).classList.remove('hidden');
+      document.getElementById(`gm_${n}`).classList[v.includes('1X10') ? 'add' : 'remove']('hidden');
+    }
+  }
+
+  // ─── ENVIAR REPORTE (Con Factor de Edición de 10 segundos) ─────────────────
+  function enviarReporte(e) {
+    e.preventDefault();
+    const regs   = [];
+    const bloques = document.querySelectorAll('.report-card.col');
+
+    for (const bloque of bloques) {
+      const n  = parseInt(bloque.id.split('-')[1]);
+      const mv = document.getElementById(`modo_${n}`).value;
+      if (!mv || mv.includes('Seleccione')) { toast.error(`Falta seleccionar el MODO en el Registro ${n}`); return; }
+
+      let actList = [], totalDatos = 0, detalleCuali = '';
+      const mUp   = mv.toUpperCase();
+      const varsCfg = (gVariables && gVariables[mv]) || [];
+      const esCustom = varsCfg.length > 0;
+      const isAn  = mUp.includes('ANALISTA') || mUp.includes('CUALITATIV');
+
+      for (const row of bloque.querySelectorAll('.act-row')) {
+        const rowId   = row.id.split('_').pop();
+        const selEl   = document.getElementById(`campana_${n}_${rowId}`);
+        const textEl  = document.getElementById(`campana_other_${n}_${rowId}`);
+        if (!selEl) continue;
+
+        const selVal  = selEl.value;
+        if (!selVal || selVal.includes('Seleccione')) { toast.error(`Falta seleccionar campaña/actividad en Registro ${n}`); return; }
+
+        const finalVal = selVal === 'Otros' ? (textEl ? textEl.value.trim() : '') : selVal;
+        if (!finalVal)  { toast.error(`Falta especificar nombre en "Otros" del Registro ${n}`); return; }
+
+        if (esCustom) {
+          actList.push(finalVal.toUpperCase());
+        } else if (isAn) {
+          const datos = parseInt(document.getElementById(`datos_analizados_${n}_${rowId}`)?.value) || 0;
+          const desc  = document.getElementById(`desc_actividad_${n}_${rowId}`)?.value.trim();
+          if (!desc)   { toast.error(`Falta la descripción en una actividad del Registro ${n}`); return; }
+          totalDatos += datos;
+          actList.push(finalVal.toUpperCase());
+          detalleCuali += `ACTIVIDAD: ${finalVal.toUpperCase()} | DATOS: ${datos} | DETALLE: ${desc}\n`;
+        } else {
+          actList.push(finalVal.toUpperCase());
+        }
+      }
+
+      let efecFinal = document.getElementById(`efectivas_${n}`).value;
+      let detFinal  = document.getElementById(`detalle_${n}`).value;
+      let totFinal  = document.getElementById(`totales_${n}`).value;
+      let variablesObj = null;
+
+      if (esCustom) {
+        variablesObj = {};
+        let suma = 0;
+        for (let idx = 0; idx < varsCfg.length; idx++) {
+          const vv = varsCfg[idx];
+          const el = document.getElementById(`var_${n}_${idx}`);
+          const val = el ? el.value : '';
+          const esTexto = String(vv.tipo || 'NUMERO').toUpperCase() === 'TEXTO';
+          const oblig = vv.obligatorio === true;
+
+          if (oblig && (esTexto ? !String(val).trim() : String(val).trim() === '')) {
+            toast.error(`Debe llenar la variable obligatoria "${vv.etiqueta || vv.variable}" en el Registro ${n}.`);
+            return;
+          }
+
+          if (esTexto) {
+            variablesObj[vv.variable] = val;
+          } else {
+            const num = parseInt(val) || 0;
+            variablesObj[vv.variable] = num;
+            if (!vv.padre) suma += num;  // solo las variables principales suman al total
+          }
+        }
+        efecFinal = suma;
+        totFinal = 0;
+      } else if (isAn) {
+        efecFinal = actList.length; totFinal = totalDatos; detFinal = detalleCuali.trim();
+      }
+
+      regs.push({
+        idOperador:   cUser.id,
+        usuario:      cUser.u,
+        fechaReporte: document.getElementById('fechaReporte').value,
+        modo:         mv,
+        campana:      actList.join(' | '),
+        efectivas:    efecFinal,
+        detalle:      detFinal,
+        totales:      totFinal,
+        estados:      document.getElementById(`estados_${n}`)?.value || '',
+        municipios:   document.getElementById(`municipios_${n}`)?.value || '',
+        incidencias:  document.getElementById(`incidencias_${n}`)?.value || '',
+        variables:    variablesObj
+      });
+    }
+
+    if (regs.length === 0) return toast.error('No hay registros para reportar.');
+
+    const dobleTurno = document.getElementById('chk-todoeldia').checked;
+    
+    // Almacenar el payload temporalmente
+    reportPendingPayload = { registros: regs, todoElDia: dobleTurno, rol: cUser.r, turnoUsuario: cUser.t };
+
+    // Iniciar y mostrar overlay de countdown
+    iniciarCountdownEnvio();
+  }
+
+  function iniciarCountdownEnvio() {
+    countdownSeconds = 10;
+    document.getElementById('countdown-number').innerText = countdownSeconds;
+    
+    const bar = document.getElementById('countdown-progress-bar');
+    bar.style.transition = 'none';
+    bar.style.transform = 'scaleX(1)';
+    
+    document.getElementById('countdown-overlay').classList.remove('hidden');
+
+    // Desencadenar animación de la barra
+    setTimeout(() => {
+      bar.style.transition = 'transform 10000ms linear';
+      bar.style.transform = 'scaleX(0)';
+    }, 50);
+
+    // Iniciar contador
+    clearInterval(countdownTimer);
+    countdownTimer = setInterval(() => {
+      countdownSeconds--;
+      document.getElementById('countdown-number').innerText = countdownSeconds;
+      if (countdownSeconds <= 0) {
+        enviarReporteInmediato();
+      }
+    }, 1000);
+  }
+
+  function cancelarEnvioReporte() {
+    clearInterval(countdownTimer);
+    document.getElementById('countdown-overlay').classList.add('hidden');
+    reportPendingPayload = null;
+    toast.info('Envío cancelado. Puedes realizar modificaciones a tu reporte.');
+  }
+
+  async function enviarReporteInmediato() {
+    clearInterval(countdownTimer);
+    document.getElementById('countdown-overlay').classList.add('hidden');
+    
+    if (!reportPendingPayload) return;
+
+    const btn    = document.getElementById('btn-enviar');
+    const loader = document.getElementById('loader-form');
+    
+    btn.disabled = true; loader.style.display = 'block';
+
+    try {
+      const res = await api.guardarRegistro(reportPendingPayload);
+      btn.disabled = false; loader.style.display = 'none';
+      reportPendingPayload = null;
+      if (res.success) {
+        toast.success(res.message);
+        const cbTodoElDia = document.getElementById('chk-todoeldia');
+        if (cbTodoElDia) {
+          cbTodoElDia.checked = false;
+          cbTodoElDia.dispatchEvent(new Event('change'));
+        }
+        iniciarFormulario();
+        document.getElementById('fechaReporte').value = new Date().toISOString().split('T')[0];
+      } else {
+        toast.error(res.message);
+      }
+    } catch (err) {
+      btn.disabled = false; loader.style.display = 'none';
+      reportPendingPayload = null;
+      toast.error('Error de conexión al guardar. Intente nuevamente.\n' + err);
+    }
+  }
+
+  // ─── DASHBOARD ──────────────────────────────────────────────────────────────
+  async function loadDashboard() {
+    const f1 = document.getElementById('dash-f1').value;
+    const f2 = document.getElementById('dash-f2').value;
+    const u  = document.getElementById('dash-user').value;
+    const tb = document.querySelector('#table-dash tbody');
+
+    tb.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:20px;">Cargando Rendimiento...</td></tr>';
+    document.getElementById('loader-dash').style.display = 'block';
+    document.getElementById('dash-total-efec').innerText = '0';
+    document.getElementById('dash-total-tot').innerText  = '0';
+
+    try {
+      const res = await api.obtenerDatosDashboard(f1, f2, u);
+      document.getElementById('loader-dash').style.display = 'none';
+      tb.innerHTML = '';
+      document.getElementById('dash-total-efec').innerText = res.totalEfec;
+      document.getElementById('dash-total-tot').innerText  = res.totalTot;
+
+      if (res.datos.length === 0) {
+        tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:gray;">Sin resultados en estas fechas</td></tr>';
+        return;
+      }
+      res.datos.forEach(d => {
+        tb.innerHTML += `<tr>
+          <td style="font-weight:500;">${d.modo}</td>
+          <td align="center" style="font-weight:bold;color:var(--primary);font-size:1.1rem;">${d.efectivas}</td>
+          <td align="center" style="font-weight:bold;color:#64748b;font-size:1.1rem;">${d.totales}</td>
+        </tr>`;
+      });
+
+      // Desglose por variables de evaluación
+      const varsCard = document.getElementById('dash-vars-card');
+      const varsTb   = document.querySelector('#table-dash-vars tbody');
+      if (varsCard && varsTb) {
+        if (res.variablesTotales && res.variablesTotales.length > 0) {
+          varsCard.style.display = '';
+          varsTb.innerHTML = res.variablesTotales.map(v =>
+            `<tr><td style="font-weight:500;">${escHtml(v.etiqueta)}</td><td align="center" style="font-weight:bold;color:var(--secondary);">${v.total}</td></tr>`
+          ).join('');
+        } else {
+          varsCard.style.display = 'none';
+        }
+      }
+    } catch (e) {
+      document.getElementById('loader-dash').style.display = 'none';
+      tb.innerHTML = '<tr><td colspan="3" style="color:red;text-align:center;">Error al cargar datos</td></tr>';
+      toast.error('Error al cargar datos de rendimiento.');
+    }
+  }
+
+  function exportarDashboardCSV() {
+    const rows = document.querySelectorAll('#table-dash tbody tr');
+    if (rows.length === 1 && rows[0].innerText.includes('Sin resultados')) return toast.error('No hay datos para exportar.');
+
+    let csv = 'Modo,Efectivas/Actividades,Llamadas Totales\n';
+    rows.forEach(r => {
+      const cols = r.querySelectorAll('td');
+      if (cols.length === 3) csv += `"${cols[0].innerText}","${cols[1].innerText}","${cols[2].innerText}"\n`;
+    });
+
+    const f1 = document.getElementById('dash-f1').value;
+    const f2 = document.getElementById('dash-f2').value;
+    const u  = document.getElementById('dash-user').value;
+    const tE = document.getElementById('dash-total-efec').innerText;
+    const tT = document.getElementById('dash-total-tot').innerText;
+    csv += `"TOTAL GENERAL","${tE}","${tT}"\n`;
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href  = URL.createObjectURL(blob);
+    link.download = `Rendimiento_${u}_${f1}_al_${f2}.csv`;
+    link.click();
+    toast.success('Rendimiento exportado en CSV con éxito.');
+  }
+
+  // ─── REPORTES WORD ──────────────────────────────────────────────────────────
+  async function doExportWord(tipo) {
+    const b           = document.getElementById('btn-word-' + tipo);
+    const textOrig    = b.innerHTML;
+    b.disabled = true; b.innerText = 'Generando Documento...';
+
+    try {
+      const r = await api.generarReporteWord(
+        document.getElementById('word-f1').value,
+        document.getElementById('word-f2').value,
+        tipo
+      );
+      b.disabled = false; b.innerHTML = textOrig;
+      if (r.success) {
+        const a  = document.createElement('a');
+        a.href   = 'data:application/msword;base64,' + r.base64;
+        a.download = r.filename;
+        a.click();
+        toast.success('Reporte Word descargado correctamente.');
+      } else {
+        toast.error(r.message);
+      }
+    } catch (e) {
+      b.disabled = false; b.innerHTML = textOrig;
+      toast.error('Error generando reporte.');
+    }
+  }
+
+  // ─── CONFIGURACIÓN DE MODOS ──────────────────────────────────────────────────
+  function handleCfgModoChange() {
+    const sel = document.getElementById('cfg-modo-select').value;
+    const inp = document.getElementById('cfg-modo-input');
+    if (sel === 'NUEVO') {
+      inp.classList.remove('hidden'); inp.value = ''; tCamps = []; tVars = [];
+    } else {
+      inp.classList.add('hidden'); inp.value = sel;
+      tCamps = gConfig[sel] ? [...gConfig[sel]] : [];
+      tVars = (gVariables[sel] || []).map(v => ({ variable: v.variable, etiqueta: v.etiqueta, tipo: v.tipo, obligatorio: v.obligatorio === true, padre: v.padre || '' }));
+    }
+    renderC();
+    renderVars();
+  }
+
+  function addVarToList() {
+    tVars.push({ variable: '', etiqueta: '', tipo: 'NUMERO', obligatorio: false, padre: '' });
+    renderVars();
+  }
+  function rmVar(i) { tVars.splice(i, 1); renderVars(); }
+  function toggleOblig(i) { tVars[i].obligatorio = !tVars[i].obligatorio; renderVars(); }
+
+  function renderVars() {
+    const c = document.getElementById('cfg-var-list');
+    if (!c) return;
+    if (tVars.length === 0) {
+      c.innerHTML = '<span style="color:var(--on-surface-variant);font-size:12px;">Sin variables definidas. Este modo usará los campos por defecto.</span>';
+      return;
+    }
+    c.innerHTML = tVars.map((v, i) => {
+      const otros = tVars.filter((o, j) => j !== i && (o.variable || '').trim());
+      const opcionesPadre = otros.map(o => {
+        const n = o.variable.trim();
+        return `<option value="${escHtml(n)}" ${v.padre === n ? 'selected' : ''}>${escHtml(n)}</option>`;
+      }).join('');
+      return `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" class="free-text" placeholder="Variable (ej: Excels Trabajados)" value="${escHtml(v.variable)}"
+          style="flex:1;min-width:150px;" oninput="tVars[${i}].variable=this.value;">
+        <input type="text" class="free-text" placeholder="Etiqueta (opcional)" value="${escHtml(v.etiqueta)}"
+          style="flex:1;min-width:150px;" oninput="tVars[${i}].etiqueta=this.value;">
+        <select style="width:110px;" onchange="tVars[${i}].tipo=this.value;">
+          <option value="NUMERO" ${v.tipo !== 'TEXTO' ? 'selected' : ''}>Número</option>
+          <option value="TEXTO" ${v.tipo === 'TEXTO' ? 'selected' : ''}>Texto</option>
+        </select>
+        <select style="width:170px;" onchange="tVars[${i}].padre=this.value;">
+          <option value="">Depende de: Ninguna</option>
+          ${opcionesPadre}
+        </select>
+        <button type="button" class="oblig-toggle ${v.obligatorio ? 'on' : ''}" onclick="toggleOblig(${i})" title="Marcar como obligatorio">
+          <span class="material-symbols-outlined" style="font-size:15px;">${v.obligatorio ? 'check_circle' : 'radio_button_unchecked'}</span>
+          Obligatorio ${v.obligatorio ? 'SÍ' : 'NO'}
+        </button>
+        <button type="button" onclick="rmVar(${i})" class="btn-mini" style="color:var(--danger);" title="Eliminar">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  function addCampaignToList() {
+    const v = document.getElementById('cfg-new-camp').value.trim();
+    if (v && !tCamps.includes(v)) { tCamps.push(v); document.getElementById('cfg-new-camp').value = ''; renderC(); }
+  }
+  function rmC(i) { tCamps.splice(i, 1); renderC(); }
+  function renderC() {
+    const l = document.getElementById('cfg-camp-list');
+    l.innerHTML = tCamps.length === 0
+      ? '<li style="color:gray;">Sin campañas/actividades</li>'
+      : tCamps.map((c, i) => `<li class="campaign-item">${c} <span class="campaign-remove" onclick="rmC(${i})">&times;</span></li>`).join('');
+  }
+
+  async function saveConfig() {
+    const sel = document.getElementById('cfg-modo-select').value;
+    const m   = sel === 'NUEVO' ? document.getElementById('cfg-modo-input').value.trim().toUpperCase() : sel;
+    if (!m) return toast.error('Especifique un modo.');
+
+    const vars = tVars
+      .map(v => ({ variable: (v.variable || '').trim(), etiqueta: (v.etiqueta || '').trim(), tipo: v.tipo === 'TEXTO' ? 'TEXTO' : 'NUMERO', obligatorio: v.obligatorio === true, padre: (v.padre || '').trim() }))
+      .filter(v => v.variable);
+
+    try {
+      const r  = await api.guardarNuevaConfiguracion(m, tCamps.join(', '));
+      const rv = await api.guardarVariablesModo(m, vars);
+      toast.success(rv.success ? rv.message : r.message);
+      loadCfg();
+    } catch (e) {
+      toast.error('Error guardando configuración.');
+    }
+  }
+
+  // ─── INDICADORES MACRO (DRIVE) ──────────────────────────────────────────────
+  function addIndRow() { tInd.push({ indicador: '', modo: '' }); renderInd(); }
+  function rmInd(i) { tInd.splice(i, 1); renderInd(); }
+
+  function renderInd() {
+    const c = document.getElementById('ind-list-container');
+    if (!c) return;
+    if (tInd.length === 0) {
+      c.innerHTML = '<span style="color:var(--on-surface-variant);font-size:12px;">Sin indicadores. Cada indicador agrupa un modo y se guarda en Drive como MODO/INDICADOR.</span>';
+      return;
+    }
+    const modos = Object.keys(gConfig);
+    c.innerHTML = tInd.map((it, i) => {
+      const opciones = '<option value="" disabled ' + (!it.modo ? 'selected' : '') + '>Seleccione modo...</option>' +
+        modos.map(m => `<option value="${escHtml(m)}" ${it.modo === m ? 'selected' : ''}>${escHtml(m)}</option>`).join('');
+      return `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" class="free-text" placeholder="Nombre del indicador (ej: LLAMADAS GENERAL)" value="${escHtml(it.indicador)}"
+          style="flex:1;min-width:200px;" oninput="tInd[${i}].indicador=this.value;">
+        <select style="flex:1;min-width:160px;" onchange="tInd[${i}].modo=this.value;">${opciones}</select>
+        <button type="button" onclick="rmInd(${i})" class="btn-mini" style="color:var(--danger);" title="Eliminar">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  async function saveInd() {
+    const btn = document.querySelector('[onclick="saveInd()"]');
+    const msg = document.getElementById('ind-msg');
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api.guardarIndicadores(tInd);
+      if (btn) btn.disabled = false;
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      toast.error('Error guardando indicadores.');
+    }
+  }
+
+  async function generarHojasPorModo() {
+    const btn = document.querySelector('[onclick="generarHojasPorModo()"]');
+    const msg = document.getElementById('ind-msg');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Sincronizando hojas por modo...'; }
+    if (msg) msg.innerText = '';
+    try {
+      let r;
+      if (typeof api.actualizarHojasPorModo === 'function') {
+        r = await api.actualizarHojasPorModo();
+      } else {
+        r = await api.actualizarArchivosIndicadores();
+      }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Sincronizar Hojas por Modo de Trabajo'; }
+      if (r && r.success) {
+        toast.success(r.message || 'Hojas por modo sincronizadas.');
+        if (msg) msg.innerText = r.message;
+      } else {
+        toast.error((r && r.message) || 'Error al sincronizar hojas.');
+        if (msg) msg.innerText = (r && r.message) || 'Error al procesar.';
+      }
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Sincronizar Hojas por Modo de Trabajo'; }
+      toast.error('Error al sincronizar hojas por modo de trabajo: ' + (e.message || e));
+    }
+  }
+
+  async function generarIndicadores() {
+    return generarHojasPorModo();
+  }
+
+  // ─── REPOSITORIO DE EMOJIS (ADMIN) ───────────────────────────────────────────
+  function addEmojiRow() { tEmojis.push({ tipo: 'VARIABLE', nombre: '', emoji: '' }); renderEmojis(); }
+  function rmEmoji(i) { tEmojis.splice(i, 1); renderEmojis(); }
+
+  function renderEmojis() {
+    const c = document.getElementById('emoji-list-container');
+    if (!c) return;
+    if (tEmojis.length === 0) {
+      c.innerHTML = '<span style="color:var(--on-surface-variant);font-size:12px;">Sin emojis configurados.</span>';
+      return;
+    }
+    c.innerHTML = tEmojis.map((e, i) => `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select style="width:110px;" onchange="tEmojis[${i}].tipo=this.value;">
+          <option value="VARIABLE" ${e.tipo === 'VARIABLE' ? 'selected' : ''}>Variable</option>
+          <option value="MODO" ${e.tipo === 'MODO' ? 'selected' : ''}>Modo</option>
+          <option value="CAMPAÑA" ${e.tipo === 'CAMPAÑA' ? 'selected' : ''}>Campaña</option>
+        </select>
+        <input type="text" class="free-text" placeholder="Nombre exacto (modo/campaña en MAYÚSCULAS)" value="${escHtml(e.nombre)}"
+          style="flex:1;min-width:160px;" oninput="tEmojis[${i}].nombre=this.value;">
+        <input type="text" placeholder="Emoji" value="${escHtml(e.emoji)}"
+          style="width:70px;text-align:center;" oninput="tEmojis[${i}].emoji=this.value;">
+        <button type="button" onclick="rmEmoji(${i})" class="btn-mini" style="color:var(--danger);" title="Eliminar">✕</button>
+      </div>`).join('');
+  }
+
+  async function saveEmojis() {
+    const btn = document.querySelector('[onclick="saveEmojis()"]');
+    const msg = document.getElementById('emoji-msg');
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api.guardarEmojis(tEmojis);
+      if (btn) btn.disabled = false;
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      toast.error('Error guardando emojis.');
+    }
+  }
+
+  // ─── DESTINATARIOS DE REPORTES PROGRAMADOS ──────────────────────────────────
+  function addDestRow() { tDest.push({ chatId: '', frecuencia: 'DIARIO', activo: true }); renderDest(); }
+  function rmDest(i) { tDest.splice(i, 1); renderDest(); }
+  function toggleDest(i) { tDest[i].activo = !tDest[i].activo; renderDest(); }
+
+  function renderDest() {
+    const c = document.getElementById('dest-list-container');
+    if (!c) return;
+    if (tDest.length === 0) {
+      c.innerHTML = '<span style="color:var(--on-surface-variant);font-size:12px;">Sin destinatarios. Agregue al menos un Chat ID de Telegram.</span>';
+      return;
+    }
+    c.innerHTML = tDest.map((d, i) => `
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="text" placeholder="Chat ID de Telegram (ej: -1001234567890)" value="${escHtml(d.chatId)}"
+          style="flex:1;min-width:180px;" oninput="tDest[${i}].chatId=this.value;">
+        <select style="width:120px;" onchange="tDest[${i}].frecuencia=this.value;">
+          <option value="DIARIO" ${d.frecuencia === 'DIARIO' ? 'selected' : ''}>Diario</option>
+          <option value="SEMANAL" ${d.frecuencia === 'SEMANAL' ? 'selected' : ''}>Semanal</option>
+        </select>
+        <button type="button" class="oblig-toggle ${d.activo ? 'on' : ''}" onclick="toggleDest(${i})">
+          <span class="material-symbols-outlined" style="font-size:15px;">${d.activo ? 'check_circle' : 'radio_button_unchecked'}</span>
+          Activo ${d.activo ? 'SÍ' : 'NO'}
+        </button>
+        <button type="button" onclick="rmDest(${i})" class="btn-mini" style="color:var(--danger);" title="Eliminar">✕</button>
+      </div>`).join('');
+  }
+
+  async function saveDest() {
+    const btn = document.querySelector('[onclick="saveDest()"]');
+    const msg = document.getElementById('dest-msg');
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api.guardarDestinatarios(tDest);
+      if (btn) btn.disabled = false;
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      toast.error('Error guardando destinatarios.');
+    }
+  }
+
+  async function instalarTriggers() {
+    const btn = document.querySelector('[onclick="instalarTriggers()"]');
+    const msg = document.getElementById('dest-msg');
+    if (btn) { btn.disabled = true; btn.innerText = 'Instalando...'; }
+    try {
+      const r = await api.instalarTriggersReportes();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">schedule</span> Instalar Triggers'; }
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">schedule</span> Instalar Triggers'; }
+      toast.error('Error instalando triggers.');
+    }
+  }
+
+  // ─── TABLAS DE VALIDACIÓN (UNIFICADAS) ──────────────────────────────────────
+
+  async function loadTablaValidacion(tipo, pageOverride) {
+    const isAn      = tipo === 'ANALISTAS';
+    const pageVar   = isAn ? 'currPageAn' : 'currPage';
+    const tableId   = isAn ? 'admin-table-an' : 'admin-table';
+    const rowsId    = isAn ? 'rows-per-page-an' : 'rows-per-page';
+    const f1Id      = isAn ? 'filter-1-an'      : 'filter-1';
+    const fdId      = isAn ? 'filter-date-an'   : 'filter-date';
+    const msDrop    = isAn ? 'ms-dropdown-modos-an' : 'ms-dropdown-modos';
+    const msOps     = isAn ? 'ms-dropdown-ops-an'   : 'ms-dropdown-ops';
+    const msTurnos  = isAn ? 'ms-dropdown-turnos-an': 'ms-dropdown-turnos';
+    const pageInpId = isAn ? 'curr-page-input-an'   : 'curr-page-input';
+    const totalPgId = isAn ? 'total-pages-an'        : 'total-pages';
+    const totalRcId = isAn ? 'total-records-an'      : 'total-records';
+    const btnPrevId = isAn ? 'btn-prev-an'           : 'btn-prev';
+    const btnNextId = isAn ? 'btn-next-an'           : 'btn-next';
+    const colSpan   = isAn ? 10 : 11;
+
+    if (pageOverride) {
+      if (isAn) currPageAn = pageOverride;
+      else      currPage   = pageOverride;
+    }
+    const paginaActual = isAn ? currPageAn : currPage;
+
+    const cant    = parseInt(document.getElementById(rowsId).value);
+    const f1      = document.getElementById(f1Id)?.value || '';
+    const fd      = document.getElementById(fdId)?.value || '';
+    const arrM    = getSelectedMs(msDrop);
+    const arrO    = getSelectedMs(msOps);
+    const arrT    = getSelectedMs(msTurnos);
+
+    const tb = document.querySelector(`#${tableId} tbody`);
+    if (tb) tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:20px;">Buscando...</td></tr>`;
+
+    try {
+      const res = await api.obtenerRegistrosAdmin(paginaActual, cant, f1, '', fd, arrM, arrO, tipo, arrT);
+      if (!tb) return;
+      tb.innerHTML = '';
+
+      if (isAn) { totalPAn = res.totalPaginas; currPageAn = res.paginaActual; }
+      else       { totalP   = res.totalPaginas; currPage   = res.paginaActual; }
+
+      document.getElementById(pageInpId).value   = res.paginaActual;
+      document.getElementById(totalPgId).innerText = res.totalPaginas;
+      document.getElementById(totalRcId).innerText = res.totalRegistros;
+      document.getElementById(btnPrevId).disabled  = res.paginaActual <= 1;
+      document.getElementById(btnNextId).disabled  = res.paginaActual >= res.totalPaginas;
+
+      if (res.datos.length === 0) {
+        tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;">Sin resultados</td></tr>`;
+        return;
+      }
+
+      if (isAn) renderFilasAnalistas(tb, res.datos);
+      else       renderFilasRegulares(tb, res.datos);
+    } catch (e) {
+      if (tb) tb.innerHTML = `<tr><td colspan="${colSpan}" style="color:red;text-align:center;">Error al cargar</td></tr>`;
+      toast.error('Error cargando registros de validación.');
+    }
+  }
+
+  function _getTurnoBadge(turno) {
+    const t = String(turno).toUpperCase();
+    if (t.includes('TARDE'))  return `<span class="badge badge-tarde">${turno}</span>`;
+    return `<span class="badge badge-manana">${turno}</span>`;
+  }
+
+  function _getModeBadge(modo) {
+    const m = String(modo).toUpperCase();
+    let cls = 'mode-normal';
+    if (m.includes('INCIDENCIA')) cls = 'mode-incidencia';
+    else if (m.includes('ESEQUIBO')) cls = 'mode-esequibo';
+    else if (m.includes('1X10'))     cls = 'mode-1x10';
+    else if (m.includes('ANALISTA') || m.includes('CUALITATIV')) cls = 'mode-analista';
+    return `<span class="mode-badge ${cls}">${modo}</span>`;
+  }
+
+  function renderFilasRegulares(tb, datos) {
+    datos.forEach(r => {
+      tb.innerHTML += `
+        <tr data-row="${r.rowId}">
+          <td style="font-family:monospace;font-size:12px;color:var(--on-surface-variant);">#${r.id}</td>
+          <td style="font-size:13px;">${r.fecha}</td>
+          <td style="font-weight:500;">${r.usuario}</td>
+          <td>${_getTurnoBadge(r.turno)}</td>
+          <td>${_getModeBadge(r.modo)}</td>
+          <td style="font-size:13px;max-width:200px;">${r.campana}</td>
+          <td class="text-center" style="font-weight:700;color:var(--secondary);">${r.efectivas}</td>
+          <td class="text-center" style="color:var(--on-surface-variant);">${r.incidencias}</td>
+          <td class="text-center"><input class="input-mini ve" type="number" value="${r.valEfec || ''}" placeholder="—"></td>
+          <td class="text-center"><input class="input-mini vi" type="number" value="${r.valInc  || ''}" placeholder="—"></td>
+          <td class="text-center">
+            <button class="btn-mini-save" onclick="saveRowValidacion(${r.rowId}, this, '.ve', '.vi')">
+              <span class="material-symbols-outlined">save</span>
+            </button>
+          </td>
+        </tr>`;
+    });
+  }
+
+  function renderFilasAnalistas(tb, datos) {
+    const calidades = ['Excelente (100%)', 'Bien (85%)', 'Mejorable (70%)', 'Normal (50%)', 'Deficiente (30%)', 'Mala (10%)', 'Pésima (0%)'];
+    datos.forEach(r => {
+      const opts = `<option value="">Seleccionar calidad...</option>` +
+        calidades.map(q => `<option value="${q}" ${r.valInc === q ? 'selected' : ''}>${q}</option>`).join('');
+
+      tb.innerHTML += `
+        <tr data-row="${r.rowId}">
+          <td style="font-family:monospace;font-size:12px;color:var(--on-surface-variant);">#${r.id}</td>
+          <td style="font-size:13px;">${r.fecha}</td>
+          <td style="font-weight:500;">${r.usuario}</td>
+          <td>${_getTurnoBadge(r.turno)}</td>
+          <td>${_getModeBadge(r.modo)}</td>
+          <td style="font-size:13px;max-width:200px;">${r.campana}</td>
+          <td class="text-center" style="font-weight:700;color:var(--primary);">${r.efectivas}</td>
+          <td class="text-center"><input class="input-mini ve-an" type="number" value="${r.valEfec || ''}" placeholder="—"></td>
+          <td><select class="vi-an" style="width:160px;padding:7px 10px;font-size:13px;">${opts}</select></td>
+          <td class="text-center">
+            <button class="btn-mini-save" onclick="saveRowValidacion(${r.rowId}, this, '.ve-an', '.vi-an')">
+              <span class="material-symbols-outlined">save</span>
+            </button>
+          </td>
+        </tr>`;
+    });
+  }
+
+  // ─── ACCIONES DE VALIDACIÓN ──────────────────────────────────────────────────
+
+  async function saveRowValidacion(rowId, btn, veClass, viClass) {
+    const tr   = btn.closest('tr');
+    const ve   = tr.querySelector(veClass).value;
+    const vi   = tr.querySelector(viClass).value;
+    const icon = btn.innerHTML;
+    btn.innerHTML = '...';
+
+    try {
+      await api.guardarValidacionAdmin(rowId, ve, vi, cUser.u, cUser.r);
+      btn.innerHTML = '✔';
+      toast.success(`Fila #${rowId} validada correctamente.`);
+      setTimeout(() => btn.innerHTML = icon, 1500);
+    } catch (e) {
+      btn.innerHTML = '❌';
+      toast.error('No se pudo guardar la validación individual.');
+      setTimeout(() => btn.innerHTML = icon, 1500);
+    }
+  }
+
+  async function saveTableMasivo(tableId, veClass, viClass) {
+    const list = [];
+    document.querySelectorAll(`#${tableId} tbody tr`).forEach(tr => {
+      const rowId = tr.getAttribute('data-row');
+      const ve    = tr.querySelector(veClass)?.value;
+      const vi    = tr.querySelector(viClass)?.value;
+      if (rowId) list.push({ rowId: parseInt(rowId), efectivas: ve, incidencias: vi });
+    });
+
+    const btn  = document.querySelector(`[onclick="saveTable()"], [onclick="saveTableAn()"]`);
+    if (btn) { btn.innerHTML = 'Guardando...'; btn.disabled = true; }
+
+    try {
+      await api.guardarValidacionMasiva(list, cUser.u, cUser.r);
+      toast.success('Guardado masivo completado exitosamente.');
+      if (btn) {
+        btn.innerHTML = '💾 GUARDAR TODO (MASIVO)';
+        btn.disabled = false;
+      }
+      const isAn = tableId.includes('-an');
+      loadTablaValidacion(isAn ? 'ANALISTAS' : 'REGULARES');
+    } catch (e) {
+      toast.error('Error al realizar el guardado masivo.');
+      if (btn) {
+        btn.innerHTML = '💾 GUARDAR TODO (MASIVO)';
+        btn.disabled = false;
+      }
+    }
+  }
+
+  // Alias para compatibilidad con los onclick del HTML
+  function saveTable()   { saveTableMasivo('admin-table',    '.ve',    '.vi'); }
+  function saveTableAn() { saveTableMasivo('admin-table-an', '.ve-an', '.vi-an'); }
+  function loadTable(p)           { loadTablaValidacion('REGULARES', p); }
+  function loadTableAnalistas(p)  { loadTablaValidacion('ANALISTAS', p); }
+  function changePage(d)          { loadTablaValidacion('REGULARES', currPage   + d); }
+  function changePageAn(d)        { loadTablaValidacion('ANALISTAS', currPageAn + d); }
+  function jumpToPage()   { const p = parseInt(document.getElementById('curr-page-input').value); loadTablaValidacion('REGULARES', Math.min(Math.max(1, p), totalP)); }
+  function jumpToPageAn() { const p = parseInt(document.getElementById('curr-page-input-an').value); loadTablaValidacion('ANALISTAS', Math.min(Math.max(1, p), totalPAn)); }
+
+  // ─── EXPORTAR BD ─────────────────────────────────────────────────────────────
+  async function doExport() {
+    const b = document.getElementById('btn-exp');
+    b.disabled = true; b.innerText = '...';
+
+    try {
+      const r = await api.generarReporteXLSX(
+        document.getElementById('exp-f1').value,
+        document.getElementById('exp-f2').value,
+        document.getElementById('exp-modo').value
+      );
+      b.disabled = false; b.innerText = 'Generar Excel Completo';
+      if (r.success) {
+        const a  = document.createElement('a');
+        a.href   = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + r.base64;
+        a.download = r.filename;
+        a.click();
+        toast.success('Descarga de Excel iniciada correctamente.');
+      } else {
+        toast.error(r.message);
+      }
+    } catch (e) {
+      b.disabled = false; b.innerText = 'Generar Excel Completo';
+      toast.error('Error al exportar base de datos.');
+    }
+  }

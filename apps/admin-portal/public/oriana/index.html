@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ORIANA — Sistema de Gestión</title>
+
+    <!-- Plus Jakarta Sans -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Material Symbols Outlined -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="./css/style.css">
+  </head>
+  <body>
+
+    <!-- ── AMBIENT GLOWS ──────────────────────────────────────────────────── -->
+    <div class="ambient-glow-1"></div>
+    <div class="ambient-glow-2"></div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         PANTALLA DE LOGIN
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div id="login-overlay">
+      <div class="login-card">
+        <div class="login-logo">ORIANA</div>
+        <p class="login-subtitle">Sistema de Gestión</p>
+
+        <div class="form-group" style="text-align:left;">
+          <label>Usuario</label>
+          <div style="position:relative;">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:18px;pointer-events:none;">person</span>
+            <input class="input-icon-left" type="text" id="login-user" placeholder="Ingrese su usuario"
+              onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+          </div>
+        </div>
+
+        <div class="form-group" style="text-align:left;">
+          <label>Contraseña</label>
+          <div style="position:relative;">
+            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:18px;pointer-events:none;">lock</span>
+            <input class="input-icon-left" type="password" id="login-pass" placeholder="Contraseña"
+              onkeydown="if(event.key==='Enter') doLogin()">
+          </div>
+        </div>
+
+        <!-- Selector de Área de Trabajo (visible para Operadores/Analistas, exc Admins) -->
+        <div class="form-group hidden" id="login-area-wrapper" style="text-align:left;">
+          <label style="color:var(--primary);display:flex;align-items:center;gap:6px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">workspaces</span>
+            Área de Trabajo
+          </label>
+          <select id="login-area-select" style="width:100%; padding:12px; border-radius:var(--r-lg); background:var(--surface-container-high); border:1px solid rgba(255,255,255,0.08); color:var(--on-surface); font-family:var(--font); font-size:14px; outline:none; cursor:pointer; margin-top:6px;">
+            <option value="" disabled selected>Seleccione su área de trabajo...</option>
+          </select>
+          <p style="font-size:12px;color:var(--on-surface-variant);margin-top:8px;">
+            Seleccione el área operativa en la que trabajó en esta jornada.
+          </p>
+        </div>
+
+        <button class="btn btn-primary btn-lg" onclick="doLogin()" id="btn-login" style="width:100%;margin-top:8px;">
+          <span class="material-symbols-outlined">login</span>
+          Ingresar
+        </button>
+        <div class="loader" id="loader-login"></div>
+        <p id="login-msg" style="color:var(--error);margin-top:10px;font-size:13px;text-align:center;min-height:20px;"></p>
+
+        <div class="audit-alert">
+          <span class="material-symbols-outlined" style="flex-shrink:0;">warning</span>
+          Tenga la cautela de que su reporte diario está en constante auditoría y se validará la cantidad de llamadas indicadas.
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         APLICACIÓN PRINCIPAL
+    ══════════════════════════════════════════════════════════════════════ -->
+    <div class="app-container hidden" id="app-main">
+
+      <!-- ── SIDEBAR ────────────────────────────────────────────────────── -->
+      <nav class="sidebar">
+        <!-- Logo -->
+        <div class="sidebar-header">
+          <div class="sidebar-logo-icon">
+            <span class="material-symbols-outlined icon-fill">shield_person</span>
+          </div>
+          <div>
+            <h2 class="sidebar-brand">ORIANA</h2>
+            <p class="sidebar-subtitle">Command Center</p>
+          </div>
+        </div>
+
+        <!-- User info -->
+        <div class="sidebar-user">
+          <div id="sidebar-name"></div>
+          <div id="sidebar-role"></div>
+          <div id="sidebar-turno"></div>
+        </div>
+
+        <!-- CTA: Nuevo Reporte -->
+        <button class="sidebar-cta" onclick="navTo('reportar')">
+          <span class="material-symbols-outlined">add</span>
+          Nuevo Reporte
+        </button>
+
+        <!-- Nav principal -->
+        <div class="sidebar-nav">
+          <button class="nav-item active" onclick="navTo('reportar')" id="nav-reportar">
+            <span class="material-symbols-outlined">edit_note</span>
+            Reportar
+          </button>
+          <button class="nav-item hidden admin-only" onclick="navTo('dashboard')" id="nav-dashboard">
+            <span class="material-symbols-outlined">dashboard</span>
+            Rendimiento
+          </button>
+          <button class="nav-item hidden admin-only" onclick="navTo('reportegen')" id="nav-reportegen">
+            <span class="material-symbols-outlined">description</span>
+            Reportes Generales
+          </button>
+          <button class="nav-item hidden admin-only" onclick="navTo('validar')" id="nav-validar">
+            <span class="material-symbols-outlined">table_chart</span>
+            Validación
+          </button>
+          <button class="nav-item hidden super-admin-only" onclick="navTo('val-analistas')" id="nav-val-analistas">
+            <span class="material-symbols-outlined">admin_panel_settings</span>
+            Val. Analistas
+          </button>
+          <button class="nav-item hidden admin-only" onclick="navTo('exportar')" id="nav-exportar">
+            <span class="material-symbols-outlined">download</span>
+            Exportar BD
+          </button>
+          <button class="nav-item hidden admin-only" onclick="navTo('config')" id="nav-config">
+            <span class="material-symbols-outlined">settings</span>
+            Configuración
+          </button>
+        </div>
+
+        <!-- Footer: volver a nexus + tema + salir -->
+        <div class="sidebar-footer">
+          <a href="/" class="nav-item" style="text-decoration:none;color:var(--primary);margin-bottom:4px;">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver a Nexus
+          </a>
+          <button class="nav-item" onclick="toggleTheme()">
+            <span class="material-symbols-outlined">dark_mode</span>
+            Cambiar Tema
+          </button>
+          <button class="nav-item nav-item-danger" onclick="logout()">
+            <span class="material-symbols-outlined">logout</span>
+            Salir
+          </button>
+        </div>
+      </nav>
+
+      <!-- ── CONTENIDO PRINCIPAL ────────────────────────────────────────── -->
+      <main class="main-content">
+        <div class="main-inner">
+
+          <!-- Page header con info del usuario -->
+          <div class="page-header">
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div class="sidebar-logo-icon" style="width:36px;height:36px;">
+                <span class="material-symbols-outlined icon-fill" style="font-size:18px;">shield_person</span>
+              </div>
+              <div>
+                <span style="font-size:18px;font-weight:800;color:var(--secondary);letter-spacing:-0.5px;">ORIANA</span>
+                <span style="font-size:13px;color:var(--on-surface-variant);margin-left:8px;">| Sistema de Operaciones</span>
+              </div>
+            </div>
+            <div class="page-header-user">
+              <div id="user-display"></div>
+              <div id="user-role"></div>
+              <div id="user-turno"></div>
+            </div>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: REPORTAR
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-reportar" class="section-tab active">
+            <div class="tab-header">
+              <div>
+                <h2>Cargar Reporte</h2>
+                <p class="muted">Complete los datos de su actividad diaria.</p>
+              </div>
+            </div>
+
+            <form onsubmit="enviarReporte(event)">
+              <!-- Fecha y doble turno -->
+              <div class="date-report-card">
+                <div class="form-group">
+                  <label>
+                    <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">calendar_today</span>
+                    Fecha del Reporte
+                  </label>
+                  <input type="date" id="fechaReporte" required>
+                </div>
+                <label class="chk-doble">
+                  <input type="checkbox" id="chk-todoeldia">
+                  <span class="material-symbols-outlined" style="font-size:16px;">schedule</span>
+                  <b>Trabajé Todo el Día (Doble Turno)</b>
+                </label>
+              </div>
+
+              <!-- Bloques de campaña dinámicos -->
+              <div class="flex-row" id="reportes-container"></div>
+
+              <!-- Acciones -->
+              <div class="form-actions">
+                <button type="button" class="btn btn-secondary btn-lg" onclick="agregarBloqueCampaña()" style="width:100%;max-width:420px;">
+                  <span class="material-symbols-outlined">add_circle</span>
+                  Añadir Otro Registro
+                </button>
+                <button type="submit" class="btn btn-primary btn-lg" id="btn-enviar" style="width:100%;max-width:420px;">
+                  <span class="material-symbols-outlined">save</span>
+                  Guardar Todo el Reporte
+                </button>
+              </div>
+              <div class="loader" id="loader-form"></div>
+              <p id="msg-exito"></p>
+            </form>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: DASHBOARD
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-dashboard" class="section-tab">
+            <div class="tab-header">
+              <div>
+                <h2>Dashboard de Rendimiento</h2>
+                <p class="muted">Visión general operativa y métricas clave.</p>
+              </div>
+              <button class="btn-glass" onclick="exportarDashboardCSV()">
+                <span class="material-symbols-outlined">download</span>
+                Descargar CSV
+              </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filter-bar glass-card">
+              <div class="filter-bar-search">
+                <span class="material-symbols-outlined">person_search</span>
+                <select id="dash-user" class="input-icon-left">
+                  <option value="TODOS">Todos los Operadores</option>
+                </select>
+              </div>
+              <div class="filter-bar-dates">
+                <div class="date-wrapper">
+                  <span class="material-symbols-outlined">calendar_today</span>
+                  <input type="date" id="dash-f1" class="input-icon-left" style="width:160px;">
+                </div>
+                <span class="sep muted" style="font-size:13px;font-weight:600;">a</span>
+                <div class="date-wrapper">
+                  <span class="material-symbols-outlined">calendar_today</span>
+                  <input type="date" id="dash-f2" class="input-icon-left" style="width:160px;">
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="loadDashboard()">
+                <span class="material-symbols-outlined">filter_list</span>
+                Filtrar
+              </button>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+              <div class="kpi-card kpi-secondary">
+                <div class="kpi-card-glow"></div>
+                <div class="kpi-icon-row">
+                  <div class="kpi-icon">
+                    <span class="material-symbols-outlined icon-fill">task_alt</span>
+                  </div>
+                  <h3 class="kpi-label">Total Efectivas / Actividades</h3>
+                </div>
+                <div class="kpi-value-row">
+                  <span class="kpi-value" id="dash-total-efec">0</span>
+                </div>
+              </div>
+              <div class="kpi-card kpi-primary">
+                <div class="kpi-card-glow"></div>
+                <div class="kpi-icon-row">
+                  <div class="kpi-icon">
+                    <span class="material-symbols-outlined icon-fill">call</span>
+                  </div>
+                  <h3 class="kpi-label">Total Llamadas Realizadas</h3>
+                </div>
+                <div class="kpi-value-row">
+                  <span class="kpi-value" id="dash-total-tot">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabla -->
+            <div class="glass-card table-container">
+              <div class="table-header">
+                <h3>Desglose Operativo</h3>
+              </div>
+              <div style="overflow-x:auto;">
+                <table id="table-dash" class="premium-table">
+                  <thead>
+                    <tr>
+                      <th>Modo de Trabajo</th>
+                      <th class="text-right">Efectivas / Actividades</th>
+                      <th class="text-right">Llamadas Totales</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr><td colspan="3" style="text-align:center;padding:30px;color:var(--on-surface-variant);">Presione "Filtrar" para ver el rendimiento</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="loader" id="loader-dash"></div>
+            </div>
+
+            <!-- Desglose por Variable de Evaluación -->
+            <div class="glass-card table-container" id="dash-vars-card" style="display:none;">
+              <div class="table-header">
+                <h3>Desglose por Variable de Evaluación</h3>
+              </div>
+              <div style="overflow-x:auto;">
+                <table id="table-dash-vars" class="premium-table">
+                  <thead>
+                    <tr>
+                      <th>Variable</th>
+                      <th class="text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: REPORTES GENERALES
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-reportegen" class="section-tab">
+            <div class="tab-header">
+              <div>
+                <h2>Reportes Generales</h2>
+                <p class="muted">Descargue reportes estructurados en formato Word.</p>
+              </div>
+            </div>
+
+            <div class="glass-card glass-card-padded" style="max-width:560px;margin:0 auto;">
+              <div class="flex-row mb-lg">
+                <div class="form-group col">
+                  <label>
+                    <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">calendar_today</span>
+                    Desde
+                  </label>
+                  <input type="date" id="word-f1">
+                </div>
+                <div class="form-group col">
+                  <label>
+                    <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">calendar_today</span>
+                    Hasta
+                  </label>
+                  <input type="date" id="word-f2">
+                </div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <button class="word-btn" onclick="doExportWord(1)" id="btn-word-1">
+                  <div class="word-btn-icon"><span class="material-symbols-outlined icon-fill">description</span></div>
+                  <div>
+                    <div style="font-weight:700;">Reporte General</div>
+                    <div style="font-size:12px;color:var(--on-surface-variant);margin-top:2px;">Vista consolidada de toda la operación</div>
+                  </div>
+                </button>
+                <button class="word-btn" onclick="doExportWord(2)" id="btn-word-2">
+                  <div class="word-btn-icon"><span class="material-symbols-outlined icon-fill">article</span></div>
+                  <div>
+                    <div style="font-weight:700;">Reporte General por Modo</div>
+                    <div style="font-size:12px;color:var(--on-surface-variant);margin-top:2px;">Desglose agrupado por modo de trabajo</div>
+                  </div>
+                </button>
+                <button class="word-btn" onclick="doExportWord(3)" id="btn-word-3">
+                  <div class="word-btn-icon"><span class="material-symbols-outlined icon-fill">group</span></div>
+                  <div>
+                    <div style="font-weight:700;">Reporte General por Operadores</div>
+                    <div style="font-size:12px;color:var(--on-surface-variant);margin-top:2px;">Detalle individual por cada operador</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: VALIDACIÓN REGULAR
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-validar" class="section-tab">
+            <div class="tab-header">
+              <div>
+                <h2>Validación de Operadores</h2>
+                <p class="muted">Control directo y ajuste de parámetros operativos.</p>
+              </div>
+              <button class="btn btn-success" onclick="saveTable()">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Todo (Masivo)
+              </button>
+            </div>
+
+            <!-- Filtros -->
+            <div class="filter-bar glass-card">
+              <!-- Multi-select Modos -->
+              <div style="flex:1;min-width:190px;">
+                <div class="ms-container">
+                  <div class="ms-button" onclick="toggleMs('ms-dropdown-modos')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--on-surface-variant);">category</span>
+                      <span id="ms-text-modos">Todos los modos</span>
+                    </div>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="ms-dropdown" id="ms-dropdown-modos"></div>
+                </div>
+              </div>
+              <!-- Multi-select Operadores -->
+              <div style="flex:1;min-width:190px;">
+                <div class="ms-container">
+                  <div class="ms-button" onclick="toggleMs('ms-dropdown-ops')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--on-surface-variant);">badge</span>
+                      <span id="ms-text-ops">Todos los operadores</span>
+                    </div>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="ms-dropdown" id="ms-dropdown-ops"></div>
+                </div>
+              </div>
+              <!-- Multi-select Turnos -->
+              <div style="flex:1;min-width:190px;">
+                <div class="ms-container">
+                  <div class="ms-button" onclick="toggleMs('ms-dropdown-turnos')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--on-surface-variant);">schedule</span>
+                      <span id="ms-text-turnos">Todos los turnos</span>
+                    </div>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="ms-dropdown" id="ms-dropdown-turnos">
+                    <label class="ms-option"><input type="checkbox" value="MAÑANA" onchange="updateMsText('ms-dropdown-turnos','ms-text-turnos','Todos los turnos')"> MAÑANA</label>
+                    <label class="ms-option"><input type="checkbox" value="TARDE"  onchange="updateMsText('ms-dropdown-turnos','ms-text-turnos','Todos los turnos')"> TARDE</label>
+                  </div>
+                </div>
+              </div>
+              <!-- Búsqueda + Fecha -->
+              <div style="flex:1;min-width:180px;position:relative;">
+                <span class="material-symbols-outlined" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:17px;pointer-events:none;">search</span>
+                <input type="text" id="filter-1" class="input-icon-left" placeholder="Buscar campaña..."
+                  onkeydown="if(event.key==='Enter') loadTable()">
+              </div>
+              <div style="position:relative;">
+                <span class="material-symbols-outlined" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:16px;pointer-events:none;">calendar_today</span>
+                <input type="date" id="filter-date" class="input-icon-left" style="width:170px;" onchange="loadTable()">
+              </div>
+              <button class="btn btn-primary" onclick="loadTable()">
+                <span class="material-symbols-outlined">filter_list</span>
+              </button>
+            </div>
+
+            <!-- Tabla -->
+            <div class="glass-card table-container">
+              <div style="overflow-x:auto;">
+                <table id="admin-table" class="premium-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Fecha</th>
+                      <th>Operador</th>
+                      <th>Turno</th>
+                      <th>Modo</th>
+                      <th>Act / Campaña</th>
+                      <th class="text-center">Efec / Act.</th>
+                      <th class="text-center">Inc.</th>
+                      <th class="text-center">V. Efec</th>
+                      <th class="text-center">V. Inc</th>
+                      <th class="text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+
+              <!-- Paginador -->
+              <div class="pagination-bar">
+                <div class="pagination-left">
+                  <span class="label-sm muted">Filas por página:</span>
+                  <select id="rows-per-page" onchange="loadTable(1)" style="width:auto;padding:6px 28px 6px 10px;">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                  <span class="label-sm muted">Total: <span id="total-records" style="color:var(--on-surface);font-weight:700;">0</span> registros</span>
+                </div>
+                <div class="pagination-controls">
+                  <button class="page-btn" id="btn-prev" onclick="changePage(-1)">
+                    <span class="material-symbols-outlined" style="font-size:17px;">chevron_left</span>
+                  </button>
+                  <span class="page-sep" style="font-size:13px;">Pág.</span>
+                  <input type="number" id="curr-page-input" class="page-input" value="1" min="1" onchange="jumpToPage()" style="width:54px;">
+                  <span class="page-sep">de <span id="total-pages" style="font-weight:700;">1</span></span>
+                  <button class="page-btn" id="btn-next" onclick="changePage(1)">
+                    <span class="material-symbols-outlined" style="font-size:17px;">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: VALIDACIÓN ANALISTAS
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-val-analistas" class="section-tab">
+            <div class="tab-header">
+              <div>
+                <h2>Validación de Analistas</h2>
+                <p class="muted">Revisión exclusiva de actividades cualitativas.</p>
+              </div>
+              <button class="btn btn-success" onclick="saveTableAn()">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Todo (Masivo)
+              </button>
+            </div>
+
+            <!-- Filtros analistas -->
+            <div class="filter-bar glass-card">
+              <div style="flex:1;min-width:190px;">
+                <div class="ms-container">
+                  <div class="ms-button" onclick="toggleMs('ms-dropdown-modos-an')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--on-surface-variant);">category</span>
+                      <span id="ms-text-modos-an">Todos los modos</span>
+                    </div>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="ms-dropdown" id="ms-dropdown-modos-an"></div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:190px;">
+                <div class="ms-container">
+                  <div class="ms-button" onclick="toggleMs('ms-dropdown-ops-an')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--on-surface-variant);">badge</span>
+                      <span id="ms-text-ops-an">Todos los analistas</span>
+                    </div>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="ms-dropdown" id="ms-dropdown-ops-an"></div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:190px;">
+                <div class="ms-container">
+                  <div class="ms-button" onclick="toggleMs('ms-dropdown-turnos-an')">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span class="material-symbols-outlined" style="font-size:17px;color:var(--on-surface-variant);">schedule</span>
+                      <span id="ms-text-turnos-an">Todos los turnos</span>
+                    </div>
+                    <span class="material-symbols-outlined">expand_more</span>
+                  </div>
+                  <div class="ms-dropdown" id="ms-dropdown-turnos-an">
+                    <label class="ms-option"><input type="checkbox" value="MAÑANA" onchange="updateMsText('ms-dropdown-turnos-an','ms-text-turnos-an','Todos los turnos')"> MAÑANA</label>
+                    <label class="ms-option"><input type="checkbox" value="TARDE"  onchange="updateMsText('ms-dropdown-turnos-an','ms-text-turnos-an','Todos los turnos')"> TARDE</label>
+                  </div>
+                </div>
+              </div>
+              <div style="flex:1;min-width:180px;position:relative;">
+                <span class="material-symbols-outlined" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:17px;pointer-events:none;">search</span>
+                <input type="text" id="filter-1-an" class="input-icon-left" placeholder="Buscar actividad..."
+                  onkeydown="if(event.key==='Enter') loadTableAnalistas()">
+              </div>
+              <div style="position:relative;">
+                <span class="material-symbols-outlined" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:16px;pointer-events:none;">calendar_today</span>
+                <input type="date" id="filter-date-an" class="input-icon-left" style="width:170px;" onchange="loadTableAnalistas()">
+              </div>
+              <button class="btn btn-primary" onclick="loadTableAnalistas()">
+                <span class="material-symbols-outlined">filter_list</span>
+              </button>
+            </div>
+
+            <!-- Tabla analistas -->
+            <div class="glass-card table-container">
+              <div style="overflow-x:auto;">
+                <table id="admin-table-an" class="premium-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Fecha</th>
+                      <th>Analista</th>
+                      <th>Turno</th>
+                      <th>Modo</th>
+                      <th>Actividad</th>
+                      <th class="text-center">Acts. Realizadas</th>
+                      <th class="text-center">Verif. Efectividad</th>
+                      <th>Calidad Análisis</th>
+                      <th class="text-center"></th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+
+              <!-- Paginador -->
+              <div class="pagination-bar">
+                <div class="pagination-left">
+                  <span class="label-sm muted">Filas por página:</span>
+                  <select id="rows-per-page-an" onchange="loadTableAnalistas(1)" style="width:auto;padding:6px 28px 6px 10px;">
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                  <span class="label-sm muted">Total: <span id="total-records-an" style="color:var(--on-surface);font-weight:700;">0</span> registros</span>
+                </div>
+                <div class="pagination-controls">
+                  <button class="page-btn" id="btn-prev-an" onclick="changePageAn(-1)">
+                    <span class="material-symbols-outlined" style="font-size:17px;">chevron_left</span>
+                  </button>
+                  <span class="page-sep">Pág.</span>
+                  <input type="number" id="curr-page-input-an" class="page-input" value="1" min="1" onchange="jumpToPageAn()" style="width:54px;">
+                  <span class="page-sep">de <span id="total-pages-an" style="font-weight:700;">1</span></span>
+                  <button class="page-btn" id="btn-next-an" onclick="changePageAn(1)">
+                    <span class="material-symbols-outlined" style="font-size:17px;">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: EXPORTAR BD
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-exportar" class="section-tab">
+            <div class="tab-header">
+              <div>
+                <h2>Exportar Base de Datos</h2>
+                <p class="muted">Descargue registros en formato Excel.</p>
+              </div>
+            </div>
+
+            <div class="glass-card glass-card-padded" style="max-width:500px;margin:0 auto;">
+              <div class="flex-row mb-md">
+                <div class="form-group col">
+                  <label>Desde</label>
+                  <input type="date" id="exp-f1">
+                </div>
+                <div class="form-group col">
+                  <label>Hasta</label>
+                  <input type="date" id="exp-f2">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Filtrar por Modo</label>
+                <select id="exp-modo">
+                  <option value="TODOS">Todos</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-lg" onclick="doExport()" id="btn-exp" style="width:100%;margin-top:8px;">
+                <span class="material-symbols-outlined">table_view</span>
+                Generar Excel Completo
+              </button>
+            </div>
+          </div>
+
+          <!-- ════════════════════════════════════════════════════════════
+               TAB: CONFIGURACIÓN
+          ════════════════════════════════════════════════════════════ -->
+          <div id="tab-config" class="section-tab">
+            <div class="tab-header">
+              <div>
+                <h2>Configuración de Modos</h2>
+                <p class="muted">Gestione los modos de trabajo y sus campañas.</p>
+              </div>
+            </div>
+
+            <div class="glass-card glass-card-padded" style="max-width:620px;margin:0 auto;">
+              <div class="form-group">
+                <label>Seleccionar Modo a Editar</label>
+                <select id="cfg-modo-select" onchange="handleCfgModoChange()">
+                  <option disabled selected>Seleccione un modo...</option>
+                </select>
+                <input type="text" id="cfg-modo-input" class="hidden"
+                  placeholder="Escriba nombre del nuevo modo..."
+                  style="margin-top:10px;text-transform:uppercase;"
+                  oninput="this.value=this.value.toUpperCase()">
+              </div>
+
+              <div style="background:rgba(255,255,255,0.03);padding:var(--sp-lg);border-radius:var(--r-lg);border:1px solid rgba(255,255,255,0.08);">
+                <label style="margin-bottom:var(--sp-md);display:block;">Campañas / Actividades Registradas:</label>
+                <div style="display:flex;gap:10px;margin-bottom:var(--sp-md);">
+                  <input type="text" id="cfg-new-camp" placeholder="Nueva campaña..."
+                    style="text-transform:uppercase;" oninput="this.value=this.value.toUpperCase()">
+                  <button class="btn btn-primary" onclick="addCampaignToList()" style="white-space:nowrap;padding:10px 16px;">
+                    <span class="material-symbols-outlined">add</span>
+                  </button>
+                </div>
+                <ul class="campaign-list" id="cfg-camp-list">
+                  <li style="color:var(--on-surface-variant);font-size:13px;">Selecciona un modo...</li>
+                </ul>
+              </div>
+
+              <!-- Variables de Evaluación por Modo -->
+              <div style="background:rgba(255,255,255,0.03);padding:var(--sp-lg);border-radius:var(--r-lg);border:1px solid rgba(255,255,255,0.08);margin-top:var(--sp-md);">
+                <label style="margin-bottom:var(--sp-sm);display:block;color:var(--secondary);">Variables de Evaluación (cuantitativas a reportar):</label>
+                <p class="muted" style="font-size:12px;margin-bottom:var(--sp-md);line-height:1.5;">
+                  Defina qué cantidades pedirá el bot en este modo (ej: Excels Trabajados, Datos Analizados, Fichas Realizadas).
+                  Se exportarán <b>separadas</b> y <b>totalizadas</b>. Active el interruptor <b>Obligatorio</b> para exigir
+                  esa variable al reportar (se marcará con <span style="color:var(--danger);">*</span>). Si no define variables,
+                  el modo usará los campos por defecto.
+                </p>
+                <div id="cfg-var-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+                <button type="button" class="btn btn-secondary btn-mini" onclick="addVarToList()" style="margin-top:var(--sp-sm);">
+                  <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir variable
+                </button>
+              </div>
+
+              <button class="btn btn-success btn-lg" onclick="saveConfig()" style="width:100%;margin-top:var(--sp-lg);">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Configuración
+              </button>
+              <p id="cfg-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
+            </div>
+
+            <!-- Áreas de Trabajo Card -->
+            <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
+              <h3>Áreas de Trabajo</h3>
+              <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;">Gestione y edite las áreas de trabajo disponibles para los operadores.</p>
+              
+              <div id="areas-list-container" style="display:flex;flex-direction:column;gap:10px;margin-bottom:var(--sp-md);">
+                <!-- Carga dinámica de inputs de áreas -->
+              </div>
+              
+              <button class="btn btn-success btn-lg" onclick="saveAreasConfig()" style="width:100%;">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Nombres de Áreas
+              </button>
+              <p id="areas-cfg-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
+            </div>
+
+            <!-- Reglas y Super Reglas de Acceso Card -->
+            <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
+              <h3>Reglas de Acceso a Modos</h3>
+              <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;">Configure los modos de trabajo a los que puede acceder cada perfil.</p>
+              
+              <!-- Super Reglas -->
+              <div style="background:rgba(255,255,255,0.03);padding:var(--sp-md);border-radius:var(--r-lg);border:1px solid rgba(255,255,255,0.08);margin-bottom:var(--sp-md);">
+                <label style="font-weight:700;display:block;margin-bottom:10px;color:var(--primary);">Super Reglas</label>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                    <input type="checkbox" id="sr-analistas-todos">
+                    Habilitar "Gestión de Analistas" para todos los perfiles
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                    <input type="checkbox" id="sr-todos-modos">
+                    Habilitar TODOS los modos para todos los perfiles (Bypass completo)
+                  </label>
+                </div>
+              </div>
+
+              <!-- Tabla de Reglas por Perfil -->
+              <div style="overflow-x:auto;margin-bottom:var(--sp-md);">
+                <table class="premium-table" id="table-rules" style="font-size:13px;">
+                  <thead>
+                    <tr>
+                      <th style="padding: 10px;">Perfil / Rol</th>
+                      <th style="padding: 10px;">Modos Permitidos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="font-weight:700; padding: 10px;">ADMIN</td>
+                      <td id="rules-admin-container" style="padding: 10px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        <!-- Checkboxes dinámicos de modos -->
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight:700; padding: 10px;">ANALISTA</td>
+                      <td id="rules-analista-container" style="padding: 10px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        <!-- Checkboxes dinámicos de modos -->
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight:700; padding: 10px;">OPERADOR</td>
+                      <td id="rules-operador-container" style="padding: 10px; display: flex; flex-wrap: wrap; gap: 10px;">
+                        <!-- Checkboxes dinámicos de modos -->
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <button class="btn btn-success btn-lg" onclick="saveRulesConfig()" style="width:100%;">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Reglas de Acceso
+              </button>
+              <p id="rules-cfg-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
+            </div>
+
+            <!-- Hojas Dinámicas por Modo de Trabajo Card -->
+            <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
+              <h3>Hojas Dinámicas por Modo de Trabajo <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
+              <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;line-height:1.5;">
+                Las hojas de cálculo se crean y actualizan <b>por Modo de Trabajo</b> (ej. <i>Modo_LLAMADAS</i>, <i>Modo_ISSABEL</i>, <i>Modo_1X10</i>, <i>Modo_ANALISTA</i>).
+                Los <b>indicadores y variables de evaluación</b> se configuran como <b>columnas</b> dentro de cada hoja, junto con los datos de operador, fecha, turno, estados y detalles.
+              </p>
+              <button class="btn btn-primary btn-lg" onclick="generarHojasPorModo()" style="width:100%;margin-bottom:var(--sp-sm);">
+                <span class="material-symbols-outlined">sync</span>
+                Sincronizar Hojas por Modo de Trabajo
+              </button>
+              <div style="border-top:1px solid var(--outline-variant);margin:var(--sp-md) 0;padding-top:var(--sp-sm);">
+                <p class="muted" style="font-size:12px;margin-bottom:var(--sp-sm);">
+                  Configuración de Indicadores / Agrupaciones personalizadas por Modo:
+                </p>
+                <div id="ind-list-container" style="display:flex;flex-direction:column;gap:8px;margin-bottom:var(--sp-md);"></div>
+                <div style="display:flex;gap:8px;">
+                  <button type="button" class="btn btn-secondary btn-mini" onclick="addIndRow()">
+                    <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir indicador
+                  </button>
+                  <button class="btn btn-success btn-sm" onclick="saveInd()" style="flex:1;">
+                    <span class="material-symbols-outlined">save</span> Guardar Indicadores
+                  </button>
+                </div>
+              </div>
+              <p id="ind-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
+            </div>
+
+            <!-- Repositorio de Emojis Card (Admin) -->
+            <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
+              <h3>Repositorio de Emojis <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
+              <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;line-height:1.5;">
+                Configure el emoji que usará el bot para cada <b>variable</b>, <b>modo</b> o <b>campaña</b>.
+                El nombre debe coincidir exactamente (modos y campañas en MAYÚSCULAS).
+              </p>
+              <div id="emoji-list-container" style="display:flex;flex-direction:column;gap:8px;margin-bottom:var(--sp-md);"></div>
+              <button type="button" class="btn btn-secondary btn-mini" onclick="addEmojiRow()" style="margin-bottom:var(--sp-md);">
+                <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir emoji
+              </button>
+              <button class="btn btn-success btn-lg" onclick="saveEmojis()" style="width:100%;">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Emojis
+              </button>
+              <p id="emoji-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
+            </div>
+
+            <!-- Reportes Programados Card (Admin) -->
+            <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
+              <h3>Reportes Programados <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
+              <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;line-height:1.5;">
+                El bot enviará un <b>consolidado diario</b> y uno <b>semanal</b> a los Chat IDs de Telegram que indique.
+                Luego presione <b>Instalar Triggers</b> una vez para activar el envío automático.
+              </p>
+              <div id="dest-list-container" style="display:flex;flex-direction:column;gap:8px;margin-bottom:var(--sp-md);"></div>
+              <button type="button" class="btn btn-secondary btn-mini" onclick="addDestRow()" style="margin-bottom:var(--sp-md);">
+                <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir destinatario
+              </button>
+              <button class="btn btn-success btn-lg" onclick="saveDest()" style="width:100%;">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Destinatarios
+              </button>
+              <button class="btn btn-primary btn-lg" onclick="instalarTriggers()" style="width:100%;margin-top:var(--sp-sm);">
+                <span class="material-symbols-outlined">schedule</span>
+                Instalar Triggers
+              </button>
+              <p id="dest-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
+            </div>
+
+          </div>
+
+        </div><!-- .main-inner -->
+      </main>
+    </div><!-- #app-main -->
+
+    <!-- ── OVERLAY DE EDICIÓN / COUNTDOWN 10 SEGUNDOS ────────────────────────── -->
+    <div id="countdown-overlay" class="hidden">
+      <div class="countdown-card">
+        <span class="material-symbols-outlined countdown-bell">alarm</span>
+        <h3>Reporte Listo para Enviar</h3>
+        <p>Tu reporte se registrará y enviará al canal de Telegram en <span id="countdown-number">10</span> segundos.</p>
+        
+        <div class="countdown-progress-bar-container">
+          <div id="countdown-progress-bar"></div>
+        </div>
+        
+        <div class="countdown-actions">
+          <button class="btn btn-secondary" onclick="cancelarEnvioReporte()">
+            <span class="material-symbols-outlined">edit</span> Deshacer y Editar
+          </button>
+          <button class="btn btn-primary" onclick="enviarReporteInmediato()">
+            <span class="material-symbols-outlined">send</span> Enviar Ahora
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="./js/app.js"></script>
+  </body>
+</html>
