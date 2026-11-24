@@ -19,9 +19,13 @@
     }
   },
   "rewrites": [
+    { "source": "/asistencia", "destination": { "service": "attendance" } },
     { "source": "/asistencia/(.*)", "destination": { "service": "attendance" } },
+    { "source": "/oriana", "destination": { "service": "oriana" } },
     { "source": "/oriana/(.*)", "destination": { "service": "oriana" } },
+    { "source": "/llamadas", "destination": { "service": "calls-incidents" } },
     { "source": "/llamadas/(.*)", "destination": { "service": "calls-incidents" } },
+    { "source": "/admin", "destination": { "service": "admin-portal" } },
     { "source": "/admin/(.*)", "destination": { "service": "admin-portal" } },
     { "source": "/(.*)", "destination": { "service": "admin-portal" } }
   ]
