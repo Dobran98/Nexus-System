@@ -7,7 +7,12 @@ const nextConfig = {
     '@intranet/telemetry',
     '@intranet/utils',
   ],
+  async rewrites() {
+    return [
+      { source: '/oriana', destination: '/' },
+      { source: '/oriana/:path*', destination: '/:path*' },
+    ];
+  },
 };
 
 module.exports = nextConfig;
-

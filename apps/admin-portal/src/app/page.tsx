@@ -19,38 +19,44 @@ import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
 export default async function AdminHomePage() {
+  const supabase = createSupabaseServerClient();
   let user: any = null;
   let profile: any = null;
   let roles: string[] = [];
 
   try {
-    const supabase = createSupabaseServerClient();
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
-
-    if (!user) {
-      redirect('/login');
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
+      user = data.user;
     }
+  } catch {
+    user = null;
+  }
 
-    // Obtener perfil del usuario
+  if (!user) {
+    redirect('/login');
+  }
+
+  try {
     const { data: profileData } = await (supabase
       .from('profiles') as any)
       .select('full_name, is_active')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
     profile = profileData;
+  } catch {
+    profile = null;
+  }
 
-    // Obtener roles del usuario
+  try {
     const { data: rolesData } = await (supabase
       .from('user_roles') as any)
       .select('roles!inner(name)')
       .eq('user_id', user.id);
 
     roles = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-  } catch (err: any) {
-    if (err?.digest?.startsWith('NEXT_REDIRECT')) throw err;
-    // Fallback seguro si no hay sesión
-    redirect('/login');
+  } catch {
+    roles = [];
   }
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Operador';
@@ -149,7 +155,7 @@ export default async function AdminHomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            
+
             {/* 🟢 MÓDULO 1: ASISTENCIA (ACTIVO) */}
             <Link
               href="/asistencia"

@@ -11,7 +11,10 @@ const PUBLIC_PATHS = ['/login', '/_next', '/favicon.ico', '/api/auth'];
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) ||
+    pathname.includes('.')
+  ) {
     return NextResponse.next();
   }
 
@@ -42,6 +45,9 @@ export async function middleware(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+      }
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirectTo', pathname);
       return NextResponse.redirect(loginUrl);
@@ -49,11 +55,14 @@ export async function middleware(request: NextRequest) {
 
     return response;
   } catch {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Error de autenticación' }, { status: 401 });
+    }
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|css|js|woff|woff2|ttf|eot)).*)'],
 };

@@ -7,7 +7,12 @@ const nextConfig = {
     '@intranet/telemetry',
     '@intranet/utils',
   ],
+  async rewrites() {
+    return [
+      { source: '/asistencia', destination: '/' },
+      { source: '/asistencia/:path*', destination: '/:path*' },
+    ];
+  },
 };
 
 module.exports = nextConfig;
-
