@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Sparkles,
   Zap,
-  LogOut,
   Clock,
   Construction,
   PhoneCall,
@@ -15,6 +14,7 @@ import {
   LineChart,
   UserCheck,
 } from 'lucide-react';
+import { SignOutButton } from '../components/SignOutButton';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
@@ -96,15 +96,7 @@ export default async function AdminHomePage() {
               <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200 shadow-sm">
                 {initials}
               </div>
-              <form action="/api/auth/signout" method="POST">
-                <button
-                  type="submit"
-                  title="Cerrar Sesión"
-                  className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-900 rounded-lg transition-colors border border-transparent hover:border-slate-800"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </form>
+              <SignOutButton />
             </div>
           </div>
         </div>

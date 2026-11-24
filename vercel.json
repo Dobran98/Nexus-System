@@ -19,8 +19,8 @@
     }
   },
   "rewrites": [
-    { "source": "/asistencia", "destination": { "service": "attendance" } },
-    { "source": "/asistencia/(.*)", "destination": { "service": "attendance" } },
+    { "source": "/asistencia", "destination": { "service": "admin-portal" } },
+    { "source": "/asistencia/(.*)", "destination": { "service": "admin-portal" } },
     { "source": "/oriana", "destination": { "service": "oriana" } },
     { "source": "/oriana/(.*)", "destination": { "service": "oriana" } },
     { "source": "/llamadas", "destination": { "service": "calls-incidents" } },
