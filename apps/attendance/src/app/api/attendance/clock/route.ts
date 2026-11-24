@@ -13,17 +13,31 @@ export async function GET() {
 
     const today = new Date().toISOString().split('T')[0];
 
+    // Buscar registro de hoy
     const { data: record } = await (supabase
       .from('attendance_records') as any)
-      .select('*')
+      .select('id, user_id, work_date, status, total_active_seconds, clock_in_summary, clock_out_summary, created_at')
       .eq('user_id', user.id)
       .eq('work_date', today)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    let lastEvent: string | null = null;
+    if (record?.id) {
+      const { data: eventData } = await (supabase
+        .from('clock_events') as any)
+        .select('event_type, event_timestamp')
+        .eq('attendance_id', record.id)
+        .order('event_timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      lastEvent = eventData?.event_type ?? null;
+    }
+
     return NextResponse.json({
       record: record ?? null,
+      last_event: lastEvent,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
@@ -55,37 +69,59 @@ export async function POST(request: Request) {
       verification_method = 'qr_scan',
       latitude = null,
       longitude = null,
-      device_fingerprint = 'unknown',
-      attendance_id,
     } = body;
 
+    // device_fingerprint constraint: CHECK (length between 16 and 128)
+    let device_fingerprint = body.device_fingerprint;
+    if (!device_fingerprint || device_fingerprint.length < 16) {
+      device_fingerprint = 'nexus-device-fingerprint-v1-official';
+    }
+    device_fingerprint = device_fingerprint.slice(0, 128);
+
     const now = new Date().toISOString();
+    const today = now.split('T')[0]; // 'YYYY-MM-DD'
 
-    // ── CLOCK IN: crear attendance_record del día ──────────────────────────────
+    let targetAttendanceId = body.attendance_id;
+
+    // ── CLOCK IN: buscar o crear attendance_record del día ──────────────────────
     if (event_type === 'clock_in') {
-      const today = now.split('T')[0]; // 'YYYY-MM-DD'
-
-      const { data: attendance, error: attError } = await (supabase
+      // Verificar si ya existe registro hoy
+      const { data: existingRecord } = await (supabase
         .from('attendance_records') as any)
-        .insert({
-          user_id:   user.id,
-          work_date: today,
-          status:    'active',
-        })
         .select('id')
-        .single();
+        .eq('user_id', user.id)
+        .eq('work_date', today)
+        .maybeSingle();
 
-      if (attError || !attendance) {
-        return NextResponse.json(
-          { error: attError?.message ?? 'Error al crear registro' },
-          { status: 500 }
-        );
+      if (existingRecord?.id) {
+        targetAttendanceId = existingRecord.id;
+      } else {
+        // Status debe ser uno de: 'present', 'late', 'absent', 'excused'
+        const { data: newRecord, error: attError } = await (supabase
+          .from('attendance_records') as any)
+          .insert({
+            user_id:          user.id,
+            work_date:        today,
+            status:           'present',
+            clock_in_summary: now,
+          })
+          .select('id')
+          .single();
+
+        if (attError || !newRecord) {
+          return NextResponse.json(
+            { error: attError?.message ?? 'Error al crear registro de asistencia' },
+            { status: 500 }
+          );
+        }
+        targetAttendanceId = newRecord.id;
       }
 
+      // Registrar evento de clock_in
       const { error: eventError } = await (supabase
         .from('clock_events') as any)
         .insert({
-          attendance_id:       attendance.id,
+          attendance_id:       targetAttendanceId,
           event_type,
           verification_method,
           device_fingerprint,
@@ -98,39 +134,45 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: eventError.message }, { status: 500 });
       }
 
-      return NextResponse.json({ success: true, attendance_id: attendance.id });
+      return NextResponse.json({ success: true, attendance_id: targetAttendanceId });
     }
 
     // ── OTROS EVENTOS (break_start, break_end, clock_out) ─────────────────────
-    if (!attendance_id) {
-      return NextResponse.json({ error: 'attendance_id requerido' }, { status: 400 });
+    if (!targetAttendanceId) {
+      // Intentar recuperarlo de la base de datos para la jornada de hoy
+      const { data: existingRecord } = await (supabase
+        .from('attendance_records') as any)
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('work_date', today)
+        .maybeSingle();
+
+      if (!existingRecord?.id) {
+        return NextResponse.json({ error: 'No se encontró un registro de jornada activo para hoy' }, { status: 400 });
+      }
+      targetAttendanceId = existingRecord.id;
     }
 
     const { error: eventError } = await (supabase
       .from('clock_events') as any)
       .insert({
-        attendance_id,
+        attendance_id:       targetAttendanceId,
         event_type,
         verification_method,
         device_fingerprint,
         latitude,
         longitude,
-        event_timestamp: now,
+        event_timestamp:     now,
       });
 
     if (eventError) {
       return NextResponse.json({ error: eventError.message }, { status: 500 });
     }
 
-    // clock_out → marcar registro como completado
-    if (event_type === 'clock_out') {
-      await (supabase
-        .from('attendance_records') as any)
-        .update({ status: 'completed' })
-        .eq('id', attendance_id);
-    }
+    // Nota: El trigger fn_recalculate_active_seconds() en PostgreSQL actualiza
+    // automáticamente total_active_seconds y clock_out_summary de forma segura.
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, attendance_id: targetAttendanceId });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

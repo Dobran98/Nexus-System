@@ -39,20 +39,36 @@ export default function AttendancePage() {
         if (res.ok) {
           const data = await res.json();
           if (data.record) {
-            const isCompleted = data.record.status === 'completed';
-            const createdAt = new Date(data.record.created_at);
+            const lastEvent = data.last_event;
+            const isCompleted = lastEvent === 'clock_out' || Boolean(data.record.clock_out_summary);
+            const isOnBreak = lastEvent === 'break_start';
+            const isClockedIn = (lastEvent === 'clock_in' || lastEvent === 'break_end') && !isCompleted;
+
+            const createdAt = new Date(data.record.clock_in_summary || data.record.created_at);
             const now = new Date();
             const diffSeconds = Math.max(0, Math.floor((now.getTime() - createdAt.getTime()) / 1000));
+            const activeSeconds = data.record.total_active_seconds || diffSeconds;
+
+            let currentClockState: ClockState = 'idle';
+            if (isCompleted) {
+              currentClockState = 'clocked_out';
+            } else if (isOnBreak) {
+              currentClockState = 'on_break';
+            } else if (isClockedIn) {
+              currentClockState = 'clocked_in';
+            }
 
             setState({
-              clockState: isCompleted ? 'clocked_out' : 'clocked_in',
+              clockState: currentClockState,
               attendanceId: data.record.id,
               clockInTime: createdAt,
-              totalActiveSeconds: data.record.total_active_seconds || diffSeconds,
+              totalActiveSeconds: activeSeconds,
             });
 
-            if (!isCompleted) {
+            if (currentClockState === 'clocked_in') {
               setElapsed(diffSeconds);
+            } else if (currentClockState === 'clocked_out') {
+              setElapsed(activeSeconds);
             }
           }
         }

@@ -50,6 +50,8 @@ pnpm-debug.log*
 Thumbs.db
 *.swp
 *.swo
+*.xlsx
+*.xls
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
