@@ -254,37 +254,39 @@ export default async function AdminHomePage() {
               </div>
             </Link>
 
-            {/* 🚧 MÓDULO 4: ORIANA ANALYTICS (EN CONSTRUCCIÓN) */}
+            {/* 🟢 MÓDULO 4: ORIANA ANALYTICS (ACTIVO) */}
             <Link
-              href="/en-construccion?modulo=Oriana+Analytics"
-              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
+              href="/oriana"
+              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-indigo-500/60 hover:border-indigo-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-950/40 transition-all duration-300"
             >
               <div>
                 <div className="flex items-start justify-between mb-5">
-                  <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
-                    <LineChart className="h-6 w-6" />
+                  <div className="h-14 w-14 rounded-2xl bg-indigo-950/80 border border-indigo-800/50 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-all shadow-md">
+                    <LineChart className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                    🚧 En Construcción
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800 uppercase tracking-wide">
+                    ● Activo Ahora
                   </span>
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
-                    Auditoría
+                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-indigo-400">
+                    Auditoría & Calidad
                   </span>
-                  <h3 className="text-xl font-bold text-slate-300 tracking-tight">
+                  <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-indigo-300 transition-colors">
                     Módulo Oriana
                   </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">
-                    Evaluación analítica y validación de calidad operativa de agentes y llamadas.
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Evaluación analítica, validación de lotes comunales, precisión porcentual y control de calidad operativa.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
-                <span>Próximamente disponible</span>
-                <Construction className="h-4 w-4 text-amber-500" />
+              <div className="mt-6 flex items-center justify-between text-sm font-semibold text-indigo-400 group-hover:text-indigo-300 pt-4 border-t border-slate-800">
+                <span>Ingresar al Command Center</span>
+                <span className="h-8 w-8 rounded-full bg-indigo-950 border border-indigo-800 flex items-center justify-center text-indigo-300 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
             </Link>
 

@@ -21,8 +21,8 @@
   "rewrites": [
     { "source": "/asistencia", "destination": { "service": "admin-portal" } },
     { "source": "/asistencia/(.*)", "destination": { "service": "admin-portal" } },
-    { "source": "/oriana", "destination": { "service": "oriana" } },
-    { "source": "/oriana/(.*)", "destination": { "service": "oriana" } },
+    { "source": "/oriana", "destination": { "service": "admin-portal" } },
+    { "source": "/oriana/(.*)", "destination": { "service": "admin-portal" } },
     { "source": "/llamadas", "destination": { "service": "calls-incidents" } },
     { "source": "/llamadas/(.*)", "destination": { "service": "calls-incidents" } },
     { "source": "/admin", "destination": { "service": "admin-portal" } },
