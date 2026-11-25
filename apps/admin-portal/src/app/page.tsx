@@ -11,6 +11,8 @@ import {
   LineChart,
   UserCheck,
   Construction,
+  Tags,
+  Vote,
 } from 'lucide-react';
 import { SignOutButton } from '../components/SignOutButton';
 import { NotificationCenter } from '../components/NotificationCenter';
@@ -398,6 +400,78 @@ export default async function AdminHomePage() {
                 <div className="mt-6 flex items-center justify-between text-xs font-semibold text-blue-400 pt-4 border-t border-slate-800/60">
                   <span>Administrar Personal & Credenciales</span>
                   <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+            )}
+
+            {/* 🚧 MÓDULO 7: RECLASIFICACIÓN (EXCLUSIVO PARA DESARROLLADOR BRANDO) */}
+            {isBrando && (
+              <Link
+                href="/en-construccion?modulo=Reclasificación"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-950/20 transition-all opacity-90 hover:opacity-100"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="h-14 w-14 rounded-2xl bg-amber-950/60 border border-amber-800/50 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-all">
+                      <Tags className="h-6 w-6" />
+                    </div>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
+                      🚧 En Construcción (Dev)
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-mono font-medium uppercase tracking-wider text-amber-500">
+                      Auditoría & Calidad Operativa
+                    </span>
+                    <h3 className="text-xl font-bold text-slate-300 tracking-tight group-hover:text-amber-200 transition-colors">
+                      Reclasificación
+                    </h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Revisión de tipificaciones, reclasificación de llamadas, auditoría de contactos y ajuste de incidencias registradas.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between text-xs font-medium text-amber-400/80 pt-4 border-t border-slate-800/60">
+                  <span>Privado Desarrollador (Brando)</span>
+                  <Construction className="h-4 w-4 text-amber-500" />
+                </div>
+              </Link>
+            )}
+
+            {/* 🚧 MÓDULO 8: GESTIÓN DE ELECCIONES (EXCLUSIVO PARA DESARROLLADOR BRANDO) */}
+            {isBrando && (
+              <Link
+                href="/en-construccion?modulo=Gestión+de+Elecciones"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-cyan-500/40 hover:shadow-xl hover:shadow-cyan-950/20 transition-all opacity-90 hover:opacity-100"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="h-14 w-14 rounded-2xl bg-cyan-950/60 border border-cyan-800/50 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-all">
+                      <Vote className="h-6 w-6" />
+                    </div>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
+                      🚧 En Construcción (Dev)
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-mono font-medium uppercase tracking-wider text-cyan-400">
+                      Procesos Electorales & Movilización
+                    </span>
+                    <h3 className="text-xl font-bold text-slate-300 tracking-tight group-hover:text-cyan-200 transition-colors">
+                      Gestión de Elecciones
+                    </h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Monitoreo de centros electorales, registro de movilización popular, padrón y reporte de participación en tiempo real.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between text-xs font-medium text-cyan-400/80 pt-4 border-t border-slate-800/60">
+                  <span>Privado Desarrollador (Brando)</span>
+                  <Construction className="h-4 w-4 text-amber-500" />
                 </div>
               </Link>
             )}
