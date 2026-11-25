@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, PhoneCall } from 'lucide-react';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'BRIANA — Telefonía Celular & Contact Center | Nexus Intranet',
@@ -9,14 +10,23 @@ export const metadata = {
 };
 
 export default async function LlamadasPortalPage() {
+  const supabase = createSupabaseServerClient();
   let user: any = null;
+
   try {
-    const supabase = createSupabaseServerClient();
-    const { data } = await supabase.auth.getUser();
-    user = data?.user;
-  } catch (e) {
-    // Sesión opcional
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
+      user = data.user;
+    }
+  } catch {
+    user = null;
   }
+
+  if (!user) {
+    redirect('/login?redirectTo=/llamadas');
+  }
+
+  const userEmail = user.email || 'Usuario';
 
   return (
     <div className="relative w-full h-screen bg-slate-950 flex flex-col overflow-hidden">
@@ -36,8 +46,8 @@ export default async function LlamadasPortalPage() {
               <PhoneCall className="w-3.5 h-3.5" />
               BRIANA CONTACT CENTER
             </span>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-950 text-sky-400 border border-sky-800/60">
-              ● Operativo
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-950 text-sky-300 border border-sky-800/60">
+              ● SSO Activo ({userEmail})
             </span>
           </div>
         </div>

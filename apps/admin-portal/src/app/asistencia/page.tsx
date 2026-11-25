@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink, QrCode } from 'lucide-react';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { redirect } from 'next/navigation';
 
 export const metadata = {
   title: 'ASYS — Control y Registro de Asistencia | Nexus Intranet',
@@ -9,14 +10,23 @@ export const metadata = {
 };
 
 export default async function AsistenciaPortalPage() {
+  const supabase = createSupabaseServerClient();
   let user: any = null;
+
   try {
-    const supabase = createSupabaseServerClient();
-    const { data } = await supabase.auth.getUser();
-    user = data?.user;
-  } catch (e) {
-    // Sesión opcional
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
+      user = data.user;
+    }
+  } catch {
+    user = null;
   }
+
+  if (!user) {
+    redirect('/login?redirectTo=/asistencia');
+  }
+
+  const userEmail = user.email || 'Usuario';
 
   return (
     <div className="relative w-full h-screen bg-slate-950 flex flex-col overflow-hidden">
@@ -37,7 +47,7 @@ export default async function AsistenciaPortalPage() {
               ASYS ASISTENCIA & SEGURIDAD
             </span>
             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-              ● Operativo
+              ● SSO Activo ({userEmail})
             </span>
           </div>
         </div>

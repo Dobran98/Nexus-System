@@ -172,6 +172,24 @@
       const accessConfig = await api.obtenerReglasAcceso();
       gRules = accessConfig.rules;
       gSuperRules = accessConfig.superRules;
+      
+      // Nexus Single Sign-On (SSO) Automático
+      try {
+        const ssoRes = await fetch('/api/auth/me');
+        const ssoData = await ssoRes.json();
+        if (ssoData && ssoData.authenticated && ssoData.user) {
+          console.log('[Oriana] Nexus SSO Sesión activa detectada:', ssoData.user.email);
+          const areaId = ssoData.user.isAdmin ? 'ADMIN' : (ssoData.user.areas?.[0] || 'GENERAL');
+          completarSesion({
+            usuario: ssoData.user.username,
+            nombre: ssoData.user.name,
+            rol: ssoData.user.role || 'Admin',
+            turno: ssoData.user.turno || 'General'
+          }, areaId);
+        }
+      } catch (ssoErr) {
+        console.warn('[Oriana] Verificación SSO silenciosa:', ssoErr);
+      }
     } catch (e) {
       console.error('Error cargando configuración inicial:', e);
       toast.error('No se pudo cargar la configuración de campañas del servidor.');
@@ -320,7 +338,9 @@
   }
 
   function completarSesion(r, areaOId) {
-    cUser = { u: document.getElementById('login-user').value.trim(), id: areaOId, n: r.nombre, r: r.rol, t: r.turno };
+    const loginEl = document.getElementById('login-user');
+    const uVal = r.usuario || (loginEl && loginEl.value ? loginEl.value.trim() : '') || 'usuario';
+    cUser = { u: uVal, id: areaOId, n: r.nombre, r: r.rol, t: r.turno };
 
     document.getElementById('login-overlay').classList.add('hidden');
     document.getElementById('app-main').classList.remove('hidden');
