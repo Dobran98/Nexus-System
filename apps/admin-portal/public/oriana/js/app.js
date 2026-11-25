@@ -1,3 +1,46 @@
+
+// ─── GATE DE IDENTIDAD NEXUS SSO ───
+window.mostrarTarjetaIngresoOriana = function(userData) {
+  window._ssoUserTemp = userData;
+  const card = document.querySelector('.login-card');
+  if (!card) return;
+  
+  const initials = (userData.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  card.innerHTML = `
+    <div class="login-logo" style="margin-bottom:4px; font-size:24px; font-weight:900; letter-spacing:1px; color:#3b82f6;">ORIANA</div>
+    <p class="login-subtitle" style="margin-bottom:20px; font-size:12px; color:#94a3b8;">Command Center · Intranet Nexus</p>
+    
+    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 20px; padding: 22px; text-align: center; margin-bottom: 22px; backdrop-blur: 10px;">
+      <div style="width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, #2563eb, #4f46e5); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; margin: 0 auto 12px auto; box-shadow: 0 4px 18px rgba(37,99,235,0.45); border: 2px solid rgba(255,255,255,0.15);">
+        ${initials}
+      </div>
+      <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 12px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-size: 11px; font-weight: 600; margin-bottom: 10px;">
+        <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+        Sesión Nexus Conectada
+      </div>
+      <h3 style="color: #ffffff; font-size: 19px; font-weight: 800; margin: 0 0 5px 0;">${userData.name}</h3>
+      <p style="color: #94a3b8; font-size: 12px; margin: 0;">${userData.role || 'Operador'} · <span style="color:#60a5fa;">${userData.email}</span></p>
+    </div>
+
+    <button class="btn btn-primary btn-lg" onclick="window.confirmarIngresoOriana()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; font-weight: 700; border-radius: 14px; background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 4px 14px rgba(37,99,235,0.35); cursor: pointer; transition: transform 0.2s;">
+      <span>Ingresar a Oriana</span>
+      <span class="material-symbols-outlined" style="font-size: 20px;">arrow_forward</span>
+    </button>
+  `;
+};
+
+window.confirmarIngresoOriana = function() {
+  if (!window._ssoUserTemp) return;
+  const u = window._ssoUserTemp;
+  const areaId = u.isAdmin ? 'ADMIN' : (u.areas?.[0] || 'GENERAL');
+  completarSesion({
+    usuario: u.username,
+    nombre: u.name,
+    rol: u.role || 'Admin',
+    turno: u.turno || 'General'
+  }, areaId);
+};
+
 // ─── ESTADO GLOBAL ──────────────────────────────────────────────────────────
   let gConfig          = {};
   let gVariables       = {};          // { MODO: [{ variable, etiqueta, tipo, obligatorio, padre }] }
@@ -179,13 +222,7 @@
         const ssoData = await ssoRes.json();
         if (ssoData && ssoData.authenticated && ssoData.user) {
           console.log('[Oriana] Nexus SSO Sesión activa detectada:', ssoData.user.email);
-          const areaId = ssoData.user.isAdmin ? 'ADMIN' : (ssoData.user.areas?.[0] || 'GENERAL');
-          completarSesion({
-            usuario: ssoData.user.username,
-            nombre: ssoData.user.name,
-            rol: ssoData.user.role || 'Admin',
-            turno: ssoData.user.turno || 'General'
-          }, areaId);
+          window.mostrarTarjetaIngresoOriana(ssoData.user);
         }
       } catch (ssoErr) {
         console.warn('[Oriana] Verificación SSO silenciosa:', ssoErr);

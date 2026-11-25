@@ -48,6 +48,7 @@ pnpm-debug.log*
 # Sistema operativo y editores
 .DS_Store
 Thumbs.db
+*.zip
 *.swp
 *.swo
 *.xlsx
