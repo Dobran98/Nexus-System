@@ -14,7 +14,7 @@ async function verifyAdminAuthorization(supabase: any, user: any) {
     .eq('user_id', user.id);
 
   const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-  const isSuperAdmin = roleNames.includes('superadmin') || email.toLowerCase().includes('brando');
+  const isSuperAdmin = roleNames.includes('superadmin') || email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez');
   const isModuleAdmin = roleNames.includes('module_admin');
 
   // 2. Traer sub-rol de usuarios legacy para distinguir coordinadores
@@ -29,7 +29,12 @@ async function verifyAdminAuthorization(supabase: any, user: any) {
                                rol.toLowerCase() === 'superadmin' || 
                                rol.toLowerCase() === 'admin';
 
-  return isSuperAdmin || isModuleAdmin || isCoordinadorGeneral;
+  return {
+    authorized: isSuperAdmin || isModuleAdmin || isCoordinadorGeneral,
+    isSuperAdmin,
+    isModuleAdmin,
+    roleNames
+  };
 }
 
 // ── GET: LISTADO DE USUARIOS CON FILTROS ──────────────────────────────────────
@@ -42,8 +47,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const authorized = await verifyAdminAuthorization(supabase, authData.user);
-    if (!authorized) {
+    const authStatus = await verifyAdminAuthorization(supabase, authData.user);
+    if (!authStatus.authorized) {
       return NextResponse.json({ error: 'Acceso restringido: Se requieren privilegios de Administrador o Coordinador General' }, { status: 403 });
     }
 
@@ -63,22 +68,44 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: rpcError.message }, { status: 500 });
     }
 
-    const userList = Array.isArray(users) ? users : [];
+    let userList: any[] = Array.isArray(users) ? users : [];
+
+    // Stealth Governance: Si el usuario consultante NO es SuperAdmin,
+    // ocultar absolutamente todo rastro de perfiles superadmin (Brando, cuentas fundador)
+    if (!authStatus.isSuperAdmin) {
+      userList = userList.filter((u: any) => {
+        const uEmail = String(u.email || '').toLowerCase();
+        const uRole = String(u.role_name || '').toLowerCase();
+        const uSubRol = String(u.sub_rol || '').toLowerCase();
+        const uName = String(u.full_name || '').toLowerCase();
+        const isTargetSuper = uRole === 'superadmin' || 
+                              uSubRol.includes('superadmin') || 
+                              uEmail.includes('brando') || 
+                              uEmail.includes('bralez') ||
+                              uName.includes('brando');
+        return !isTargetSuper;
+      });
+    }
 
     // Calcular estadísticas de resumen
     const stats = {
       total: userList.length,
       active: userList.filter((u: any) => u.is_active).length,
       inactive: userList.filter((u: any) => !u.is_active).length,
-      admins: userList.filter((u: any) => ['superadmin', 'module_admin'].includes(u.role_name)).length,
+      admins: userList.filter((u: any) => u.role_name === 'module_admin').length,
       supervisors: userList.filter((u: any) => u.role_name === 'supervisor').length,
       operators: userList.filter((u: any) => ['multi_operator', 'data_analyst', 'auditor'].includes(u.role_name)).length,
     };
+
+    if (authStatus.isSuperAdmin) {
+      stats.admins = userList.filter((u: any) => ['superadmin', 'module_admin'].includes(u.role_name)).length;
+    }
 
     return NextResponse.json({
       success: true,
       users: userList,
       stats,
+      isSuperAdmin: authStatus.isSuperAdmin,
     });
   } catch (err: any) {
     console.error('GET /api/admin/users error:', err);
@@ -96,8 +123,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const authorized = await verifyAdminAuthorization(supabase, authData.user);
-    if (!authorized) {
+    const authStatus = await verifyAdminAuthorization(supabase, authData.user);
+    if (!authStatus.authorized) {
       return NextResponse.json({ error: 'Acceso restringido: Se requieren privilegios de Administrador o Coordinador General' }, { status: 403 });
     }
 
@@ -119,6 +146,15 @@ export async function POST(req: NextRequest) {
 
     if (!email || !password || !fullName || !documentId) {
       return NextResponse.json({ error: 'Todos los campos obligatorios deben completarse' }, { status: 400 });
+    }
+
+    // Blindaje Stealth: Solo un SuperAdmin puede conceder o crear a otro SuperAdmin
+    if (roleName === 'superadmin' || String(subRol || '').toLowerCase().includes('superadmin')) {
+      if (!authStatus.isSuperAdmin) {
+        return NextResponse.json({ 
+          error: 'Operación no permitida: Solo la Dirección Fundadora puede conceder el rol o cargo de SuperAdmin.' 
+        }, { status: 403 });
+      }
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -190,8 +226,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const authorized = await verifyAdminAuthorization(supabase, authData.user);
-    if (!authorized) {
+    const authStatus = await verifyAdminAuthorization(supabase, authData.user);
+    if (!authStatus.authorized) {
       return NextResponse.json({ error: 'Acceso restringido: Se requieren privilegios de Administrador o Coordinador General' }, { status: 403 });
     }
 
@@ -215,6 +251,39 @@ export async function PATCH(req: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: 'Identificador de usuario (userId) requerido' }, { status: 400 });
+    }
+
+    // Blindaje Stealth para PATCH:
+    // Si el solicitante no es SuperAdmin, no puede promover a nadie a superadmin
+    // ni puede editar perfiles de fundadores/superadmins.
+    if (!authStatus.isSuperAdmin) {
+      if (roleName === 'superadmin' || String(subRol || '').toLowerCase().includes('superadmin')) {
+        return NextResponse.json({ 
+          error: 'Operación denegada: Solo la Dirección Fundadora puede otorgar el rango o cargo SuperAdmin.' 
+        }, { status: 403 });
+      }
+
+      // Validar si el usuario target es Superadmin o Brando/Bralez
+      const { data: targetAuth } = await (supabase.from('auth.users') as any)
+        .select('email')
+        .eq('id', userId)
+        .single();
+      const targetEmail = String(targetAuth?.email || '').toLowerCase();
+
+      const { data: targetRoles } = await (supabase.from('user_roles') as any)
+        .select('roles!inner(name)')
+        .eq('user_id', userId);
+      const targetRoleNames: string[] = (targetRoles ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
+
+      if (
+        targetRoleNames.includes('superadmin') || 
+        targetEmail.includes('brando') || 
+        targetEmail.includes('bralez')
+      ) {
+        return NextResponse.json({ 
+          error: 'Operación denegada: No posee privilegios suficientes para modificar este perfil administrativo reservado.' 
+        }, { status: 403 });
+      }
     }
 
     const { data: result, error: rpcError } = await (supabase.rpc as any)('nexus_admin_update_user', {

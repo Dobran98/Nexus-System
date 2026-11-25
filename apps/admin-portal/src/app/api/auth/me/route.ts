@@ -29,7 +29,7 @@ export async function GET() {
       .eq('user_id', authUser.id);
 
     const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-    const isSuperAdmin = roleNames.includes('superadmin') || email.toLowerCase().includes('admin') || email.toLowerCase().includes('brando');
+    let isSuperAdmin = roleNames.includes('superadmin') || email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez');
     const isModuleAdmin = roleNames.includes('module_admin') || isSuperAdmin;
     const isSupervisor = roleNames.includes('supervisor') || isModuleAdmin;
 
@@ -59,13 +59,16 @@ export async function GET() {
     const username = legacyUser?.usuario || email.split('@')[0];
     const fullName = profile?.full_name || legacyUser?.nombre_apellido || email.split('@')[0];
     
-    // Si es superadmin o informática, asegurar permisos elevados
-    let resolvedRole = legacyUser?.rol || (isSuperAdmin || isModuleAdmin ? 'Admin' : (isSupervisor ? 'Analista' : 'Operador'));
-    let resolvedSubRol = legacyUser?.sub_rol || (isSuperAdmin ? 'Informático/a' : (isSupervisor ? 'Coordinador General' : 'Operador/a'));
+    // Si es superadmin, rol y subrol directos de Superadmin
+    let resolvedRole = legacyUser?.rol || (isSuperAdmin ? 'Superadmin' : (isModuleAdmin ? 'Admin' : (isSupervisor ? 'Analista' : 'Operador')));
+    let resolvedSubRol = legacyUser?.sub_rol || (isSuperAdmin ? 'Superadmin' : (isSupervisor ? 'Coordinador General' : 'Operador/a'));
 
-    if (isSuperAdmin || email.toLowerCase().includes('brando')) {
-      resolvedRole = 'Admin';
-      resolvedSubRol = 'Informático/a';
+    if (isSuperAdmin) {
+      resolvedRole = 'Superadmin';
+      resolvedSubRol = 'Superadmin';
+      if (!roleNames.includes('superadmin')) {
+        roleNames.unshift('superadmin');
+      }
     }
 
     // Áreas de trabajo permitidas
@@ -88,7 +91,7 @@ export async function GET() {
         role: resolvedRole,
         subRol: resolvedSubRol,
         roles: roleNames,
-        isAdmin: resolvedRole.toLowerCase() === 'admin' || isSuperAdmin,
+        isAdmin: isSuperAdmin || isModuleAdmin || resolvedRole.toLowerCase() === 'admin',
         isSuperAdmin: isSuperAdmin,
         isSupervisor: isSupervisor,
         areas: areas,

@@ -95,6 +95,7 @@ export default function UsersManagementPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [isCurrentUserSuperAdmin, setIsCurrentUserSuperAdmin] = useState(false);
   
   // Modales
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -304,6 +305,9 @@ export default function UsersManagementPage() {
       if (data.success) {
         setUsers(data.users || []);
         if (data.stats) setStats(data.stats);
+        if (data.isSuperAdmin !== undefined) {
+          setIsCurrentUserSuperAdmin(!!data.isSuperAdmin);
+        }
       }
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -631,7 +635,7 @@ export default function UsersManagementPage() {
           <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm">
             <span className="text-[11px] font-semibold text-purple-400 uppercase tracking-wider">Admins</span>
             <div className="text-2xl font-black font-mono text-purple-300 mt-1">{stats.admins}</div>
-            <span className="text-[10px] text-slate-500 mt-0.5 block">Superadmin & Admin</span>
+            <span className="text-[10px] text-slate-500 mt-0.5 block">{isCurrentUserSuperAdmin ? 'Superadmin & Admin' : 'Administradores'}</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur-sm">
@@ -668,7 +672,7 @@ export default function UsersManagementPage() {
               className="px-3 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               <option value="">Todos los Roles</option>
-              <option value="superadmin">SuperAdmin</option>
+              {isCurrentUserSuperAdmin && <option value="superadmin">SuperAdmin</option>}
               <option value="module_admin">Admin Módulo</option>
               <option value="supervisor">Supervisor</option>
               <option value="multi_operator">Operador</option>
@@ -953,7 +957,7 @@ export default function UsersManagementPage() {
                     <option value="supervisor">Supervisor</option>
                     <option value="data_analyst">Analista de Datos</option>
                     <option value="module_admin">Administrador de Módulo</option>
-                    <option value="superadmin">SuperAdmin</option>
+                    {isCurrentUserSuperAdmin && <option value="superadmin">SuperAdmin</option>}
                     <option value="auditor">Auditor (Solo Lectura)</option>
                   </select>
                 </div>
@@ -1136,7 +1140,7 @@ export default function UsersManagementPage() {
                     <option value="supervisor">Supervisor</option>
                     <option value="data_analyst">Analista de Datos</option>
                     <option value="module_admin">Administrador de Módulo</option>
-                    <option value="superadmin">SuperAdmin</option>
+                    {isCurrentUserSuperAdmin && <option value="superadmin">SuperAdmin</option>}
                     <option value="auditor">Auditor (Solo Lectura)</option>
                   </select>
                 </div>
