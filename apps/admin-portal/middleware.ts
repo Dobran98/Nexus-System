@@ -15,6 +15,12 @@ const PUBLIC_PATHS = [
   '/en-construccion',
   '/oriana',
   '/api/oriana',
+  '/asistencia',
+  '/api/asys',
+  '/asys',
+  '/llamadas',
+  '/api/briana',
+  '/briana',
 ];
 
 export async function middleware(request: NextRequest) {

@@ -227,36 +227,39 @@ export default async function AdminHomePage() {
             </Link>
 
             {/* 🚧 MÓDULO 3: LLAMADAS / MARCADOR (EN CONSTRUCCIÓN) */}
+            {/* 🟢 MÓDULO 3: LLAMADAS Y BRIANA (ACTIVO) */}
             <Link
-              href="/en-construccion?modulo=Telefonía+y+Llamadas"
-              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
+              href="/llamadas"
+              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-sky-500/60 hover:border-sky-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-sky-950/40 transition-all duration-300"
             >
               <div>
                 <div className="flex items-start justify-between mb-5">
-                  <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
-                    <PhoneCall className="h-6 w-6" />
+                  <div className="h-14 w-14 rounded-2xl bg-sky-950/80 border border-sky-800/50 flex items-center justify-center text-sky-400 group-hover:scale-105 transition-all shadow-md">
+                    <PhoneCall className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                    🚧 En Construcción
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-950 text-sky-300 border border-sky-800 uppercase tracking-wide">
+                    ● Activo Ahora
                   </span>
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
-                    Operaciones
+                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-sky-400">
+                    Operaciones Telefónicas
                   </span>
-                  <h3 className="text-xl font-bold text-slate-300 tracking-tight">
-                    Marcador e Incidentes
+                  <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-sky-300 transition-colors">
+                    Módulo Briana
                   </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">
-                    Marcación guiada de colas, tipificación y registro telefónico de incidentes.
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Gestión de campañas telefónicas sin PBX, discador guiado para terminales Samsung, tipificación e incidencias.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
-                <span>Próximamente disponible</span>
-                <Construction className="h-4 w-4 text-amber-500" />
+              <div className="mt-6 flex items-center justify-between text-sm font-semibold text-sky-400 group-hover:text-sky-300 pt-4 border-t border-slate-800">
+                <span>Ingresar al Contact Center</span>
+                <span className="h-8 w-8 rounded-full bg-sky-950 border border-sky-800 flex items-center justify-center text-sky-300 group-hover:bg-sky-600 group-hover:text-white transition-all">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
             </Link>
 
