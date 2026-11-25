@@ -304,7 +304,7 @@ export default function OrianaDashboardStandalonePage() {
 
       {/* ── 2. CONTENIDO PRINCIPAL ─────────────────────────────────────── */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
+
         {/* Banner de Bienvenida y Estado SLA */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-blue-950/40 border border-slate-800/80 p-6 sm:p-8 shadow-xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -335,7 +335,7 @@ export default function OrianaDashboardStandalonePage() {
 
         {/* ── 3. KPI CARDS RESUMEN ───────────────────────────────────── */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          
+
           <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-sm space-y-2">
             <div className="flex items-center justify-between text-slate-400">
               <span className="text-xs font-semibold uppercase tracking-wider">Reportes Totales</span>
@@ -405,10 +405,10 @@ export default function OrianaDashboardStandalonePage() {
 
         {/* ── 4. TABLA DE REPORTES Y CONTROLES ───────────────────────── */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl space-y-4 p-5 sm:p-6">
-          
+
           {/* Controles de Filtros y Búsqueda */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            
+
             {/* Pestañas de estado */}
             <div className="flex items-center gap-1.5 p-1 bg-slate-950/70 border border-slate-800 rounded-xl w-full md:w-auto overflow-x-auto">
               {[
@@ -421,11 +421,10 @@ export default function OrianaDashboardStandalonePage() {
                 <button
                   key={tab.id}
                   onClick={() => setFilterStatus(tab.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    filterStatus === tab.id
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterStatus === tab.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -475,7 +474,7 @@ export default function OrianaDashboardStandalonePage() {
 
                     return (
                       <tr key={rep.id} className="hover:bg-slate-800/30 transition-colors">
-                        
+
                         {/* Lote & Título */}
                         <td className="py-3.5 px-4">
                           <p className="font-bold text-white text-sm">{rep.report_title}</p>
@@ -505,9 +504,8 @@ export default function OrianaDashboardStandalonePage() {
 
                         {/* Precisión */}
                         <td className="py-3.5 px-4">
-                          <span className={`font-mono font-bold ${
-                            accNum >= 98.5 ? 'text-emerald-400' : 'text-amber-400'
-                          }`}>
+                          <span className={`font-mono font-bold ${accNum >= 98.5 ? 'text-emerald-400' : 'text-amber-400'
+                            }`}>
                             {accNum.toFixed(2)}%
                           </span>
                         </td>
@@ -523,28 +521,26 @@ export default function OrianaDashboardStandalonePage() {
 
                         {/* Plazo SLA */}
                         <td className="py-3.5 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                            rep.deadline_state === 'CUMPLIDO'  ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${rep.deadline_state === 'CUMPLIDO' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
                             rep.deadline_state === 'EN_TIEMPO' ? 'bg-blue-950 text-blue-400 border border-blue-800' :
-                            rep.deadline_state === 'EN_RIESGO' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
-                            'bg-rose-950 text-rose-400 border border-rose-800'
-                          }`}>
+                              rep.deadline_state === 'EN_RIESGO' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                                'bg-rose-950 text-rose-400 border border-rose-800'
+                            }`}>
                             {rep.deadline_state}
                           </span>
                         </td>
 
                         {/* Estado */}
                         <td className="py-3.5 px-4">
-                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                            rep.status === 'approved'       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${rep.status === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
                             rep.status === 'review_pending' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                            rep.status === 'rejected'       ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
-                            'bg-slate-700/40 text-slate-400 border border-slate-700'
-                          }`}>
-                            {rep.status === 'approved'       ? '● Aprobado' :
-                             rep.status === 'review_pending' ? '⏳ En Revisión' :
-                             rep.status === 'rejected'       ? '✖ Rechazado' :
-                             'Borrador'}
+                              rep.status === 'rejected' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
+                                'bg-slate-700/40 text-slate-400 border border-slate-700'
+                            }`}>
+                            {rep.status === 'approved' ? '● Aprobado' :
+                              rep.status === 'review_pending' ? '⏳ En Revisión' :
+                                rep.status === 'rejected' ? '✖ Rechazado' :
+                                  'Borrador'}
                           </span>
                         </td>
 
@@ -591,7 +587,7 @@ export default function OrianaDashboardStandalonePage() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-5 shadow-2xl">
-            
+
             <div className="flex items-center justify-between pb-4 border-b border-slate-800">
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-white tracking-tight">Crear Nuevo Reporte Oriana</h3>
@@ -606,7 +602,7 @@ export default function OrianaDashboardStandalonePage() {
             </div>
 
             <form onSubmit={handleCreateReport} className="space-y-4">
-              
+
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
                   Título del Reporte
@@ -736,11 +732,10 @@ export default function OrianaDashboardStandalonePage() {
 
       {/* ── 6. TOAST NOTIFICACIÓN ────────────────────────────────────────── */}
       {toastMessage && (
-        <div className={`fixed bottom-6 right-6 z-50 p-4 rounded-2xl text-xs font-bold border shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom ${
-          toastMessage.type === 'success'
-            ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
-            : 'bg-rose-950 border-rose-700 text-rose-300'
-        }`}>
+        <div className={`fixed bottom-6 right-6 z-50 p-4 rounded-2xl text-xs font-bold border shadow-2xl flex items-center gap-2 animate-in slide-in-from-bottom ${toastMessage.type === 'success'
+          ? 'bg-emerald-950 border-emerald-700 text-emerald-300'
+          : 'bg-rose-950 border-rose-700 text-rose-300'
+          }`}>
           {toastMessage.type === 'success' ? <CheckIcon className="h-4 w-4" /> : <AlertTriangleIcon className="h-4 w-4" />}
           <span>{toastMessage.text}</span>
         </div>

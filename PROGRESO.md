@@ -1,6 +1,6 @@
 # REGISTRO DE PROGRESO — Nexus System Remediation
 **Inicio:** 2026-11-20T08:57  
-**Fase de Resiliencia y Estabilidad en Recarga:** 2026-11-24T04:10  
+**Fase 6: Montaje y Activación Operativa de ASYS:** 2026-11-24T23:35  
 **Supabase Project:** pzkqjdkphcwmblbyorbr  
 **Supabase URL:** https://pzkqjdkphcwmblbyorbr.supabase.co  
 **Anon Key:** eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6a3FqZGtwaGN3bWJsYnlvcmJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5NzE1NjEsImV4cCI6MjEwOTU0NzU2MX0.g2PTG7bzasuMj5Z_UoOrBmEDkLgUTTfT-pMtcs_EgoE  
@@ -26,49 +26,51 @@
 - [x] Registro y confirmación de turnos (Entrada/Salida) en tiempo real con geolocalización.
 
 ## ✅ FASE 4 — Migración y Montaje de ORIANA (Fidelidad 100% GAS) [COMPLETADO]
-- [x] **Esquema DDL de Base de Datos en Supabase:**
-  - Creadas y verificadas las 12 tablas: `usuarios`, `registros`, `configuracion`, `reglas_acceso`, `areas_trabajo`, `config_variables`, `config_emojis`, `config_destinatarios`, `config_indicadores`, `registros_act_especial`, `cola_telegram`, `logs_auditoria`.
-- [x] **Migración de Datos Históricos:**
-  - 6.967 registros históricos reales migrados desde el dump/Excel de Oriana.
-  - 63 operadores y analistas con credenciales preexistentes.
-  - 11 modos de operación y campañas vinculadas.
-  - 3 reglas de acceso por perfil (`ADMIN`, `OPERADOR`, `ANALISTA`).
-  - 5 áreas físicas de trabajo.
-  - 661 registros de auditoría administrativa (`logs_auditoria`).
-- [x] **Frontend Exacto de Oriana (Stitch / Dark Glassmorphism):**
-  - Servido de forma nativa en `apps/admin-portal/public/oriana/` (`index.html`, `css/style.css`, `js/app.js`).
-  - Todos los tabs funcionales:
-    1. **Cargar Reporte:** Selección de Modo, Campañas dinámicas, Efectivas, Totales, Incidencias, Estados, Variables dinámicas jerárquicas, y cuenta regresiva de 10s.
-    2. **Rendimiento:** Dashboard analítico con filtros por fecha y operador, KPI cards y exportación CSV.
-    3. **Validación:** Consola administrativa con inputs editables de `Val. Efec` y `Val. Inc`.
-    4. **Val. Analistas:** Tab de validación para analistas.
-    5. **Exportar BD:** Generación y descarga directa en Excel/CSV.
-    6. **Configuración:** Administración completa de Áreas, Reglas, Modos, Variables, Emojis, Indicadores y Destinatarios.
-  - Marco integrado en `/oriana` con barra superior de navegación y retorno al Panel Maestro Nexus.
-- [x] **Backend Serverless API de Oriana:**
-  - Implementado despachador centralizado en `apps/admin-portal/src/app/api/[action]/route.ts` y `apps/admin-portal/src/app/api/oriana/[action]/route.ts`.
-  - Cubre las 23 acciones de Oriana con paginación `fetchAllRows()` anti-límite de 1.000 filas y encolado en `cola_telegram`.
+- [x] Esquema DDL en Supabase con 12 tablas.
+- [x] 6.967 registros históricos migrados.
+- [x] Frontend exacto en `apps/admin-portal/public/oriana/` con tabs de Cargar Reporte, Rendimiento, Validación, Exportar BD y Configuración.
+- [x] Backend Serverless API en `apps/admin-portal/src/app/api/oriana/[action]/route.ts`.
 
 ## ✅ FASE 5 — Resiliencia en Recargas F5 y Prevención de 404 / 500 [COMPLETADO]
-- [x] **Eliminación del Server Crash (Digest 439706726):**
-  - Corregido `apps/admin-portal/src/app/page.tsx` para extraer `redirect('/login')` fuera de bloques `try/catch` (evitando atrapar el error interno `NEXT_REDIRECT` de Next.js).
-  - Consulta a `profiles` cambiada de `.single()` a `.maybeSingle()` para no crashear si un usuario recién creado no tiene perfil inicial.
-- [x] **Prevención de 404 y Redirects Dañinos en Middlewares:**
-  - Middlewares de las 4 aplicaciones actualizados con exclusión estricta de extensiones estáticas (`.css`, `.js`, imágenes, fuentes).
-  - Peticiones API (`/api/*`) sin autenticación ahora devuelven `401 Unauthorized` en JSON en lugar de redirecciones HTML 307 que rompían llamadas fetch.
-  - Corregido error de propiedad abreviada `value` en `response.cookies.set()` en middlewares de asistencia, llamadas y oriana.
-- [x] **Mapeo de Rutas de Microservicios:**
-  - Agregadas reglas de `rewrites()` internas en `next.config.js` de `calls-incidents`, `attendance` y `oriana` para responder a rutas con y sin prefijo de servicio (`/asistencia`, `/llamadas`, `/oriana`).
-  - Navegación post-login con recarga completa `window.location.href = ...` para sincronización determinista de cookies de sesión.
-- [x] **Página Corporativa 404 Personalizada:**
-  - Añadida `apps/admin-portal/src/app/not-found.tsx` con diseño corporativo Nexus en modo oscuro y botón de regreso al Panel Maestro.
-- [x] **Build y Verificación Completa:**
-  - Compilación exitosa con Turborepo: 4 de 4 aplicaciones compiladas limpiamente en producción sin advertencias críticas.
+- [x] Eliminación de caídas de servidor SSR con `.maybeSingle()` y `redirect()` fuera de `try/catch`.
+- [x] Exclusión de extensiones estáticas en middlewares y 401 JSON en llamadas API.
+- [x] Reglas `rewrites()` en `next.config.js` de microservicios y página corporativa `not-found.tsx`.
+
+## ✅ FASE 6 — Montaje y Puesta en Funcionamiento de ASYS (Fidelidad 100% GAS) [COMPLETADO]
+- [x] **Esquema DDL de Base de Datos en Supabase:**
+  - Creadas las 10 tablas relacionales: `asistencias`, `guardias`, `permisos`, `suplencias`, `cross_turnos`, `amonestaciones`, `tipos_amonestacion`, `config_horarios`, `solicitudes_manuales`, `permisos_roles`.
+  - Campos extendidos de personal vinculados en `usuarios`.
+- [x] **Migración Masiva de Datos Históricos desde `SYSTEM ASIS V8 (1).xlsx`:**
+  - **28.162** asistencias históricas reales migradas con estampa cronológica, turno, sede y coordenadas.
+  - **48** órdenes de guardias diurnas y nocturnas.
+  - **191** permisos laborales justificados (médicos, personales, etc.).
+  - **27** suplencias y cruces de turno.
+  - **17** registros de CrossTurnos.
+  - **236** amonestaciones institucionales.
+  - **10** configuraciones de horarios de entrada/salida y tolerancias.
+  - **21** solicitudes manuales de marcaje.
+- [x] **Frontend Exacto de ASYS (SB Admin 2 / Dark Glassmorphism):**
+  - Servido en `apps/admin-portal/public/asys/index.html`.
+  - **Admin Dashboard:** Sábana semanal de asistencia descargable en Excel (SheetJS), estadísticas de chequeos diarios, inasistencias en tiempo real, gestión de guardias, permisos, amonestaciones y configuración de horarios.
+  - **Coordinador Dashboard:** Supervisión de personal asignado, aprobación de permisos y suplencias por área.
+  - **User Dashboard:** Vista personal de asistencia, historial de marcas, botón de solicitud de permisos y justificaciones manuales.
+  - **Modal de Validación GPS y Escáner QR:** Validación perimetral anti-fraude y lectura en vivo de credenciales mediante cámara web/móvil.
+- [x] **Puente y Backend Serverless de ASYS:**
+  - Puente `window.google.script.run` proxy en el frontend que redirige automáticamente las 60+ funciones de Google Apps Script a Next.js API Routes.
+  - Despachador centralizado en `apps/admin-portal/src/app/api/asys/[action]/route.ts`.
+  - Integrado dentro del marco institucional en `/asistencia` con retorno al Panel Maestro Nexus.
 
 ---
 
 ## 📌 PRÓXIMOS MÓDULOS EN COLA
-1. **Módulo de Telefonía y Marcador (Briana):**
-   - Migración del sistema original de llamadas ubicado en `.\Llamadas - Briana\`.
-2. **Ingesta Masiva de Datos:**
-   - Procesamiento de lotes CSV/XLSX con detección heurística de duplicados hacia Supabase.
+1. **Módulo de Telefonía Celular sin PBX (Briana):**
+   - Discador guiado `GuidedDialer` para terminales Samsung Enterprise con temporizador, control de tiempo muerto (<45s) y tipificación.
+   - Mesa de incidencias y tickets operativos con cálculo de SLAs automáticos.
+2. **Ingesta Masiva de Datos (`/ingest`):**
+   - Procesamiento de lotes CSV/XLSX hasta 50.000 registros con normalización E.164 y detección heurística de duplicados.
+3. **Gobierno de Usuarios, RBAC y Perfiles:**
+   - CRUD administrativo de usuarios y política de cooldown de 7 días para edición de campos protegidos.
+4. **Motor de Scoring Dinámico y Telemetría:**
+   - Algoritmo de evaluación para roles híbridos y agregados diarios permanentes.
+5. **Ciclo de Vida y Purga Supabase:**
+   - Mantenimiento nocturno bajo cuota gratuita de 500 MB.
