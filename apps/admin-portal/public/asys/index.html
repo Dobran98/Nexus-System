@@ -3438,14 +3438,20 @@ document.addEventListener("DOMContentLoaded", function() {
     function logout() { 
         stopScanner(); 
         currentUser = null; 
-        sessionStorage.removeItem("currentUser");
+        sessionStorage.clear();
+        try { localStorage.removeItem('currentUser'); } catch(e){}
         const tables =['adminAttendanceTable', 'userAttendanceTable', 'usersTable', 'dutiesTable', 'hoursReportTable', 'detailedReportTable', 'adminPermissionsTable', 'userPermissionsTable', 'substitutionsTable', 'crossTable'];
         tables.forEach(function(id) { 
             if ($.fn.DataTable.isDataTable('#' + id)) {
                 $('#' + id).DataTable().destroy(); 
             }
         }); 
-        loadLoginPage(); 
+        // Redirigir la ventana superior al logout oficial de Nexus
+        if (window.top && window.top !== window) {
+            window.top.location.href = '/api/auth/signout';
+        } else {
+            window.location.href = '/api/auth/signout';
+        }
     }
 
     function handleAdminManualRecord(button, type) { 
@@ -5570,18 +5576,42 @@ document.addEventListener("DOMContentLoaded", function() {
         }).getCoordDashboardStats(currentUser.areas);
     }
 
-    // Arranque de la App con Nexus SSO
+    // Arranque de la App con Nexus SSO - Forzado Atómico
     (async function() { 
         try {
-            const ssoRes = await fetch('/api/auth/me');
+            const ssoRes = await fetch('/api/auth/me?t=' + Date.now());
             const ssoData = await ssoRes.json();
             if (ssoData && ssoData.authenticated && ssoData.user) {
-                console.log('[ASYS] Nexus SSO Sesión activa detectada:', ssoData.user.email);
-                window.mostrarTarjetaIngresoAsys(ssoData.user);
+                const u = ssoData.user;
+                console.log('[ASYS] Nexus SSO - Autenticando usuario activo:', u.email, u.role, u.subRol);
+                
+                // Limpiar cualquier residuo de usuario previo
+                sessionStorage.clear();
+                
+                currentUser = {
+                    userId: u.userId || u.id,
+                    name: u.name,
+                    role: u.role || (u.isAdmin ? 'Admin' : 'Operador'),
+                    subRol: u.subRol || (u.isAdmin ? 'superadmin' : 'Operador/a'),
+                    foto: '',
+                    areas: u.areas || [],
+                    email: u.email,
+                    masterQRId: "QR-MAESTRO-ASISTENCIA-V1"
+                };
+                sessionStorage.setItem("currentUser", JSON.stringify(currentUser));
+                masterQRId = currentUser.masterQRId;
+                
+                // Enrutamiento directo e instantáneo al panel del rol activo
+                routeByRole(currentUser);
+                return;
+            } else {
+                console.warn('[ASYS] No hay sesión activa en Nexus. Limpiando almacenamiento.');
+                sessionStorage.clear();
+                loadLoginPage();
                 return;
             }
         } catch (ssoErr) {
-            console.warn('[ASYS] Verificación SSO silenciosa:', ssoErr);
+            console.warn('[ASYS] Error verificando SSO:', ssoErr);
         }
 
         let u = sessionStorage.getItem("currentUser"); 

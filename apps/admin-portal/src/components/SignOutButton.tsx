@@ -11,13 +11,22 @@ export function SignOutButton() {
     if (loading) return;
     setLoading(true);
     try {
+      // 1. Limpieza exhaustiva de memorias locales y de sesión de todos los módulos
+      try {
+        sessionStorage.clear();
+        localStorage.clear();
+      } catch (storageErr) {
+        console.warn('Advertencia limpiando almacenamiento:', storageErr);
+      }
+
+      // 2. Cerrar sesión en Supabase Auth
       const supabase = createSupabaseBrowserClient();
       await supabase.auth.signOut();
     } catch (e) {
       console.warn('Error en signOut:', e);
     } finally {
-      // Redirigir de forma segura forzando limpieza de caché y estado
-      window.location.href = '/login';
+      // 3. Purgar cookies del servidor y redirigir a /login
+      window.location.href = '/api/auth/signout';
     }
   };
 
