@@ -87,17 +87,49 @@ flowchart TD
 
 ---
 
-## 3. Fases Pendientes por Construir e Implementar
+### ✅ Fase 8: Ingesta Masiva de Datos (/ingest)
+- Streaming parser para procesamiento de bases de datos masivas.
+- Validación de números telefónicos y deduplicación automática.
 
-A continuación se detalla la hoja de ruta técnica de las fases que faltan por construir en el portal:
+### ✅ Fase 9: Perfil de Usuario con Cooldown de 7 Días (/profile)
+- Autoservicio de personal para actualización de datos de contacto.
+- Trigger y restricción a nivel de base de datos (`check_profile_cooldown`) con bloqueo estricto de 7 días entre modificaciones.
 
-| Fase | Módulo / Característica | Ruta / Componente | Alcance Técnico & Objetivos |
-| :--- | :--- | :--- | :--- |
-| **Fase 8** | **Ingesta Masiva de Datos** | `/ingest` | • Streaming parser de archivos CSV y XLSX para procesar hasta 50.000 contactos sin agotar la memoria del servidor.<br/>• Detección heurística de duplicados (por número telefónico y documento de identidad).<br/>• Normalización de teléfonos a formato internacional E.164 (`+58...`).<br/>• Inserción directa en `briana_data_campanas` y asignación balanceada por lotes a operadores. |
-| **Fase 9** | **Perfil de Usuario con Cooldown de 7 Días** | `/profile` | • Formulario de autoservicio para actualización de datos personales (teléfono de contacto, dirección residencial, contacto de emergencia).<br/>• **Restricción forzada por base de datos:** Trigger PostgreSQL (`check_profile_cooldown`) que rechaza cualquier actualización si no han transcurrido 7 días exactos desde la última modificación.<br/>• Componente visual en el frontend que muestra la cuenta regresiva en días, horas y minutos hasta la próxima fecha de edición permitida. |
-| **Fase 10** | **Matriz de Gobierno RBAC y CRUD de Personal** | `/admin/usuarios` | • Tablero de administración de personal corporativo para Superadministradores.<br/>• Creación, edición, congelamiento y reactivación de credenciales `@impress.com`.<br/>• Asignación granular de roles (`superadmin`, `module_admin`, `supervisor`, `multi_operator`, `auditor`, `data_analyst`).<br/>• Asignación de extensión telefónica `110xx` de Briana y matriz de áreas de trabajo de Asys/Oriana. |
-| **Fase 11** | **Scoring Dinámico & Telemetría de Latencia** | Telemetría en API Handlers | • Medición del **First Interaction Time (FIT)** en la gestión de leads de Briana.<br/>• Algoritmo de scoring dinámico ponderado: Puntualidad y asistencia (Asys: 30%) + Eficacia y tipificación de llamadas (Briana: 40%) + Precisión en reportes de calidad (Oriana: 30%).<br/>• Alertas tempranas de supervisión para operadores por debajo del umbral de rendimiento esperado. |
-| **Fase 12** | **Purga Nocturna & Ciclo de Vida de Base de Datos** | `pg_cron` / Edge Function | • Mantenimiento preventivo para garantizar que el almacenamiento se mantenga estrictamente dentro de la cuota gratuita de Supabase (límite de 500 MB).<br/>• Estrategia de compactación y purga de logs de auditoría antiguos (> 90 días), sesiones de asistencia huérfanas y gestiones temporales de marcación. |
+### ✅ Fase 10: Matriz de Gobierno RBAC y CRUD de Personal (/admin/usuarios y /users)
+- Tablero de administración de personal para Superadministradores y Coordinadores.
+- Creación, edición, congelamiento y reactivación de credenciales `@impress.com`.
+- Asignación de extensiones telefónicas de Briana (`110xx`) y áreas de trabajo autorizadas para Asys y Oriana.
+
+### ✅ Fase 11: Algoritmo de Scoring Dinámico y Telemetría de Latencia Inicial
+- Medición del First Interaction Time (FIT) en la gestión telefónica.
+- Scoring ponderado por agente: Asistencia y puntualidad (Asys: 30%) + Eficacia de contacto (Briana: 40%) + Precisión en reportes (Oriana: 30%).
+- Endpoint `/api/admin/scoring` y función RPC `nexus_calculate_daily_scores` y `nexus_get_daily_leaderboard`.
+
+### ✅ Fase 12: Purga Nocturna & Ciclo de Vida de Base de Datos (500 MB Free Tier)
+- Función de auditoría y almacenamiento `nexus_get_database_storage_stats` (monitoreo en tiempo real: ~26 MB / 500 MB = 5.28% de cuota, estado HEALTHY).
+- Función de archivado `archive_and_purge_lifecycle` con consolidación previa en agregados diarios (`registros_daily_aggregates`, `telemetry_daily_aggregates`, `call_daily_aggregates`) antes de purgar registros > 90 días.
+- Endpoint `/api/admin/lifecycle` con soporte para invocación manual, dry-run y Vercel Cron nocturno (`0 4 * * *`).
+
+### ✅ Fase 13: Reclasificación & Triage de Incidencias Comunitarias (/reclasificacion)
+- Sustitución de hojas de cálculo de 10.5 MB por arquitectura relacional en Supabase (`reclasificacion_lotes`, `reclasificacion_registros`).
+- Función SQL `public.nexus_repartir_reclasificacion(p_lote_id, p_operators)` para distribución atómica y equitativa de carga sin colisiones ni duplicados.
+- Interfaz de Triage Rápido centrada en tarjeta: visualización completa del reporte ciudadano (Comuna, cédula, teléfono, descripción) con atajo de teclado `Ctrl + Enter` para calificar y avanzar sin fricción.
+- Tablero de supervisión con leaderboard de avance por operador y resumen de efectividad global.
+- Acceso exclusivo para el desarrollador Brando (`isBrando`) durante fase de calibración.
+
+### ✅ Fase 14: Sala Nacional Electoral (/elecciones)
+- Migración y porting completo del sistema electoral desde Google Apps Script a Next.js y Supabase.
+- Monitoreo oficial de 335 municipios distribuidos en los 24 estados de Venezuela (`elecciones_municipios`).
+- Reporte de participación en 9 franjas horarias (9:00 AM a 8:00 PM), centros activos 8:00 AM y mesas instaladas.
+- Registro de movilización comunitaria y condominios movilizados.
+- Centro de incidencias y alertas electorales en tiempo real (`elecciones_incidencias`).
+- Acceso exclusivo para el desarrollador Brando (`isBrando`) durante fase de calibración.
+
+### ✅ Fase 15: Sistema de Avisos Transversales & Estación de Trabajo en Lobby
+- **Avisos Transversales (`GlobalNotificationOverlay.tsx`):** Inyección perimetral en `layout.tsx` con polling continuo. Interrumpe en pantalla con modal flotante prioritario y backdrop blur ante alertas urgentes o configuradas con `popup: true`, desplegándose sobre cualquier vista, modal o iframe abierto.
+- **Emisión Segmentada (`EmitirAvisoModal.tsx` y `AdminHeaderActions.tsx`):** Botón directo "📢 Emitir Aviso" en la cabecera del Lobby para administradores. Envío global a toda la plataforma, por rol o a usuarios individuales seleccionados de la base de datos.
+- **Despacho Operativo (`WorkstationQuickActions.tsx`):** Módulo "Iniciar Estación de Trabajo" en el Lobby con flujo guiado de inicio de turno (marcado en Asys, verificación de extensión Briana, asignación de Reclasificación y validación en Oriana).
+- **Indicadores Dinámicos de Carga:** Resaltado de tarjetas y badges en el Lobby según trabajo asignado (`🔥 X llamadas pendientes` en Briana, `📋 X casos asignados` en Reclasificación, `⚠️ Entrada pendiente` en Asys).
 
 ---
 

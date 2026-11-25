@@ -13,9 +13,15 @@ import {
   Construction,
   Tags,
   Vote,
+  Laptop,
+  Phone,
+  MapPin,
+  Clock,
 } from 'lucide-react';
 import { SignOutButton } from '../components/SignOutButton';
 import { NotificationCenter } from '../components/NotificationCenter';
+import { AdminHeaderActions } from '@/components/AdminHeaderActions';
+import { WorkstationQuickActions } from '@/components/WorkstationQuickActions';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
@@ -60,17 +66,80 @@ export default async function AdminHomePage() {
     roles = [];
   }
 
-  // Traer sub-rol de usuarios para distinguir coordinadores
+  // Traer sub-rol y configuración de usuarios para distinguir coordinadores y salas
   let legacyUser: any = null;
   try {
     const { data: legacyData } = await (supabase
       .from('usuarios') as any)
-      .select('rol, sub_rol')
+      .select('usuario, rol, sub_rol, cedula, turno, areas_ids, dispositivo_vinculado_id')
       .or(`email.eq.${user.email},usuario.ilike.%${user.email?.split('@')[0]}%`)
       .maybeSingle();
     legacyUser = legacyData;
   } catch {
     legacyUser = null;
+  }
+
+  // 1. Obtener extensión telefónica (Briana)
+  let userExtension = '';
+  try {
+    const { data: extData } = await (supabase
+      .from('briana_extensiones') as any)
+      .select('extension')
+      .eq('usuario', legacyUser?.usuario || user.email?.split('@')[0])
+      .maybeSingle();
+    userExtension = extData?.extension || legacyUser?.dispositivo_vinculado_id || '';
+  } catch {
+    userExtension = '';
+  }
+
+  // 2. Obtener Asistencia de Hoy (Asys)
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  let todayAttendance: any = null;
+  try {
+    const { data: attList } = await (supabase
+      .from('asistencias') as any)
+      .select('timestamp, tipo, estado')
+      .gte('timestamp', `${todayDateStr}T00:00:00Z`)
+      .or(`id_usuario.eq.${legacyUser?.usuario || user.email?.split('@')[0]},nombre_completo.ilike.%${profile?.full_name || ''}%`)
+      .order('timestamp', { ascending: true })
+      .limit(1);
+    if (attList && attList.length > 0) {
+      todayAttendance = attList[0];
+    }
+  } catch {
+    todayAttendance = null;
+  }
+
+  // 3. Obtener áreas autorizadas
+  const userAreas: string[] = Array.isArray(legacyUser?.areas_ids)
+    ? legacyUser.areas_ids
+    : (legacyUser?.areas_ids ? [legacyUser.areas_ids] : ['SALA DE CONFERENCIAS - P6']);
+
+  // 4. Conteo de tareas asignadas en Briana
+  let brianaTasksCount = 0;
+  try {
+    const { count } = await (supabase
+      .from('call_assignments') as any)
+      .select('id', { count: 'exact', head: true })
+      .eq('operator_id', user.id);
+    brianaTasksCount = count || 0;
+  } catch {
+    brianaTasksCount = 0;
+  }
+
+  // 5. Conteo de tareas asignadas en Reclasificación
+  let reclasifTasksCount = 0;
+  try {
+    const userEmailExact = user?.email || '';
+    const legacyUsername = legacyUser?.usuario || '';
+    const { count } = await (supabase
+      .from('reclasificacion_registros') as any)
+      .select('id', { count: 'exact', head: true })
+      .or(`asignado_a_usuario.eq.${userEmailExact},asignado_a_usuario.eq.${legacyUsername}`)
+      .eq('estado_revision', 'pendiente');
+    reclasifTasksCount = count || 0;
+  } catch {
+    reclasifTasksCount = 0;
   }
 
   // Lógica de Permisos Especiales y Visibilidad
@@ -120,7 +189,10 @@ export default async function AdminHomePage() {
             </span>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            {/* 📢 Botón Rápido de Aviso para Administradores / Superadmin */}
+            <AdminHeaderActions canEmitAviso={isSuperAdmin} currentUserEmail={user?.email || ''} />
+
             {/* 🔔 Centro de Notificaciones y Tareas */}
             <NotificationCenter />
 
@@ -171,6 +243,142 @@ export default async function AdminHomePage() {
           </div>
         </div>
 
+        {/* ── 2.5 SECCIÓN: ESTACIÓN DE TRABAJO & PUESTO ASIGNADO ── */}
+        <section className="p-6 sm:p-7 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl relative overflow-hidden space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+            <div className="flex items-center gap-3.5">
+              <div className="h-12 w-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 shadow-lg shadow-blue-900/30 flex items-center justify-center">
+                <div className="h-full w-full bg-slate-950 rounded-[14px] flex items-center justify-center text-blue-400">
+                  <Laptop className="w-6 h-6" />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-white tracking-tight">
+                    Mi Estación de Trabajo & Puesto Operativo
+                  </h2>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border font-semibold ${
+                    todayAttendance 
+                      ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60'
+                      : 'bg-amber-950/80 text-amber-300 border-amber-800/60 animate-pulse'
+                  }`}>
+                    {todayAttendance ? '● PUESTO EN SERVICIO' : '● EN ESPERA DE MARCADO'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Verificación de identidad, terminal telefónico y despacho de carga diaria
+                </p>
+              </div>
+            </div>
+
+            {/* Datos Técnicos de la Estación y Botón Iniciar Estación */}
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+              <WorkstationQuickActions
+                todayAttendance={todayAttendance}
+                userExtension={userExtension}
+                userArea={userAreas[0] || 'Sede Central'}
+                turno={legacyUser?.turno || 'Mañana'}
+                brianaTasksCount={brianaTasksCount}
+                reclasifTasksCount={reclasifTasksCount}
+                isBrando={isBrando}
+              />
+              <span className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-sky-300 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 text-sky-400" />
+                <span>{userExtension ? `Ext: ${userExtension}` : 'Sin PBX'}</span>
+              </span>
+              <span className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{userAreas[0] || 'Sede Central'}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Despacho del Día ("¿Qué me toca hoy?") */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* 1. Asys Check-in */}
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">1. Asistencia Asys</span>
+                <span className={`text-xs font-semibold block mt-0.5 ${todayAttendance ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {todayAttendance ? 'Marcada con Éxito' : 'Pendiente de Marcado'}
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  {todayAttendance ? 'Entrada registrada' : 'Escanea tu QR en Asys'}
+                </span>
+              </div>
+              <Link
+                href="/asistencia"
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                  todayAttendance 
+                    ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/60'
+                    : 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-black shadow-md'
+                }`}
+              >
+                {todayAttendance ? 'Ver Turno' : 'Marcar Ahora'}
+              </Link>
+            </div>
+
+            {/* 2. Telefonía Briana */}
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-sky-400 font-bold block">2. Telefonía Briana</span>
+                <span className="text-xs font-semibold text-white block mt-0.5">
+                  {brianaTasksCount > 0 ? `${brianaTasksCount} llamadas asignadas` : 'Terminal Listo'}
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  {userExtension ? `Ext. ${userExtension} conectada` : 'Sin PBX'}
+                </span>
+              </div>
+              <Link
+                href="/llamadas"
+                className="px-3 py-1.5 rounded-xl bg-sky-950/60 text-sky-300 border border-sky-800/60 hover:bg-sky-900/60 text-xs font-semibold transition-all"
+              >
+                Abrir Discador
+              </Link>
+            </div>
+
+            {/* 3. Oriana Auditoría */}
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-mono uppercase text-indigo-400 font-bold block">3. Analítica Oriana</span>
+                <span className="text-xs font-semibold text-white block mt-0.5">
+                  Validación Habilitada
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Carga comunal disponible
+                </span>
+              </div>
+              <Link
+                href="/oriana"
+                className="px-3 py-1.5 rounded-xl bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 hover:bg-indigo-900/60 text-xs font-semibold transition-all"
+              >
+                Ver Lotes
+              </Link>
+            </div>
+
+            {/* 4. Reclasificación & Especiales */}
+            <div className={`p-3.5 rounded-2xl bg-slate-950/60 border flex items-center justify-between transition-all ${
+              reclasifTasksCount > 0 ? 'border-amber-500/60 shadow-lg shadow-amber-950/30' : 'border-slate-800/80'
+            }`}>
+              <div>
+                <span className="text-[10px] font-mono uppercase text-amber-400 font-bold block">4. Reclasificación</span>
+                <span className="text-xs font-semibold text-white block mt-0.5">
+                  {reclasifTasksCount > 0 ? `${reclasifTasksCount} casos asignados` : (isBrando ? 'Dev Activo' : 'En cola')}
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Triage de incidencias
+                </span>
+              </div>
+              <Link
+                href={isBrando ? '/reclasificacion' : '#'}
+                className="px-3 py-1.5 rounded-xl bg-amber-950/60 text-amber-300 border border-amber-800/60 hover:bg-amber-900/60 text-xs font-semibold transition-all"
+              >
+                {isBrando ? 'Abrir Triage' : 'En cola'}
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* ── 3. SECCIÓN: MÓDULOS DE TRABAJO ────────────────────────── */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
@@ -196,9 +404,16 @@ export default async function AdminHomePage() {
                   <div className="h-14 w-14 rounded-2xl bg-emerald-950/80 border border-emerald-800/50 flex items-center justify-center text-emerald-400 group-hover:scale-105 transition-all shadow-md">
                     <QrCode className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 uppercase tracking-wide">
-                    ● Activo Ahora
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 uppercase tracking-wide">
+                      ● Activo Ahora
+                    </span>
+                    {!todayAttendance && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/90 text-amber-300 border border-amber-800 animate-pulse font-mono">
+                        ⚠️ Entrada Pendiente
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -232,9 +447,16 @@ export default async function AdminHomePage() {
                   <div className="h-14 w-14 rounded-2xl bg-sky-950/80 border border-sky-800/50 flex items-center justify-center text-sky-400 group-hover:scale-105 transition-all shadow-md">
                     <PhoneCall className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-950 text-sky-300 border border-sky-800 uppercase tracking-wide">
-                    ● Activo Ahora
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-950 text-sky-300 border border-sky-800 uppercase tracking-wide">
+                      ● Activo Ahora
+                    </span>
+                    {brianaTasksCount > 0 && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/90 text-amber-300 border border-amber-800 animate-pulse font-mono">
+                        🔥 {brianaTasksCount} Asignadas
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -407,16 +629,16 @@ export default async function AdminHomePage() {
             {/* 🚧 MÓDULO 7: RECLASIFICACIÓN (EXCLUSIVO PARA DESARROLLADOR BRANDO) */}
             {isBrando && (
               <Link
-                href="/en-construccion?modulo=Reclasificación"
-                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-amber-500/40 hover:shadow-xl hover:shadow-amber-950/20 transition-all opacity-90 hover:opacity-100"
+                href="/reclasificacion"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-amber-500/60 hover:border-amber-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-amber-950/40 transition-all duration-300"
               >
                 <div>
                   <div className="flex items-start justify-between mb-5">
-                    <div className="h-14 w-14 rounded-2xl bg-amber-950/60 border border-amber-800/50 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-all">
-                      <Tags className="h-6 w-6" />
+                    <div className="h-14 w-14 rounded-2xl bg-amber-950/80 border border-amber-800/50 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-all shadow-md">
+                      <Tags className="h-7 w-7" />
                     </div>
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                      🚧 En Construcción (Dev)
+                      ● Activo en Nexus (Brando Dev)
                     </span>
                   </div>
 
@@ -424,18 +646,18 @@ export default async function AdminHomePage() {
                     <span className="text-xs font-mono font-medium uppercase tracking-wider text-amber-500">
                       Auditoría & Calidad Operativa
                     </span>
-                    <h3 className="text-xl font-bold text-slate-300 tracking-tight group-hover:text-amber-200 transition-colors">
-                      Reclasificación
+                    <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-amber-200 transition-colors">
+                      Reclasificación & Triage
                     </h3>
                     <p className="text-sm text-slate-400 leading-relaxed">
-                      Revisión de tipificaciones, reclasificación de llamadas, auditoría de contactos y ajuste de incidencias registradas.
+                      Revisión ágil sin bloqueo de Excel, triage de llamadas comunitarias y distribución equitativa de carga de trabajo.
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-between text-xs font-medium text-amber-400/80 pt-4 border-t border-slate-800/60">
-                  <span>Privado Desarrollador (Brando)</span>
-                  <Construction className="h-4 w-4 text-amber-500" />
+                <div className="mt-6 flex items-center justify-between text-xs font-semibold text-amber-400 pt-4 border-t border-slate-800/60">
+                  <span>Abrir Cola de Triage & Distribución</span>
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
             )}
@@ -443,16 +665,16 @@ export default async function AdminHomePage() {
             {/* 🚧 MÓDULO 8: GESTIÓN DE ELECCIONES (EXCLUSIVO PARA DESARROLLADOR BRANDO) */}
             {isBrando && (
               <Link
-                href="/en-construccion?modulo=Gestión+de+Elecciones"
-                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-cyan-500/40 hover:shadow-xl hover:shadow-cyan-950/20 transition-all opacity-90 hover:opacity-100"
+                href="/elecciones"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-cyan-500/60 hover:border-cyan-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-cyan-950/40 transition-all duration-300"
               >
                 <div>
                   <div className="flex items-start justify-between mb-5">
-                    <div className="h-14 w-14 rounded-2xl bg-cyan-950/60 border border-cyan-800/50 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-all">
-                      <Vote className="h-6 w-6" />
+                    <div className="h-14 w-14 rounded-2xl bg-cyan-950/80 border border-cyan-800/50 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-all shadow-md">
+                      <Vote className="h-7 w-7" />
                     </div>
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                      🚧 En Construcción (Dev)
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 uppercase tracking-wide">
+                      ● Activo en Nexus (Brando Dev)
                     </span>
                   </div>
 
@@ -460,18 +682,18 @@ export default async function AdminHomePage() {
                     <span className="text-xs font-mono font-medium uppercase tracking-wider text-cyan-400">
                       Procesos Electorales & Movilización
                     </span>
-                    <h3 className="text-xl font-bold text-slate-300 tracking-tight group-hover:text-cyan-200 transition-colors">
-                      Gestión de Elecciones
+                    <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-cyan-200 transition-colors">
+                      Sala Nacional Electoral
                     </h3>
                     <p className="text-sm text-slate-400 leading-relaxed">
-                      Monitoreo de centros electorales, registro de movilización popular, padrón y reporte de participación en tiempo real.
+                      Monitoreo de 335 municipios, corte por franjas horarias (9AM a 8PM), efectividad de mesas y movilización de condominios.
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-between text-xs font-medium text-cyan-400/80 pt-4 border-t border-slate-800/60">
-                  <span>Privado Desarrollador (Brando)</span>
-                  <Construction className="h-4 w-4 text-amber-500" />
+                <div className="mt-6 flex items-center justify-between text-xs font-semibold text-cyan-400 pt-4 border-t border-slate-800/60">
+                  <span>Ingresar a la Sala Nacional</span>
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
             )}

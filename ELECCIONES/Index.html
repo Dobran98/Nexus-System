@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html class="dark" lang="es">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SALA NACIONAL | Command Center</title>
+  <meta name="description" content="Sistema de Reporte y Seguimiento al Proceso Electoral — Sala Nacional">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  
+  <!-- Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+  <!-- SweetAlert2 & Charts & Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <!-- Custom Styles and Config -->
+  <?!= include('Estilos.html'); ?>
+</head>
+<body class="bg-background text-on-surface min-h-screen w-full flex flex-col relative bg-mesh antialiased overflow-x-hidden selection:bg-secondary/30 selection:text-secondary">
+
+  <!-- Botón de Cambio de Tema en el Login -->
+  <div id="loginThemeToggle" class="absolute top-4 right-4 z-50">
+    <button onclick="toggleTheme()" class="text-on-surface-variant hover:text-primary transition-colors p-3 rounded-full bg-surface-container-high/50 backdrop-blur-md border border-white/10 hover:bg-white/10 shadow-lg" title="Cambiar Tema">
+      <span class="material-symbols-outlined text-[24px] theme-icon">dark_mode</span>
+    </button>
+  </div>
+
+  <!-- Atmospheric Glow Effect behind Login -->
+  <div id="glowOverlay" class="absolute inset-0 z-0 flex items-center justify-center pointer-events-none opacity-30">
+    <div class="w-[800px] h-[800px] bg-primary/10 rounded-full blur-[130px]"></div>
+  </div>
+
+  <!-- BANNER AVISO (Marquee CSS replacement) -->
+  <div id="bannerAviso" style="display:none; position:sticky; top:0; z-index:1050; padding:6px 0; text-align:center;">
+    <span id="textoAviso"></span>
+  </div>
+
+  <!-- LOADING OVERLAY -->
+    <div id="loader" class="loading-overlay">
+      <div class="flex flex-col items-center gap-4 bg-surface-container-highest/60 p-8 rounded-2xl border border-white/10 backdrop-blur-lg">
+        <div class="w-14 h-14 border-4 border-secondary border-t-transparent rounded-full animate-spin"></div>
+        <span class="font-data-sm text-sm text-secondary uppercase tracking-widest">Cargando datos...</span>
+      </div>
+    </div>
+
+  <!-- ==========================================
+       SECCIÓN DE ACCESO (LOGIN)
+       ========================================== -->
+  <main class="w-full max-w-[420px] px-gutter relative z-10 flex flex-col items-center mx-auto my-auto py-12" id="loginSection">
+    <div class="mb-8 flex flex-col items-center">
+      <div class="w-20 h-20 bg-surface-container-highest rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(0,0,0,0.5)] border border-white/5 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+        <span class="material-symbols-outlined text-[42px] text-primary">shield</span>
+      </div>
+      <h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary tracking-tighter uppercase text-center drop-shadow-lg">
+        SALA NACIONAL DEL SISTEMA DE GOBIERNO POPULAR COMUNAL
+      </h1>
+      <p class="font-label-caps text-label-caps text-on-surface-variant mt-2 tracking-widest text-center">
+        Sistema de Reporte y Seguimiento al Proceso Electoral
+      </p>
+    </div>
+
+    <!-- Glassmorphic Login Card -->
+    <div class="w-full bg-surface/75 backdrop-blur-[20px] rounded-xl p-8 relative overflow-hidden border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.7)]">
+      <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+      <form class="space-y-5" onsubmit="event.preventDefault();">
+        <div class="space-y-1.5">
+          <label class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider ml-1" for="user">Usuario</label>
+          <div class="relative group">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <span class="material-symbols-outlined text-[20px] text-outline-variant group-focus-within:text-secondary transition-colors">badge</span>
+            </div>
+            <input autocomplete="username" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-3.5 pl-11 pr-4 font-data-sm text-data-sm text-on-surface placeholder:text-outline-variant focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-all shadow-inner" id="user" name="operator-id" spellcheck="false" type="text"/>
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <label class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider ml-1" for="pass">Contraseña</label>
+          <div class="relative group">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <span class="material-symbols-outlined text-[20px] text-outline-variant group-focus-within:text-secondary transition-colors" style="font-variation-settings: 'FILL' 1;">lock</span>
+            </div>
+            <input autocomplete="current-password" class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-3.5 pl-11 pr-4 font-data-sm text-data-sm text-on-surface placeholder:text-outline-variant focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-all shadow-inner" id="pass" name="access-key" type="password"/>
+          </div>
+        </div>
+        
+        <div class="pt-4">
+          <button id="btnLogin" class="w-full relative overflow-hidden bg-inverse-primary text-on-primary py-4 rounded-lg font-label-caps text-label-caps tracking-[0.15em] transition-all duration-300 hover:bg-primary-container hover:text-on-primary-container active:scale-[0.98] flex items-center justify-center gap-2 group border border-transparent hover:border-secondary/50" style="box-shadow: 0 4px 14px 0 rgba(0, 90, 194, 0.39);" type="submit" onclick="login()">
+            <div class="absolute inset-0 bg-gradient-to-r from-transparent via-secondary/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out"></div>
+            INICIAR SESIÓN
+            <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- ==========================================
+       CONTENEDOR PRINCIPAL (DASHBOARD)
+       ========================================== -->
+  <div id="mainDashboard" style="display:none;" class="w-full min-h-screen flex flex-col md:flex-row relative z-10">
+
+    <!-- SideNavBar (Desktop Navigation) -->
+    <nav class="hidden md:flex flex-col pt-20 pb-4 px-3 bg-surface-container-lowest/80 backdrop-blur-lg fixed left-0 top-0 h-full w-64 z-40 border-r border-white/5 transition-all">
+      <div class="mb-8 px-2 flex flex-col items-center">
+        <div class="w-14 h-14 rounded-full bg-surface-container-highest border border-primary/30 flex items-center justify-center mb-3 relative">
+          <span class="material-symbols-outlined text-primary text-2xl">memory</span>
+          <div class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-tertiary shadow-[0_0_8px_#4edea3] online-dot"></div>
+        </div>
+        <div class="font-bold text-sm text-primary text-center">Sala Nacional</div>
+        <div class="font-data-sm text-[10px] text-on-surface-variant uppercase tracking-wider mt-0.5">NODO PRINCIPAL</div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <div class="flex-1 flex flex-col gap-1 w-full overflow-y-auto pr-1">
+        <button id="btn-monitor" onclick="showTab('monitor')" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">analytics</span>
+          Monitor Estadal
+        </button>
+        <button id="btn-municipal" onclick="showTab('municipal')" style="display:none;" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">holiday_village</span>
+          Monitor Municipal
+        </button>
+        <button id="btn-metas" onclick="showTab('metas')" style="display:none;" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">target</span>
+          Metas Estadales
+        </button>
+        <button id="btn-condominios" onclick="showTab('condominios')" style="display:none;" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group relative">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">apartment</span>
+          Condominios
+          <span id="badgeCondSinReporte" class="absolute right-4 top-1/2 -translate-y-1/2 bg-warning text-[#111] font-data-sm text-[10px] px-1.5 py-0.5 rounded-full" style="display:none;">0</span>
+        </button>
+        <button id="btn-incidentes" onclick="showTab('incidentes')" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group relative">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">report_problem</span>
+          Centro Incidencias
+          <span id="badgeIncidencias" class="absolute right-4 top-1/2 -translate-y-1/2 bg-error text-on-error font-data-sm text-[10px] px-1.5 py-0.5 rounded-full" style="display:none;">0</span>
+        </button>
+        <button id="btn-graficos" onclick="showTab('graficos')" style="display:none;" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">show_chart</span>
+          Panel Analítico
+        </button>
+        <button id="btn-admin" onclick="showTab('admin')" style="display:none;" class="flex items-center gap-3.5 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-all w-full text-left font-body-md text-sm group">
+          <span class="material-symbols-outlined group-hover:text-primary transition-colors">settings</span>
+          Configuración
+        </button>
+      </div>
+
+      <div class="mt-auto pt-4 border-t border-white/5 flex flex-col gap-1.5 w-full">
+        <button onclick="logout()" class="flex items-center gap-3 px-4 py-2.5 rounded-lg text-error hover:bg-error/10 hover:text-error transition-all w-full text-left font-body-md text-xs group">
+          <span class="material-symbols-outlined text-[16px]">logout</span>
+          CERRAR SESIÓN
+        </button>
+      </div>
+    </nav>
+
+    <!-- Shell Viewport -->
+    <div class="flex-1 flex flex-col min-h-screen w-full md:pl-64 relative">
+
+      <!-- TopNavBar -->
+      <header class="fixed top-0 right-0 z-30 bg-surface/75 backdrop-blur-xl border-b border-white/10 shadow-[0_0_15px_rgba(173,198,255,0.05)] w-full md:w-[calc(100%-16rem)] h-16 flex items-center justify-between px-gutter">
+        <div class="flex items-center gap-4">
+          <div class="font-headline-lg text-headline-lg tracking-tighter text-primary uppercase hidden sm:block">SALA NACIONAL</div>
+          <div class="font-headline-lg text-[16px] tracking-tighter text-primary uppercase sm:hidden">SALA NACIONAL</div>
+        </div>
+
+        <!-- Mobile Horizontal Tab list -->
+        <div class="flex md:hidden items-center gap-1.5 overflow-x-auto max-w-[50%] py-1 no-scrollbar">
+          <button onclick="showTab('monitor')" class="text-[10px] font-label-caps text-primary px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Monitor</button>
+          <button onclick="showTab('municipal')" id="btn-municipal-mobile" style="display:none;" class="text-[10px] font-label-caps text-on-surface-variant px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Municipal</button>
+          <button onclick="showTab('metas')" id="btn-metas-mobile" style="display:none;" class="text-[10px] font-label-caps text-on-surface-variant px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Metas</button>
+          <button onclick="showTab('condominios')" id="btn-condominios-mobile" style="display:none;" class="text-[10px] font-label-caps text-on-surface-variant px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Condominios</button>
+          <button onclick="showTab('incidentes')" class="text-[10px] font-label-caps text-on-surface-variant px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Incidencias</button>
+          <button onclick="showTab('graficos')" id="btn-graficos-mobile" style="display:none;" class="text-[10px] font-label-caps text-on-surface-variant px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Graficos</button>
+          <button onclick="showTab('admin')" id="btn-admin-mobile" style="display:none;" class="text-[10px] font-label-caps text-on-surface-variant px-2 py-1 bg-surface-container-low rounded border border-white/5 whitespace-nowrap">Admin</button>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <!-- Botón de cambio de tema -->
+          <button onclick="toggleTheme()" class="text-on-surface-variant hover:text-primary transition-colors p-2 rounded-full hover:bg-white/5" title="Cambiar Tema">
+            <span class="material-symbols-outlined text-[20px] theme-icon" id="themeIcon">dark_mode</span>
+          </button>
+          <!-- T-MINUS Countdown in Header -->
+          <div class="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-lg border border-white/5" id="proximoCorteBox">
+            <span class="material-symbols-outlined text-[16px] text-tertiary">timer</span>
+            <span id="labelCorte" class="hidden lg:inline font-data-sm text-[10px] text-on-surface-variant uppercase tracking-wider">Corte:</span>
+            <span id="timerDisplay" class="font-data-sm text-[12px] text-tertiary font-bold tracking-widest">--:--:--</span>
+          </div>
+          <button onclick="logout()" class="hidden md:flex text-on-surface-variant hover:text-error transition-colors p-2 rounded-full hover:bg-white/5">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- VIEWPORT CONTENT CANVAS -->
+      <main class="flex-1 pt-24 pb-12 px-6 max-w-container-max mx-auto w-full space-y-6">
+
+        <!-- ==========================================
+             TAB PESTAÑA: MONITOR ESTADAL
+             ========================================== -->
+        <div id="tab-monitor" class="tab-content fade-in space-y-6">
+          <header class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">MONITOR ESTADAL</h1>
+              <p id="infoUser" class="font-data-sm text-xs text-secondary mt-1">Cargando operador...</p>
+            </div>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[18px]">search</span>
+                <input id="busquedaEstado" onkeyup="filtrarTabla()" class="w-full sm:w-64 bg-surface-container-lowest border border-outline-variant text-on-surface text-sm rounded-lg pl-10 pr-4 py-2 focus:border-secondary focus:ring-1 focus:ring-secondary transition-all" placeholder="Buscar estado/municipio..." type="text"/>
+              </div>
+              <button onclick="descargarExcelMonitor()" class="bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2 rounded-lg flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">download</span>
+                EXCEL
+              </button>
+              <button onclick="intentarGuardar()" class="bg-secondary/10 border border-secondary text-secondary hover:bg-secondary/20 hover:shadow-[0_0_15px_rgba(76,215,246,0.3)] transition-all font-label-caps text-[11px] tracking-wider uppercase px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                GUARDAR TODO
+              </button>
+            </div>
+          </header>
+
+          <!-- Table Container -->
+          <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 shadow-lg overflow-hidden flex flex-col glass-panel">
+            <div class="bg-surface-container-low px-4 py-3 border-b border-white/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <span class="status-dot green"></span>
+                <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider">MONITOR ESTADAL</span>
+              </div>
+              <div class="font-data-sm text-[11px] text-on-surface-variant flex gap-6">
+                <span>TOTAL CENTROS: <strong id="totalCentrosBadge" class="text-on-surface font-bold">14,231</strong></span>
+                <span>TOTAL MESAS: <strong id="totalMesasBadge" class="text-on-surface font-bold">30,026</strong></span>
+              </div>
+            </div>
+
+            <!-- Table Responsive Wrapper -->
+            <div class="overflow-x-auto overflow-y-auto max-h-[68vh]">
+              <table class="min-w-[1250px] w-full text-left border-collapse" id="tablaElectoralMain">
+                <!-- Group Headers -->
+                <thead class="border-b border-white/10 text-[10px] font-label-caps tracking-wider uppercase" style="background-color: var(--surface-container-low); color: var(--on-surface);">
+                  <tr>
+                    <th rowspan="2" class="p-3 border-r sticky-col z-20" style="border-color: rgba(0,0,0,0.15);">Estado / Municipio</th>
+                    <th colspan="4" class="p-2 border-r text-center border-b text-white font-bold" style="background-color: #1565c0; border-color: rgba(255,255,255,0.3);">Centros 8:00 AM</th>
+                    <th colspan="4" class="p-2 border-r text-center border-b text-white font-bold" style="background-color: #c62828; border-color: rgba(255,255,255,0.3);">Mesas Instaladas</th>
+                    <th colspan="10" class="p-2 border-r text-center border-b font-bold" style="background-color: #1a1a2e; color: #ffffff; border-color: rgba(255,255,255,0.2);">Votos por Bloques Horarios</th>
+                    <th rowspan="2" class="p-3 text-center w-[90px]">Acción</th>
+                  </tr>
+                  <!-- Sub headers -->
+                  <tr class="bg-surface-container-low text-right">
+                    <!-- Centros -->
+                    <th class="p-2 border-r border-white/5 text-center w-[65px]">Total</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[65px]">Activos</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[60px]">Faltan</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[60px]">% Efic.</th>
+                    
+                    <!-- Mesas -->
+                    <th class="p-2 border-r border-white/5 text-center w-[65px]">Total</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[65px]">Activas</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[60px] text-error">Faltan</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[60px]">% Efic.</th>
+
+                    <!-- Horas -->
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">9:00A</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">10:00A</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">11:00A</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">12:00M</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">1:00P</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">2:00P</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">3:00P</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">4:00P</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">5:00P</th>
+                    <th class="p-2 border-r border-white/5 text-center w-[68px]">6-8P</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaElectoral" class="divide-y divide-white/5">
+                  <!-- Inyectado dinámicamente -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             TAB PESTAÑA: MONITOREO MUNICIPAL
+             ========================================== -->
+        <div id="tab-municipal" class="tab-content fade-in space-y-6" style="display:none;">
+          <header class="flex items-center justify-between gap-4">
+            <div>
+              <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">SEGUIMIENTO MUNICIPAL</h1>
+              <p class="font-data-sm text-xs text-secondary mt-1">Directorio y asignación de responsables por estado.</p>
+            </div>
+            <button id="btnExportarMun" onclick="descargarExcelMunicipal()" class="bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2 rounded-lg flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">download</span>
+              EXCEL COMPLETO
+            </button>
+          </header>
+
+          <div id="contenedorEstadosMunicipales" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <!-- Inyectado dinámicamente -->
+            <div class="text-center p-8 text-on-surface-variant col-span-full font-data-sm text-xs">Cargando estados...</div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             TAB PESTAÑA: CONDOMINIOS
+             ========================================== -->
+        <div id="tab-condominios" class="tab-content fade-in space-y-6" style="display:none;">
+          <header class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">CONDOMINIOS / URBANIZACIONES</h1>
+              <p class="font-data-sm text-xs text-secondary mt-1">Reporte de votantes por condominio, sector o urbanización — 10 bloques horarios.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant text-[18px]">search</span>
+                <input id="busquedaCond" onkeyup="window.filtrarTablaCondominios()" class="w-full sm:w-56 bg-surface-container-lowest border border-outline-variant text-on-surface text-sm rounded-lg pl-10 pr-4 py-2 focus:border-secondary focus:ring-1 focus:ring-secondary transition-all" placeholder="Buscar condominio..." type="text"/>
+              </div>
+              <button id="btnExportarCondXLSX" onclick="window.descargarExcelCondominios()" style="display:none;" class="bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2 rounded-lg flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">download</span>EXCEL
+              </button>
+              <button id="btnAgregarCond" onclick="window.abrirModalAgregarCondominio()" style="display:none;" class="bg-primary/10 border border-primary text-primary hover:bg-primary/20 transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2 rounded-lg flex items-center gap-2 font-bold">
+                <span class="material-symbols-outlined text-[18px]">add_circle</span>AGREGAR
+              </button>
+              <button onclick="window.intentarGuardarCondominios()" class="bg-secondary/10 border border-secondary text-secondary hover:bg-secondary/20 hover:shadow-[0_0_15px_rgba(76,215,246,0.3)] transition-all font-label-caps text-[11px] tracking-wider uppercase px-5 py-2.5 rounded-lg flex items-center gap-2 font-bold">
+                <span class="material-symbols-outlined text-[18px]">save</span>GUARDAR TODO
+              </button>
+            </div>
+          </header>
+
+          <!-- KPI Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-surface/70 backdrop-blur-xl rounded-xl border border-white/10 p-4 glass-panel text-center">
+              <div class="font-data-sm text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">Condominios</div>
+              <div id="kpiCondTotal" class="font-data-lg text-data-lg text-primary font-bold">—</div>
+            </div>
+            <div class="bg-surface/70 backdrop-blur-xl rounded-xl border border-white/10 p-4 glass-panel text-center">
+              <div class="font-data-sm text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">Votantes Rep.</div>
+              <div id="kpiCondVotantes" class="font-data-lg text-data-lg text-tertiary font-bold">—</div>
+            </div>
+            <div class="bg-surface/70 backdrop-blur-xl rounded-xl border border-white/10 p-4 glass-panel text-center">
+              <div class="font-data-sm text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">% Cumplimiento</div>
+              <div id="kpiCondPct" class="font-data-lg text-data-lg text-warning font-bold">—</div>
+            </div>
+            <div class="bg-surface/70 backdrop-blur-xl rounded-xl border border-white/10 p-4 glass-panel text-center border-l-4 border-error">
+              <div class="font-data-sm text-[10px] text-error uppercase tracking-wider mb-1">Sin Reporte</div>
+              <div id="kpiCondSinRep" class="font-data-lg text-data-lg text-error font-bold">—</div>
+            </div>
+          </div>
+
+          <!-- Tabla Principal -->
+          <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 shadow-lg overflow-hidden glass-panel">
+            <div class="bg-surface-container-low px-4 py-3 border-b border-white/5 flex items-center gap-3">
+              <span class="status-dot green"></span>
+              <span class="font-label-caps text-[10px] text-on-surface-variant uppercase tracking-wider">MONITOR DE CONDOMINIOS — 10 FRANJAS HORARIAS</span>
+            </div>
+            <div class="overflow-x-auto overflow-y-auto max-h-[65vh]">
+              <table class="min-w-[1100px] w-full text-left border-collapse" id="tablaCondominiosMain">
+                <thead class="border-b border-white/10 text-[10px] font-label-caps tracking-wider uppercase" style="background-color: var(--surface-container-low); color: var(--on-surface);">
+                  <tr>
+                    <th class="p-3 border-r sticky-col z-20" style="border-color: rgba(0,0,0,0.15);">Condominio / Responsable</th>
+                    <th class="p-2 text-center w-[65px]">Reg.</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#1a237e;color:#fff;">9AM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#283593;color:#fff;">10AM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#1565c0;color:#fff;">11AM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#0277bd;color:#fff;">12M</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#006064;color:#fff;">1PM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#00695c;color:#fff;">2PM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#2e7d32;color:#fff;">3PM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#558b2f;color:#fff;">4PM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#f57f17;color:#fff;">5PM</th>
+                    <th class="p-2 border-r text-center text-[9px]" style="background:#e65100;color:#fff;">6-8PM</th>
+                    <th class="p-2 text-center w-[60px] font-bold">TOTAL</th>
+                    <th class="p-2 text-center w-[65px]">%</th>
+                    <th class="p-2 text-center w-[90px]">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaCondominios" class="divide-y divide-white/5">
+                  <tr><td colspan="15" class="text-center p-8 text-on-surface-variant font-data-sm text-xs">Cargando condominios...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             TAB PESTAÑA: METAS ESTADALES
+             ========================================== -->
+        <div id="tab-metas" class="tab-content fade-in space-y-6" style="display:none;">
+          <header>
+            <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">METAS ESTADALES</h1>
+            <p class="font-data-sm text-xs text-secondary mt-1">Comparativa y porcentaje de cumplimiento frente a la meta nacional.</p>
+          </header>
+
+          <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 shadow-lg overflow-hidden glass-panel">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-surface-container-highest border-b border-white/10 text-[10px] font-label-caps tracking-wider text-on-surface-variant uppercase">
+                  <tr>
+                    <th class="p-4 pl-6">Estado</th>
+                    <th class="p-4 text-right">Votos Reportados</th>
+                    <th class="p-4 text-right">Meta Asignada</th>
+                    <th class="p-4 text-right">Diferencial (Faltan)</th>
+                    <th class="p-4 text-center w-[220px]">% Cumplimiento</th>
+                  </tr>
+                </thead>
+                <tbody id="tablaMetas" class="divide-y divide-white/5 font-data-sm text-xs text-on-surface">
+                  <tr>
+                    <td colspan="5" class="text-center p-8 text-on-surface-variant">Cargando metas...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             TAB PESTAÑA: INCIDENCIAS
+             ========================================== -->
+        <div id="tab-incidentes" class="tab-content fade-in space-y-6" style="display:none;">
+          <header class="flex items-center justify-between">
+            <div>
+              <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">CENTRO DE INCIDENCIAS</h1>
+              <p class="font-data-sm text-xs text-secondary mt-1">Mesa de control, reporte de eventos y alertas operacionales.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btnExportarCSVInc" onclick="descargarFormatoIncidencias('csv')" class="hidden bg-surface-container-high border border-outline-variant text-[11px] font-label-caps uppercase px-3 py-1.5 rounded hover:bg-surface-container-highest text-on-surface transition-colors">CSV</button>
+              <button id="btnExportarXLSXInc" onclick="descargarFormatoIncidencias('xlsx')" class="hidden bg-secondary/10 border border-secondary text-[11px] font-label-caps uppercase px-3 py-1.5 rounded hover:bg-secondary/20 text-secondary transition-colors font-bold">EXCEL</button>
+            </div>
+          </header>
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <!-- Form Card (33%) -->
+            <div class="lg:col-span-1 bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 space-y-4 glass-panel">
+              <h3 class="font-label-caps text-xs text-error font-bold uppercase tracking-widest flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">crisis_alert</span>
+                Reportar Alerta
+              </h3>
+
+              <div class="space-y-3">
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Bloque Operacional</label>
+                  <select id="incBloque" onchange="cargarCategoriasPorBloque()" class="w-full rounded-lg text-sm">
+                    <option value="">-- SELECCIONE BLOQUE --</option>
+                    <option value="B1">🟥 BLOQUE 1: URGENCIAS Y SEGURIDAD (¡Lo más grave!)</option>
+                    <option value="B2">🟦 BLOQUE 2: LO TÉCNICO (Máquinas y Sistema)</option>
+                    <option value="B3">🟨 BLOQUE 3: LOGÍSTICA (Cosas que faltan)</option>
+                    <option value="B4">🟩 BLOQUE 4: PERSONAL (La gente responsable)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Categoría</label>
+                  <select id="incCategoria" class="w-full rounded-lg text-sm"></select>
+                </div>
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Estado</label>
+                  <select id="incEstado" onchange="actualizarMunicipiosPorEstado()" class="w-full rounded-lg text-sm"></select>
+                </div>
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Municipio</label>
+                  <select id="incMunicipio" onchange="actualizarComunasPorMunicipio()" class="w-full rounded-lg text-sm"></select>
+                </div>
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Comuna (Opcional)</label>
+                  <select id="incComuna" class="w-full rounded-lg text-sm"></select>
+                </div>
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Casos Detectados</label>
+                  <input id="incCantidad" type="number" min="1" value="1" class="w-full rounded-lg text-sm"/>
+                </div>
+                <div>
+                  <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Observaciones</label>
+                  <textarea id="incDesc" rows="3" class="w-full rounded-lg text-sm p-2" placeholder="Detalles de la incidencia..."></textarea>
+                </div>
+
+                <button onclick="enviarIncidencia()" class="w-full py-3 bg-error text-on-error hover:bg-error-container hover:text-on-error-container rounded-lg font-label-caps text-[11px] tracking-wider uppercase font-bold transition-all mt-4 flex items-center justify-center gap-2">
+                  <span class="material-symbols-outlined text-[16px]">send</span>
+                  EMITIR ALERTA
+                </button>
+              </div>
+            </div>
+
+            <!-- List Card (66%) -->
+            <div class="lg:col-span-2 bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 space-y-4 glass-panel">
+              <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-white/5 pb-3">
+                <h3 class="font-label-caps text-xs text-on-surface font-bold uppercase tracking-widest">Historial de Operaciones</h3>
+                
+                <div class="flex items-center gap-2">
+                  <input id="busquedaInc" onkeyup="filtrarIncidenciasLocal()" type="text" placeholder="Buscar municipio..." class="text-xs py-1.5 px-3 rounded-lg w-40 sm:w-48"/>
+                  <select id="filtroBloque" onchange="filtrarIncidenciasLocal()" class="text-xs py-1.5 pl-3 pr-8 rounded-lg">
+                    <option value="">TODOS</option>
+                    <option value="B1">🟥 BLOQUE 1: URGENCIAS</option>
+                    <option value="B2">🟦 BLOQUE 2: TÉCNICO</option>
+                    <option value="B3">🟨 BLOQUE 3: LOGÍSTICA</option>
+                    <option value="B4">🟩 BLOQUE 4: PERSONAL</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Incidents terminal output -->
+              <div id="listaIncidentes" class="space-y-2.5 overflow-y-auto max-h-[58vh] pr-1">
+                <!-- Inyectado dinámicamente -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ==========================================
+             TAB PESTAÑA: GRÁFICOS (ANALÍTICO)
+             ========================================== -->
+        <div id="tab-graficos" class="tab-content fade-in space-y-6" style="display:none;">
+          <header class="flex items-center justify-between gap-4">
+            <div>
+              <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">PANEL ANALÍTICO NACIONAL</h1>
+              <p class="font-data-sm text-xs text-secondary mt-1">Evolución de apertura, reportes de participación y proyecciones.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="generarBoletinWhatsApp()" class="bg-tertiary/10 border border-tertiary text-tertiary hover:bg-tertiary/20 transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2 rounded-lg flex items-center gap-1.5 font-bold">
+                <span class="material-symbols-outlined text-[18px]">chat</span>
+                WHATSAPP
+              </button>
+              <button onclick="descargarPDF()" class="bg-error/10 border border-error text-error hover:bg-error/20 transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2 rounded-lg flex items-center gap-1.5 font-bold">
+                <span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                DESCARGAR PDF
+              </button>
+            </div>
+          </header>
+
+          <div class="row g-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-l-4 border-error/70 p-4 glass-panel">
+              <div class="flex items-center justify-between mb-2">
+                <h6 class="text-error font-label-caps text-[10px] tracking-wider uppercase">🚨 Top Estados Rezagados (Apertura)</h6>
+                <button onclick="toggleDashboardPanel('content-semaforoEstados', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                  <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                </button>
+              </div>
+              <div id="content-semaforoEstados" class="font-data-sm text-xs text-on-surface-variant">Calculando...</div>
+            </div>
+            <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-l-4 border-warning/70 p-4 glass-panel">
+              <div class="flex items-center justify-between mb-2">
+                <h6 class="text-warning font-label-caps text-[10px] tracking-wider uppercase">⚠️ Top Municipios Críticos (Incidencias)</h6>
+                <button onclick="toggleDashboardPanel('content-semaforoMunicipios', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                  <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                </button>
+              </div>
+              <div id="content-semaforoMunicipios" class="font-data-sm text-xs text-on-surface-variant">Calculando...</div>
+            </div>
+          </div>
+
+          <!-- Printable area for charts -->
+          <div id="zonaImpresionPDF" class="space-y-6 bg-transparent">
+            <!-- Global Opening Rate -->
+            <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-t-4 border-tertiary p-6 text-center glass-panel">
+              <div class="flex items-center justify-between mb-2">
+                <h6 class="font-label-caps text-[10px] tracking-wider text-on-surface-variant uppercase">APERTURA GLOBAL DE CENTROS</h6>
+                <button onclick="toggleDashboardPanel('content-globalOpening', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                  <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                </button>
+              </div>
+              <div id="content-globalOpening">
+                <h2 id="porcentajeGlobal" class="font-headline-xl text-headline-xl text-tertiary mb-1">0.00%</h2>
+                <p class="font-data-sm text-xs text-on-surface-variant mb-4" id="detalleCentrosGlobal">-- / -- Centros Activos</p>
+                <div class="w-full bg-surface-container-low h-3 rounded-full overflow-hidden max-w-lg mx-auto border border-white/5">
+                  <div id="barraProgreso" class="bg-tertiary h-full w-0 transition-all duration-750" style="box-shadow: 0 0 10px #4edea3;"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Chart Matrix Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <!-- Chart 1 -->
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-t-2 border-primary p-4 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-primary uppercase tracking-wider">Comparativa Histórica</h6>
+                  <button onclick="toggleDashboardPanel('content-chartHistorico', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartHistorico">
+                  <div id="textoDiferenciaHistorica" class="text-center font-bold text-xs mb-2"></div>
+                  <div class="h-[250px] relative"><canvas id="chartHistorico"></canvas></div>
+                </div>
+              </div>
+              <!-- Chart 2 -->
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-t-2 border-secondary p-4 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-secondary uppercase tracking-wider">Matriz Estadal vs Municipal</h6>
+                  <button onclick="toggleDashboardPanel('content-chartComparativaEstadalMunicipal', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartComparativaEstadalMunicipal">
+                  <div class="h-[250px] relative"><canvas id="chartComparativaEstadalMunicipal"></canvas></div>
+                </div>
+              </div>
+              <!-- Chart 3 -->
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-t-2 border-tertiary p-4 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-tertiary uppercase tracking-wider">Estatus Incidencias</h6>
+                  <button onclick="toggleDashboardPanel('content-chartIncidenciasResueltas', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartIncidenciasResueltas">
+                  <div class="h-[250px] relative"><canvas id="chartIncidenciasResueltas"></canvas></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Big Chart 1: states opening rates -->
+            <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 glass-panel">
+              <div class="flex items-center justify-between mb-3">
+                <h6 class="font-label-caps text-[10px] text-on-surface uppercase tracking-wider">Efectividad de Apertura por Estado (24 Estados)</h6>
+                <button onclick="toggleDashboardPanel('content-chartParticipacion', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                  <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                </button>
+              </div>
+              <div id="content-chartParticipacion">
+                <div class="h-[280px] relative"><canvas id="chartParticipacion"></canvas></div>
+              </div>
+            </div>
+
+            <!-- Charts Row 2 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-on-surface uppercase tracking-wider">Votantes por Estado</h6>
+                  <button onclick="toggleDashboardPanel('content-chartVotantes', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartVotantes">
+                  <div class="h-[300px] relative"><canvas id="chartVotantes"></canvas></div>
+                </div>
+              </div>
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-on-surface uppercase tracking-wider">Total Incidencias por Estado</h6>
+                  <button onclick="toggleDashboardPanel('content-chartIncidenciasEstados', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartIncidenciasEstados">
+                  <div class="h-[300px] relative"><canvas id="chartIncidenciasEstados"></canvas></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Charts Row 3 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="md:col-span-2 bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-on-surface uppercase tracking-wider">Evolución Nacional del Voto (9 Cortes)</h6>
+                  <button onclick="toggleDashboardPanel('content-chartEvolucion', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartEvolucion">
+                  <div class="h-[280px] relative"><canvas id="chartEvolucion"></canvas></div>
+                </div>
+              </div>
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-on-surface uppercase tracking-wider">Top Categorías Incidencias</h6>
+                  <button onclick="toggleDashboardPanel('content-chartTopIncidencias', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartTopIncidencias">
+                  <div class="h-[280px] relative"><canvas id="chartTopIncidencias"></canvas></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Horarias y Municipal analysis selectors -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-t-2 border-warning p-5 glass-panel">
+                <div class="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
+                  <h6 class="font-label-caps text-[10px] text-warning uppercase tracking-wider">Evolución Horaria por Estado</h6>
+                  <div class="flex items-center gap-2">
+                    <select id="selectGraficoHorasEdo" onchange="renderizarGraficoHorasEstado()" class="text-xs py-1 rounded w-44"></select>
+                    <button onclick="toggleDashboardPanel('content-chartHorasEstado', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                      <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                    </button>
+                  </div>
+                </div>
+                <div id="content-chartHorasEstado">
+                  <div class="h-[320px] relative"><canvas id="chartHorasEstado"></canvas></div>
+                </div>
+              </div>
+
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 glass-panel">
+                <div class="flex items-center justify-between mb-3">
+                  <h6 class="font-label-caps text-[10px] text-on-surface uppercase tracking-wider">Incidencias por Bloque Horario</h6>
+                  <button onclick="toggleDashboardPanel('content-chartIncidenciasHoras', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                    <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                  </button>
+                </div>
+                <div id="content-chartIncidenciasHoras">
+                  <div class="h-[320px] relative"><canvas id="chartIncidenciasHoras"></canvas></div>
+                </div>
+              </div>
+
+              <div class="md:col-span-2 bg-surface/70 backdrop-blur-2xl rounded-xl border border-t-2 border-secondary p-5 glass-panel">
+                <div class="flex items-center justify-between border-b border-white/5 pb-2 mb-3">
+                  <h6 class="font-label-caps text-[10px] text-secondary uppercase tracking-wider">Análisis Municipal (Votantes y Centros)</h6>
+                  <div class="flex items-center gap-2">
+                    <select id="selectGraficoMun" onchange="renderizarGraficoMunicipal()" class="text-xs py-1 rounded w-44"></select>
+                    <button onclick="toggleDashboardPanel('content-chartMunicipal', this)" class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-white/5" title="Colapsar/Expandir">
+                      <span class="material-symbols-outlined text-[18px]">keyboard_arrow_up</span>
+                    </button>
+                  </div>
+                </div>
+                <div id="content-chartMunicipal">
+                  <div class="h-[320px] relative"><canvas id="chartMunicipal"></canvas></div>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /zonaImpresionPDF -->
+        </div>
+
+        <!-- ==========================================
+             TAB PESTAÑA: ADMINISTRACIÓN
+             ========================================== -->
+        <div id="tab-admin" class="tab-content fade-in space-y-6" style="display:none;">
+          <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 class="font-headline-lg text-headline-lg text-on-surface uppercase">CONSOLA DE ADMINISTRACIÓN</h1>
+              <p class="font-data-sm text-xs text-secondary mt-1">Gestión de bloqueos horarios, órdenes nacionales, usuarios y auditoría.</p>
+            </div>
+            <!-- Theme Toggle in Admin Panel -->
+            <button onclick="toggleTheme()" class="bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest transition-all font-label-caps text-[11px] tracking-wider uppercase px-4 py-2.5 rounded-lg flex items-center justify-center gap-2 font-bold shadow-md">
+              <span class="material-symbols-outlined text-[18px] theme-icon">dark_mode</span>
+              CAMBIAR TEMA
+            </button>
+          </header>
+
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left panel: Controls (4 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+
+              <!-- Detallado Control (Global) -->
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 space-y-4 glass-panel">
+                <div class="text-center border-b border-white/5 pb-2">
+                  <h6 class="font-label-caps text-xs text-error uppercase font-bold tracking-widest flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[20px]">lock</span>
+                    Control Maestro Nacional
+                  </h6>
+                  <p class="text-[9px] text-on-surface-variant font-data-sm uppercase mt-0.5">El sistema bloquea horas automáticamente pasados 10 min.</p>
+                </div>
+
+                <div class="space-y-3">
+                  <select id="estadoMaestro" onchange="actualizarLedsMaestros()" class="w-full rounded-lg text-sm"></select>
+
+                  <!-- Led grid global: 9 slots -->
+                  <div class="bg-surface-container-lowest/50 p-4 rounded-lg border border-white/5 space-y-4">
+                    <div class="grid grid-cols-5 text-center gap-1.5">
+                      <div>
+                        <div id="led-h9" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h9')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">9A</button>
+                      </div>
+                      <div>
+                        <div id="led-h11" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h11')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">11A</button>
+                      </div>
+                      <div>
+                        <div id="led-h12" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h12')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">12M</button>
+                      </div>
+                      <div>
+                        <div id="led-h13" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h13')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">1P</button>
+                      </div>
+                      <div>
+                        <div id="led-h14" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h14')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">2P</button>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-4 text-center gap-1.5 max-w-[80%] mx-auto">
+                      <div>
+                        <div id="led-h15" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h15')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">3P</button>
+                      </div>
+                      <div>
+                        <div id="led-h16" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h16')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">4P</button>
+                      </div>
+                      <div>
+                        <div id="led-h17" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h17')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">5P</button>
+                      </div>
+                      <div>
+                        <div id="led-h20" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggle('h20')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">6-8P</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Messages center -->
+                  <div class="space-y-2.5">
+                    <textarea id="msgGlobal" class="w-full rounded-lg text-xs p-2" rows="2.5" placeholder="Emitir orden de Sala Nacional..."></textarea>
+                    <div class="flex items-center gap-2">
+                      <span class="text-[10px] font-label-caps text-on-surface-variant whitespace-nowrap">Expira:</span>
+                      <select id="tiempoAviso" class="text-xs py-1 pl-2 pr-6 rounded-lg w-full">
+                        <option value="1">1 Minuto</option>
+                        <option value="5" selected>5 Minutos</option>
+                        <option value="15">15 Minutos</option>
+                        <option value="30">30 Minutos</option>
+                        <option value="60">1 Hora</option>
+                      </select>
+                    </div>
+                    <div class="flex gap-2 pt-1">
+                      <button onclick="publicarAviso()" class="w-1/2 py-2 bg-error text-on-error hover:bg-error-container hover:text-on-error-container text-xs rounded-lg font-label-caps font-bold transition-all flex items-center justify-center gap-1">
+                        <span class="material-symbols-outlined text-[14px]">broadcast_on_personal</span> AVISO
+                      </button>
+                      <button onclick="borrarAviso()" class="w-1/2 py-2 bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest text-xs rounded-lg font-label-caps font-bold transition-all">
+                        RETIRAR AVISO
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Control Específico por Estado (Local) -->
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 space-y-4 glass-panel border-t-4 border-warning">
+                <div class="text-center border-b border-white/5 pb-2">
+                  <h6 class="font-label-caps text-xs text-warning uppercase font-bold tracking-widest flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[20px]">location_on</span>
+                    Control Específico por Estado
+                  </h6>
+                </div>
+                <div class="space-y-3">
+                  <select id="estadoDetallado" onchange="actualizarLedsDetallados()" class="w-full rounded-lg text-sm"></select>
+                  <div class="bg-surface-container-lowest/50 p-4 rounded-lg border border-white/5 space-y-4">
+                    <div class="grid grid-cols-5 text-center gap-1.5">
+                      <div>
+                        <div id="det-led-h9" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h9')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">9A</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h11" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h11')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">11A</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h12" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h12')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">12M</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h13" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h13')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">1P</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h14" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h14')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">2P</button>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-4 text-center gap-1.5 max-w-[80%] mx-auto">
+                      <div>
+                        <div id="det-led-h15" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h15')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">3P</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h16" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h16')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">4P</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h17" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h17')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">5P</button>
+                      </div>
+                      <div>
+                        <div id="det-led-h20" class="status-led mb-1"></div>
+                        <button onclick="ejecutarToggleDetallado('h20')" class="btn-xs bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-on-surface w-full">6-8P</button>
+                      </div>
+                    </div>
+                  </div>
+                  <button onclick="liberarTodoElEstado()" class="w-full py-2 bg-secondary text-on-secondary hover:bg-secondary-container hover:text-on-secondary-container rounded-lg font-label-caps text-xs font-bold tracking-wider transition-all flex items-center justify-center gap-1">
+                    <span class="material-symbols-outlined text-[16px]">lock_open</span> LIBERAR ESTADO COMPLETO
+                  </button>
+                </div>
+              </div>
+
+              <!-- Database management -->
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 space-y-3 glass-panel border-t-4 border-primary">
+                <h6 class="font-label-caps text-xs text-primary font-bold uppercase tracking-wider text-center">Configuración Base de Datos</h6>
+                <p class="text-[10px] text-on-surface-variant font-data-sm text-center leading-relaxed">Inicializa o limpia la hoja <strong class="text-on-surface">DB_DATA_DEF</strong> para soportar las 9 horarias.</p>
+                <button onclick="inicializarDB()" class="w-full py-2 bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container text-xs rounded-lg font-label-caps font-bold transition-all uppercase">
+                  INICIALIZAR DB_DATA_DEF
+                </button>
+                <div class="border-t border-white/5 pt-3 mt-1">
+                  <p class="text-[10px] text-on-surface-variant font-data-sm text-center leading-relaxed mb-2">Crea la hoja <strong class="text-on-surface">DB_CONDOMINIOS</strong> con estructura de 10 franjas.</p>
+                  <button onclick="window.inicializarCondominiosDB()" class="w-full py-2 bg-secondary/10 border border-secondary text-secondary hover:bg-secondary/20 text-xs rounded-lg font-label-caps font-bold transition-all uppercase">
+                    INICIALIZAR DB_CONDOMINIOS
+                  </button>
+                </div>
+                <div class="border-t border-white/5 pt-3 mt-1">
+                  <p class="text-[10px] text-on-surface-variant font-data-sm text-center leading-relaxed mb-2">Migra contraseñas a <strong class="text-on-surface">SHA-256</strong> (ejecutar UNA sola vez).</p>
+                  <button onclick="window.ejecutarMigracionContrasenas()" class="w-full py-2 bg-error/10 border border-error text-error hover:bg-error/20 text-xs rounded-lg font-label-caps font-bold transition-all uppercase">
+                    🔐 MIGRAR CONTRASEÑAS
+                  </button>
+                </div>
+              </div>
+
+            </div><!-- /left col -->
+
+            <!-- Right panel: Online users and live logs (7 cols) -->
+            <div class="lg:col-span-7 space-y-6">
+              <div class="bg-surface/70 backdrop-blur-2xl rounded-xl border border-white/10 p-5 space-y-4 glass-panel flex flex-col h-[75vh]">
+                
+                <!-- Online Users section -->
+                <div class="border-b border-white/5 pb-4">
+                  <h6 class="font-label-caps text-xs text-tertiary font-bold uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <span class="material-symbols-outlined text-[18px]">group</span>
+                    Operadores Conectados
+                  </h6>
+                  <div id="listaUsuariosActivos" class="flex flex-wrap gap-2 overflow-y-auto max-h-[120px] pr-1">
+                    <!-- Inyectado dinámicamente -->
+                  </div>
+                </div>
+
+                <!-- Live Audit Console section -->
+                <div class="flex-1 flex flex-col min-h-[300px]">
+                  <div class="flex items-center justify-between mb-2">
+                    <h6 class="font-label-caps text-xs text-on-surface-variant font-bold uppercase tracking-widest flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[18px]">terminal</span>
+                      Log de Auditoría de Votos
+                    </h6>
+                    <button onclick="descargarAuditoriaCSV()" class="bg-surface-container-high border border-outline-variant hover:bg-surface-container-highest text-[10px] font-label-caps uppercase px-2.5 py-1 rounded transition-colors text-on-surface">Descargar Log</button>
+                  </div>
+                  <!-- Command console output -->
+                  <div id="listaAuditoria" class="flex-1 overflow-y-auto bg-surface-container-lowest/80 text-tertiary p-3 rounded-lg font-data-sm text-[11px] leading-relaxed shadow-inner border border-white/5 whitespace-pre-wrap select-all">
+[SISTEMA] Estableciendo canal de datos seguro...
+                  </div>
+                </div>
+
+              </div>
+            </div><!-- /right col -->
+
+          </div>
+        </div><!-- /tab-admin -->
+
+      </main>
+    </div><!-- /shell-viewport -->
+  </div><!-- /mainDashboard -->
+
+
+  <!-- ==========================================
+       MODALES CUSTOM (Usando Tailwind flex/hidden)
+       ========================================== -->
+
+  <!-- MODAL MUNICIPAL -->
+  <div id="modalMunicipal" class="custom-modal">
+    <div class="bg-surface-container-low border border-white/10 rounded-xl max-w-5xl w-full flex flex-col shadow-2xl overflow-hidden glass-panel max-h-[85vh]">
+      <!-- Header -->
+      <div class="p-4 border-b border-white/5 bg-surface-container-high flex items-center justify-between">
+        <div>
+          <h5 id="modalMunicipalTitle" class="font-headline-lg text-[18px] text-primary font-bold uppercase tracking-tight">Cargando...</h5>
+          <span id="modalMunicipalStatus" class="font-data-sm text-[10px] text-error font-bold tracking-wider block mt-0.5"></span>
+        </div>
+        <button onclick="cerrarModal('modalMunicipal')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-full hover:bg-white/5">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Search responsibles inside modal -->
+      <div class="px-4 py-2 border-b border-white/5 bg-surface-container-lowest flex items-center gap-2">
+        <span class="material-symbols-outlined text-[16px] text-outline-variant">search</span>
+        <input id="busquedaMunResp" onkeyup="window.filtrarTarjetasMunicipales()" type="text" placeholder="Filtrar por responsable o cédula..." class="w-full sm:w-64 bg-transparent border-0 focus:ring-0 p-1 text-xs text-on-surface font-data-sm placeholder:text-outline-variant"/>
+      </div>
+
+      <!-- Body -->
+      <div id="modalMunicipalBody" class="p-5 overflow-y-auto bg-surface-dim/40 flex-1 space-y-4">
+        <div class="text-center p-8 text-on-surface-variant font-data-sm text-xs">Cargando datos municipales...</div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 border-t border-white/5 bg-surface-container-high flex items-center justify-end gap-2.5">
+        <button onclick="cerrarModal('modalMunicipal')" class="px-4 py-2 bg-surface-container-highest border border-outline-variant hover:bg-surface-bright text-xs font-label-caps text-on-surface rounded-lg transition-colors font-bold uppercase">Cancelar</button>
+        <button id="btnGuardarModalMun" onclick="window.guardarTodoMunicipal()" class="px-5 py-2.5 bg-secondary text-on-secondary hover:bg-secondary-container hover:text-on-secondary-container text-xs font-label-caps rounded-lg transition-colors font-bold uppercase shadow">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL AGREGAR CONDOMINIO -->
+  <div id="modalAgregarCondominio" class="custom-modal">
+    <div class="bg-surface-container-low border border-white/10 rounded-xl max-w-lg w-full flex flex-col shadow-2xl overflow-hidden glass-panel">
+      <!-- Header -->
+      <div class="p-4 border-b border-white/5 bg-surface-container-high flex items-center justify-between">
+        <div>
+          <h5 class="font-headline-lg text-[18px] text-primary font-bold uppercase tracking-tight flex items-center gap-2">
+            <span class="material-symbols-outlined text-[22px]">apartment</span>
+            Agregar Condominio
+          </h5>
+          <p class="font-data-sm text-[10px] text-on-surface-variant mt-0.5">Todos los campos marcados con * son obligatorios.</p>
+        </div>
+        <button onclick="cerrarModal('modalAgregarCondominio')" class="text-on-surface-variant hover:text-on-surface p-1 rounded-full hover:bg-white/5">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 space-y-3 overflow-y-auto max-h-[60vh]">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Estado *</label>
+            <select id="condNuevoEstado" onchange="window.actualizarMunicipiosCond()" class="w-full rounded-lg text-xs">
+              <option value="">-- ESTADO --</option>
+            </select>
+          </div>
+          <div>
+            <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Municipio *</label>
+            <select id="condNuevoMunicipio" class="w-full rounded-lg text-xs">
+              <option value="">-- MUNICIPIO --</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Parroquia / Sector</label>
+          <input id="condNuevoParroquia" type="text" placeholder="Ej: Parroquia El Valle" class="w-full rounded-lg text-xs"/>
+        </div>
+        <div>
+          <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Nombre del Condominio / Urbanización *</label>
+          <input id="condNuevoNombre" type="text" placeholder="Ej: Residencias Las Acacias" class="w-full rounded-lg text-xs"/>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Responsable Comunal</label>
+            <input id="condNuevoResp" type="text" placeholder="Nombre completo" class="w-full rounded-lg text-xs"/>
+          </div>
+          <div>
+            <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Teléfono</label>
+            <input id="condNuevoTel" type="text" placeholder="0412-0000000" class="w-full rounded-lg text-xs"/>
+          </div>
+        </div>
+        <div>
+          <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Total Votantes Registrados (esperados)</label>
+          <input id="condNuevoTotal" type="number" min="0" value="0" class="w-full rounded-lg text-xs"/>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 border-t border-white/5 bg-surface-container-high flex gap-2">
+        <button onclick="cerrarModal('modalAgregarCondominio')" class="w-1/2 py-2.5 bg-surface-container-highest border border-outline-variant hover:bg-surface-bright text-xs font-label-caps text-on-surface rounded-lg transition-colors font-bold uppercase">Cancelar</button>
+        <button onclick="window.guardarNuevoCondominio()" class="w-1/2 py-2.5 bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container text-xs font-label-caps rounded-lg transition-colors font-bold uppercase shadow">
+          <span class="material-symbols-outlined text-[16px] align-middle mr-1">save</span>
+          AGREGAR
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL SUPERVISIÓN / SEGURIDAD -->
+  <div id="modalSupervision" class="custom-modal">
+    <div class="bg-surface-container-low border border-white/10 rounded-xl max-w-md w-full flex flex-col shadow-2xl overflow-hidden glass-panel">
+      <!-- Header -->
+      <div class="p-4 border-b border-white/5 bg-surface-container-high/80 text-center">
+        <span class="text-3xl block mb-2">lock</span>
+        <h5 class="font-headline-lg text-[16px] text-primary font-bold uppercase tracking-tight">Validación de Supervisor</h5>
+        <p class="text-[10px] text-on-surface-variant font-data-sm uppercase mt-0.5 leading-relaxed">Esta acción requiere autorización de firma de un analista o supervisor.</p>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 space-y-4">
+        <div class="space-y-1.5">
+          <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Usuario Supervisor</label>
+          <div class="relative group">
+            <span class="material-symbols-outlined text-[18px] absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-secondary">person</span>
+            <input id="supUser" type="text" autocomplete="off" placeholder="Usuario supervisor" class="w-full rounded-lg text-xs pl-10 py-2.5 bg-surface-container-lowest border border-outline-variant"/>
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <label class="font-label-caps text-[9px] text-on-surface-variant uppercase tracking-wider block mb-1">Contraseña de Autorización</label>
+          <div class="relative group">
+            <span class="material-symbols-outlined text-[18px] absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant group-focus-within:text-secondary" style="font-variation-settings: 'FILL' 1;">key</span>
+            <input id="supPass" type="password" placeholder="••••••••" class="w-full rounded-lg text-xs pl-10 py-2.5 bg-surface-container-lowest border border-outline-variant"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="p-4 border-t border-white/5 bg-surface-container-high/80 flex gap-2">
+        <button onclick="cerrarModal('modalSupervision'); limpiarModalSup();" class="w-1/2 py-2.5 bg-surface-container-highest border border-outline-variant hover:bg-surface-bright text-xs font-label-caps text-on-surface rounded-lg transition-colors font-bold uppercase">Cancelar</button>
+        <button onclick="validarYGuardar()" class="w-1/2 py-2.5 bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container text-xs font-label-caps rounded-lg transition-colors font-bold uppercase shadow">Autorizar</button>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('Scripts.html'); ?>
+</body>
+</html>

@@ -33,7 +33,9 @@ import {
   Database,
   Trash2,
   Zap,
-  BarChart2
+  BarChart2,
+  Megaphone,
+  Send
 } from 'lucide-react';
 import { NotificationCenter } from '@/components/NotificationCenter';
 
@@ -228,6 +230,61 @@ export default function UsersManagementPage() {
     extension: '',
     areas: ['Todas'],
   });
+
+  // Estados para Emisión de Avisos / Broadcast
+  const [isBroadcastOpen, setIsBroadcastOpen] = useState(false);
+  const [broadcastForm, setBroadcastForm] = useState({
+    titulo: '',
+    descripcion: '',
+    modulo: 'general',
+    tipo: 'aviso',
+    prioridad: 'media',
+    target_type: 'global',
+    target_email: '',
+    target_role: 'multi_operator',
+    popup: false,
+    enlace: '/',
+  });
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+
+  const handleSendBroadcast = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastForm.titulo || !broadcastForm.descripcion) return;
+    setSendingBroadcast(true);
+    try {
+      const res = await fetch('/api/notificaciones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(broadcastForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedback({
+          type: 'success',
+          message: data.message || 'Aviso emitido y propagado en la plataforma.',
+        });
+        setIsBroadcastOpen(false);
+        setBroadcastForm({
+          titulo: '',
+          descripcion: '',
+          modulo: 'general',
+          tipo: 'aviso',
+          prioridad: 'media',
+          target_type: 'global',
+          target_email: '',
+          target_role: 'multi_operator',
+          popup: false,
+          enlace: '/',
+        });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (e: any) {
+      setFeedback({ type: 'error', message: e.message || 'Error al emitir aviso' });
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -509,6 +566,14 @@ export default function UsersManagementPage() {
             >
               <Database className="w-4 h-4 text-purple-400" />
               <span>Purga 500MB</span>
+            </button>
+
+            <button
+              onClick={() => setIsBroadcastOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 font-bold text-xs transition-all cursor-pointer"
+            >
+              <Megaphone className="w-4 h-4 text-rose-400" />
+              <span>Emitir Aviso</span>
             </button>
 
             <NotificationCenter />
@@ -1583,6 +1648,224 @@ export default function UsersManagementPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE EMISIÓN DE AVISOS / BROADCAST ── */}
+      {isBroadcastOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-5 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-rose-600/20 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                  <Megaphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white tracking-tight">
+                    Emitir Aviso o Notificación
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Propagar comunicados globales, alertas a salas o mensajes individuales
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setIsBroadcastOpen(false)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendBroadcast} className="space-y-4">
+              {/* Tipo de Destinatario */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Destinatario del Aviso
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastForm({ ...broadcastForm, target_type: 'global' })}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold text-center transition-all ${
+                      broadcastForm.target_type === 'global'
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    🌐 Toda la Plataforma
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastForm({ ...broadcastForm, target_type: 'user' })}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold text-center transition-all ${
+                      broadcastForm.target_type === 'user'
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    👤 Usuario Específico
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBroadcastForm({ ...broadcastForm, target_type: 'role' })}
+                    className={`p-2.5 rounded-xl border text-xs font-semibold text-center transition-all ${
+                      broadcastForm.target_type === 'role'
+                        ? 'bg-blue-600/20 border-blue-500 text-blue-300'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    }`}
+                  >
+                    👥 Por Rol
+                  </button>
+                </div>
+              </div>
+
+              {/* Selector si es Usuario */}
+              {broadcastForm.target_type === 'user' && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                    Seleccionar Usuario
+                  </label>
+                  <select
+                    value={broadcastForm.target_email}
+                    onChange={(e) => setBroadcastForm({ ...broadcastForm, target_email: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  >
+                    <option value="">Selecciona un usuario...</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.email}>
+                        {u.full_name} ({u.email}) - {u.role_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Selector si es Rol */}
+              {broadcastForm.target_type === 'role' && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                    Seleccionar Rol
+                  </label>
+                  <select
+                    value={broadcastForm.target_role}
+                    onChange={(e) => setBroadcastForm({ ...broadcastForm, target_role: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  >
+                    <option value="multi_operator">Operadores Multifunción</option>
+                    <option value="supervisor">Supervisores</option>
+                    <option value="data_analyst">Analistas de Datos</option>
+                    <option value="module_admin">Administradores de Módulo</option>
+                    <option value="auditor">Auditores</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Módulo y Prioridad */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                    Módulo de Referencia
+                  </label>
+                  <select
+                    value={broadcastForm.modulo}
+                    onChange={(e) => setBroadcastForm({ ...broadcastForm, modulo: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  >
+                    <option value="general">Plataforma General (Nexus)</option>
+                    <option value="briana">Telefonía (Briana)</option>
+                    <option value="oriana">Analítica (Oriana)</option>
+                    <option value="asys">Asistencia (Asys)</option>
+                    <option value="reclasificacion">Reclasificación</option>
+                    <option value="elecciones">Elecciones</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                    Nivel de Prioridad
+                  </label>
+                  <select
+                    value={broadcastForm.prioridad}
+                    onChange={(e) => setBroadcastForm({ ...broadcastForm, prioridad: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                  >
+                    <option value="baja">Baja (Informativo)</option>
+                    <option value="media">Media (Notificación regular)</option>
+                    <option value="alta">Alta (Toast destacado)</option>
+                    <option value="urgente">🚨 Urgente (Interrupción en pantalla)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Título */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  Título del Aviso *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Cambio de sala para turno tarde / Nueva campaña asignada"
+                  value={broadcastForm.titulo}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, titulo: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                />
+              </div>
+
+              {/* Mensaje */}
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">
+                  Mensaje Detallado *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  placeholder="Escribe el contenido del comunicado aquí..."
+                  value={broadcastForm.descripcion}
+                  onChange={(e) => setBroadcastForm({ ...broadcastForm, descripcion: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500 resize-none"
+                />
+              </div>
+
+              {/* Checkbox Popup Modal Inmediato */}
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={broadcastForm.popup}
+                    onChange={(e) => setBroadcastForm({ ...broadcastForm, popup: e.target.checked })}
+                    className="w-4 h-4 rounded text-rose-600 focus:ring-0 bg-slate-900 border-slate-700"
+                  />
+                  <div>
+                    <span className="text-xs font-semibold text-white block">
+                      Interrumpir pantalla con Popup Modal Inmediato
+                    </span>
+                    <span className="text-[11px] text-slate-400 block">
+                      Aparecerá superpuesto en cualquier modal o vista que el usuario tenga abierta y requerirá confirmación de lectura.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Botones */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsBroadcastOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={sendingBroadcast}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-bold text-xs shadow-lg shadow-rose-900/30 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{sendingBroadcast ? 'Emitiendo...' : 'Emitir Comunicado'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

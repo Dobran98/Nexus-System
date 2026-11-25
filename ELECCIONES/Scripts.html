@@ -1,0 +1,1786 @@
+<script>
+  // ==========================================
+  // 1. VARIABLES GLOBALES
+  // ==========================================
+  let session           = null;
+  let minutosInactivos  = 0;
+  let incidenciasVistas = 0;
+  let catalogoComunas   = [];
+  let ultimoDataBoletin = null;
+  let dataMunicipalCache    = [];
+  let municipalPuedeEditar  = false;
+  let dataElectoralCache    = [];
+  let _pendingSupAction     = null;   // Para el modal de supervisión
+  window.avisoTimeout       = null;
+
+  const HORAS_LABELS = ['9:00 AM','10:00 AM','11:00 AM','12:00 M','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6-8:00 PM'];
+  const HORAS_KEYS   = ['h9','h10','h11','h12','h13','h14','h15','h16','h17','h20'];
+
+  // ==========================================
+  // 1.5 CONTROL DE MODALES CUSTOM
+  // ==========================================
+  window.abrirModal = function(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.add('flex');
+      el.classList.remove('hidden');
+    }
+  };
+
+  window.cerrarModal = function(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('flex');
+      el.classList.add('hidden');
+    }
+  };
+
+  window.toggleDashboardPanel = function(contentId, btn) {
+    const el = document.getElementById(contentId);
+    if (!el) return;
+    const isHidden = el.classList.toggle('hidden');
+    const icon = btn.querySelector('.material-symbols-outlined');
+    if (icon) {
+      icon.innerText = isHidden ? 'keyboard_arrow_down' : 'keyboard_arrow_up';
+    }
+  };
+
+  // ==========================================
+  // 2. MODO OSCURO
+  // ==========================================
+  window.toggleTheme = function() {
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('sala_theme', isDark ? 'dark' : 'light');
+    document.querySelectorAll('.theme-icon').forEach(icon => {
+      icon.innerText = isDark ? 'light_mode' : 'dark_mode';
+    });
+  };
+
+  // ==========================================
+  // 3. EXPORTACIONES PDF / AUDITORÍA / EXCEL
+  // ==========================================
+  window.descargarPDF = function() {
+    window.toggleLoader(true);
+    Chart.defaults.animation = false;
+    Chart.defaults.transitions.active.animation.duration = 0;
+    const elemento = document.getElementById('zonaImpresionPDF');
+    const estiloOriginal = elemento.style.cssText;
+    elemento.style.maxHeight = 'none';
+    elemento.style.overflow  = 'visible';
+    const opt = {
+      margin: 0.2,
+      filename: 'INFORME_SALA_NACIONAL_' + new Date().toLocaleDateString() + '.pdf',
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 1.5, useCORS: true, allowTaint: true, logging: false },
+      jsPDF: { unit: 'in', format: 'legal', orientation: 'landscape' }
+    };
+    setTimeout(() => {
+      html2pdf().set(opt).from(elemento).save()
+        .then(() => {
+          elemento.style.cssText = estiloOriginal;
+          window.toggleLoader(false);
+          Chart.defaults.animation = true;
+          Chart.defaults.transitions.active.animation.duration = 1000;
+          Swal.fire({ toast:true, position:'top-end', icon:'success', title:'PDF Generado', showConfirmButton:false, timer:2000 });
+        })
+        .catch(err => {
+          elemento.style.cssText = estiloOriginal;
+          window.toggleLoader(false);
+          Chart.defaults.animation = true;
+          Chart.defaults.transitions.active.animation.duration = 1000;
+          Swal.fire('Error','No se pudo generar el PDF.','error');
+        });
+    }, 1000);
+  };
+
+  window.descargarAuditoriaCSV = function() {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(csv => {
+        window.toggleLoader(false);
+        const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = 'AUDITORIA_SALA_NACIONAL_' + new Date().toLocaleDateString() + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .generarCSVAuditoria(session.token);
+  };
+
+  window.descargarExcelMonitor = function() {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(data => {
+        window.toggleLoader(false);
+        if (!data || data.length < 2) return Swal.fire('Atención','No hay datos para exportar.','info');
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        // 18 columnas: estado, municipio, 2 centros+%, 2 mesas+%, 9 horas, total
+        ws['!cols'] = [
+          {wch:15},{wch:20},{wch:10},{wch:12},{wch:9},
+          {wch:10},{wch:10},{wch:9},
+          {wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},
+          {wch:12}
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, 'Reporte Monitor');
+        XLSX.writeFile(wb, 'REPORTE_MONITOR_' + new Date().toLocaleDateString().replace(/\//g,'-') + '.xlsx');
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error','No se pudo generar el Excel: '+err.message,'error'); })
+      .obtenerDataExportacionMonitor(session.token);
+  };
+
+  // ==========================================
+  // 4. UTILIDADES — LOADER Y RELOJ
+  // ==========================================
+  window.toggleLoader = function(s) {
+    document.getElementById('loader').style.display = s ? 'flex' : 'none';
+  };
+
+  // BUG FIX: Array de 9 cortes + AM/PM correcto para 12 (mediodía)
+  window.actualizarReloj = function() {
+    const ahora  = new Date();
+    const cortes = [9, 11, 12, 13, 14, 15, 16, 17, 20];
+    let proximo  = null;
+
+    for (let h of cortes) {
+      let horaCorte = new Date();
+      horaCorte.setHours(h, 0, 0, 0);
+      if (ahora < horaCorte) { proximo = horaCorte; break; }
+    }
+
+    const box          = document.getElementById('proximoCorteBox');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const labelCorte   = document.getElementById('labelCorte');
+
+    if (proximo && timerDisplay) {
+      const diff = proximo - ahora;
+      const hh = Math.floor(diff / 3600000);
+      const mm = Math.floor((diff % 3600000) / 60000);
+      const ss = Math.floor((diff % 60000) / 1000);
+
+      if (diff < 600000 && box) {
+        box.style.backgroundColor = '#fff3cd'; box.classList.add('border-warning');
+      } else if (box) {
+        box.style.backgroundColor = ''; box.classList.remove('border-warning');
+      }
+
+      // BUG FIX: manejo correcto de AM/PM para 12 (mediodía) y 0 (medianoche)
+      const h24 = proximo.getHours();
+      let horaFormateada;
+      if (h24 === 0)        horaFormateada = '12:00 AM';
+      else if (h24 < 12)   horaFormateada = h24 + ':00 AM';
+      else if (h24 === 12) horaFormateada = '12:00 PM';
+      else                  horaFormateada = (h24 - 12) + ':00 PM';
+
+      if (labelCorte) labelCorte.innerText = 'PRÓXIMO CORTE (' + horaFormateada + ')';
+      timerDisplay.innerText = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+    } else if (timerDisplay) {
+      if (labelCorte) labelCorte.innerText = 'JORNADA CERRADA';
+      timerDisplay.innerText = '00:00:00';
+      timerDisplay.className = timerDisplay.className.replace('text-danger','text-muted');
+    }
+  };
+
+  // ==========================================
+  // 5. MOTOR DE SESIÓN E INACTIVIDAD
+  // ==========================================
+  const limiteCierre = 15;
+
+  window.onload = () => {
+    const savedTheme = localStorage.getItem('sala_theme') || 'dark';
+    const isDark = (savedTheme === 'dark');
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    document.querySelectorAll('.theme-icon').forEach(icon => {
+      icon.innerText = isDark ? 'light_mode' : 'dark_mode';
+    });
+
+    window.actualizarReloj();
+    setInterval(window.actualizarReloj, 1000);
+
+    const savedToken = localStorage.getItem('sala_token');
+    const savedUser  = localStorage.getItem('sala_user');
+    if (savedToken && savedUser) {
+      window.toggleLoader(true);
+      google.script.run
+        .withSuccessHandler(valido => {
+          if (valido) {
+            session = { token: savedToken, user: JSON.parse(savedUser) };
+            window.toggleLoader(false);
+            window.mostrarDashboard();
+          } else {
+            localStorage.removeItem('sala_token'); localStorage.removeItem('sala_user');
+            window.toggleLoader(false);
+          }
+        })
+        .validarSesion(savedToken);
+    }
+
+    // Heartbeat (sesión + notificaciones)
+    setInterval(() => {
+      if (session && session.token) {
+        google.script.run.withSuccessHandler(valido => {
+          if (!valido) return window.logout();
+          setTimeout(() => { window.actualizarNotificaciones(); window.verificarAvisos(); }, 2000);
+        }).validarSesion(session.token);
+      }
+    }, 60000);
+
+    // Auto-refresh de pestañas activas
+    setInterval(() => {
+      if (!session) return;
+      const tm = document.getElementById('tab-monitor');
+      const ta = document.getElementById('tab-admin');
+      const tmu = document.getElementById('tab-municipal');
+      if (tm  && tm.style.display  !== 'none') window.loadData();
+      if (tmu && tmu.style.display !== 'none') window.loadMunicipal();
+      if (ta  && ta.style.display  !== 'none') { window.actualizarListaUsuarios(); window.actualizarAuditoriaEnVivo(); }
+    }, 300000);
+
+    // Cierre por inactividad
+    setInterval(() => {
+      if (session) {
+        minutosInactivos++;
+        if (minutosInactivos >= limiteCierre) {
+          window.logout();
+          Swal.fire('Sesión Expirada','Cierre automático por inactividad.','info');
+        }
+      }
+    }, 60000);
+  };
+
+  window.resetearInactividad = function() { minutosInactivos = 0; };
+  document.onmousemove = window.resetearInactividad;
+  document.onclick     = window.resetearInactividad;
+  document.onkeypress  = e => {
+    window.resetearInactividad();
+    if (e.key === 'Enter' && document.getElementById('loginSection').style.display !== 'none') window.login();
+  };
+
+  // ==========================================
+  // 6. LOGIN Y RUTEO DE ROLES
+  // ==========================================
+  window.login = function() {
+    const u = document.getElementById('user').value.trim();
+    const p = document.getElementById('pass').value.trim();
+    if (!u || !p) return Swal.fire('Atención','Ingrese credenciales','warning');
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        window.toggleLoader(false);
+        session = res;
+        localStorage.setItem('sala_token', session.token);
+        localStorage.setItem('sala_user',  JSON.stringify(session.user));
+        window.mostrarDashboard();
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .iniciarSesion(u, p);
+  };
+
+  window.mostrarDashboard = function() {
+    document.getElementById('loginSection').style.display  = 'none';
+    document.getElementById('mainDashboard').style.display = 'block';
+    const loginThemeToggle = document.getElementById('loginThemeToggle');
+    if (loginThemeToggle) loginThemeToggle.style.display = 'none';
+    document.getElementById('infoUser').innerHTML = '📍 ' + session.user.estado + ' | 👤 ' + session.user.rol;
+
+    window.cargarEstadosSelectores();
+    window.cargarCatalogoComunas();
+
+    const rol  = session.user.rol;
+    const tabs = ['btn-monitor','btn-municipal','btn-incidentes','btn-graficos','btn-admin','btn-metas','btn-condominios'];
+    tabs.forEach(id => { 
+      const el = document.getElementById(id); if (el) el.style.display = 'none'; 
+      const elMob = document.getElementById(id + '-mobile'); if (elMob) elMob.style.display = 'none';
+    });
+
+    const expBtns = ['btnExportarMun','btnExportarCSVInc','btnExportarXLSXInc','btnExportarCondXLSX','btnAgregarCond'];
+    expBtns.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+
+    if (rol === 'Admin' || rol === 'Analista') {
+      tabs.forEach(id => { 
+        const el = document.getElementById(id); if (el) el.style.display = 'flex'; 
+        const elMob = document.getElementById(id + '-mobile'); if (elMob) elMob.style.display = 'block';
+      });
+      ['btnExportarCSVInc','btnExportarXLSXInc','btnExportarMun','btnExportarCondXLSX','btnAgregarCond'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.style.display = 'block';
+      });
+      window.showTab('monitor');
+    } else if (rol === 'Operador Auxiliar') {
+      ['btn-municipal','btn-incidentes'].forEach(id => { 
+        const el = document.getElementById(id); if (el) el.style.display = 'flex'; 
+        const elMob = document.getElementById(id + '-mobile'); if (elMob) elMob.style.display = 'block';
+      });
+      const em = document.getElementById('btnExportarMun'); if (em) em.style.display = 'block';
+      window.showTab('municipal');
+    } else if (rol === 'Operador') {
+      ['btn-monitor','btn-incidentes','btn-municipal','btn-metas','btn-condominios'].forEach(id => { 
+        const el = document.getElementById(id); if (el) el.style.display = 'flex'; 
+        const elMob = document.getElementById(id + '-mobile'); if (elMob) elMob.style.display = 'block';
+      });
+      window.showTab('monitor');
+    } else if (rol === 'Operador 0800' || rol === 'Estadal Auxiliar') {
+      const bi = document.getElementById('btn-incidentes'); if (bi) bi.style.display = 'flex';
+      const biMob = document.getElementById('btn-incidentes-mobile'); if (biMob) biMob.style.display = 'block';
+      window.showTab('incidentes');
+    } else if (rol === 'Estadal Reporte') {
+      ['btn-monitor','btn-metas','btn-condominios'].forEach(id => { 
+        const el = document.getElementById(id); if (el) el.style.display = 'flex'; 
+        const elMob = document.getElementById(id + '-mobile'); if (elMob) elMob.style.display = 'block';
+      });
+      window.showTab('monitor');
+    } else {
+      ['btn-monitor','btn-incidentes','btn-metas'].forEach(id => { 
+        const el = document.getElementById(id); if (el) el.style.display = 'flex'; 
+        const elMob = document.getElementById(id + '-mobile'); if (elMob) elMob.style.display = 'block';
+      });
+      window.showTab('monitor');
+    }
+
+    window.verificarAvisos();
+  };
+
+  window.logout = function() {
+    window.toggleLoader(true);
+    google.script.run.withSuccessHandler(() => {
+      session = null;
+      localStorage.removeItem('sala_token');
+      localStorage.removeItem('sala_user');
+      document.getElementById('mainDashboard').style.display = 'none';
+      document.getElementById('loginSection').style.display  = 'block';
+      const loginThemeToggle = document.getElementById('loginThemeToggle');
+      if (loginThemeToggle) loginThemeToggle.style.display = 'block';
+      document.getElementById('user').value = '';
+      document.getElementById('pass').value = '';
+      window.toggleLoader(false);
+    }).logoutManual(session ? session.token : '');
+  };
+
+  // BUG FIX: cargarTablaMetas() se llama cuando se entra a la pestaña metas
+  window.showTab = function(id) {
+    document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+    document.getElementById('tab-' + id).style.display = 'block';
+
+    // Update active tab buttons (both desktop and mobile)
+    const tabs = ['monitor','municipal','metas','incidentes','graficos','admin'];
+    tabs.forEach(tKey => {
+      const btn = document.getElementById('btn-' + tKey);
+      if (btn) {
+        if (tKey === id) {
+          btn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-high', 'hover:text-on-surface');
+          btn.classList.add('bg-primary-container', 'text-on-primary-container', 'font-bold', 'shadow-sm');
+        } else {
+          btn.classList.add('text-on-surface-variant', 'hover:bg-surface-container-high', 'hover:text-on-surface');
+          btn.classList.remove('bg-primary-container', 'text-on-primary-container', 'font-bold', 'shadow-sm');
+        }
+      }
+      // Also update mobile buttons
+      const btnMob = document.getElementById('btn-' + tKey + '-mobile');
+      if (btnMob) {
+        if (tKey === id) {
+          btnMob.classList.remove('text-on-surface-variant');
+          btnMob.classList.add('text-primary', 'font-bold', 'bg-surface-container-high');
+        } else {
+          btnMob.classList.add('text-on-surface-variant');
+          btnMob.classList.remove('text-primary', 'font-bold', 'bg-surface-container-high');
+        }
+      }
+    });
+
+    if (id === 'monitor')     window.loadData();
+    if (id === 'municipal')   window.loadMunicipal();
+    if (id === 'incidentes')  { window.loadIncidencias(); window.limpiarBadge(); }
+    if (id === 'graficos')    window.renderizarGraficos();
+    if (id === 'metas')       window.cargarTablaMetas();
+    if (id === 'condominios') window.loadCondominios();
+    if (id === 'admin')      {
+      window.actualizarListaUsuarios();
+      window.actualizarLedsMaestros();
+      window.actualizarLedsDetallados();
+      window.actualizarAuditoriaEnVivo();
+    }
+  };
+
+  // ==========================================
+  // 7. CATÁLOGO DE COMUNAS
+  // ==========================================
+  window.cargarCatalogoComunas = function() {
+    google.script.run.withSuccessHandler(data => { catalogoComunas = data || []; }).obtenerCatalogoComunas();
+  };
+
+  window.actualizarComunasPorMunicipio = function() {
+    const estadoSel = document.getElementById('incEstado').value.toUpperCase().trim();
+    const munSel    = document.getElementById('incMunicipio').value.toUpperCase().trim();
+    const selComuna = document.getElementById('incComuna');
+    if (!selComuna) return;
+    selComuna.innerHTML = '<option value="">-- COMUNA (Opcional) --</option>';
+    if (!estadoSel || !munSel || catalogoComunas.length === 0) return;
+    const munLimpio = munSel.replace(/^MP\.?\s*/i,'').trim();
+    catalogoComunas
+      .filter(c => {
+        const cML = c.municipio.replace(/^MP\.?\s*/i,'').trim();
+        return c.estado === estadoSel && (cML === munLimpio || c.municipio.includes(munLimpio) || munLimpio.includes(c.municipio));
+      })
+      .forEach(c => {
+        let opt = document.createElement('option');
+        opt.value = c.comuna; opt.innerText = c.comuna;
+        selComuna.appendChild(opt);
+      });
+  };
+
+  // ==========================================
+  // 8. MONITOREO MUNICIPAL
+  // ==========================================
+  window.loadMunicipal = function() {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        window.toggleLoader(false);
+        const cont = document.getElementById('contenedorEstadosMunicipales');
+        if (!res || !res.registros || res.registros.length === 0) {
+          cont.innerHTML = '<div class="alert alert-light text-center w-100">No hay información municipal para mostrar.</div>';
+          return;
+        }
+        dataMunicipalCache   = res.registros;
+        municipalPuedeEditar = res.puedeEditar;
+        const estados = [...new Set(res.registros.map(m => m.estado))].sort();
+        cont.innerHTML = estados.map(edo => {
+          const cant = res.registros.filter(m => m.estado === edo).length;
+          return '<div class="bg-surface-container-high rounded-xl p-4 border border-white/5 shadow-md text-center hover:bg-surface-container-highest hover:border-primary/30 transition-all cursor-pointer group" onclick="window.abrirModalMunicipal(\'' + edo + '\')">' +
+                 '<h5 class="font-bold text-primary text-sm tracking-tight mb-2 group-hover:text-secondary transition-colors uppercase">' + edo + '</h5>' +
+                 '<span class="font-data-sm text-[10px] text-on-surface-variant bg-surface-container-lowest px-2.5 py-1 rounded border border-white/5 uppercase tracking-wider">' + cant + ' Municipios</span></div>';
+        }).join('');
+      })
+      .withFailureHandler(err => {
+        window.toggleLoader(false);
+        document.getElementById('contenedorEstadosMunicipales').innerHTML =
+          '<div class="alert alert-danger w-100">Error cargando municipal: ' + err.message + '</div>';
+      })
+      .obtenerDataMonitoreoMunicipal(session.user.estado, session.user.rol);
+  };
+
+  window.abrirModalMunicipal = function(estado) {
+    const cuerpoModal = document.getElementById('modalMunicipalBody');
+    const tituloModal = document.getElementById('modalMunicipalTitle');
+    const btnGuardar  = document.getElementById('btnGuardarModalMun');
+    const statusText  = document.getElementById('modalMunicipalStatus');
+    tituloModal.innerText = 'Monitoreo: ' + estado;
+
+    const registrosEstado = dataMunicipalCache.filter(m => m.estado === estado);
+    const dis = municipalPuedeEditar ? '' : 'disabled';
+    btnGuardar.style.display = municipalPuedeEditar ? 'inline-block' : 'none';
+    statusText.innerText = municipalPuedeEditar ? '' : 'Modo Lectura';
+
+    const horasLabel = ['9A','11A','12M','1P','2P','3P','4P','5P','6-8P'];
+
+    let html = '<div class="grid grid-cols-1 gap-4">';
+    registrosEstado.forEach(m => {
+      let horasHtml = horasLabel.map((label, i) => {
+        const key = HORAS_KEYS[i];
+        return '<div class="flex flex-col items-center"><label class="font-data-sm text-[9px] text-outline-variant uppercase tracking-wider mb-0.5">' + label + '</label>' +
+               '<input type="number" class="input-electoral text-center r-' + key + ' py-1 px-0.5 text-xs rounded border" style="width:40px;" value="' + (m[key]||0) + '" ' + dis + '></div>';
+      }).join('');
+
+      html += '<div class="w-full tarjeta-municipal" data-search="' + m.estado + ' ' + m.municipio + ' ' + m.cedula + ' ' + m.nombre + '">' +
+              '<div class="bg-surface-container-high rounded-xl border border-white/5 border-l-4 border-secondary p-4 shadow-lg space-y-3">' +
+              '<div class="flex items-center justify-between border-b border-white/5 pb-2">' +
+              '<h6 class="font-bold text-secondary text-sm uppercase tracking-wide">' + m.municipio + '</h6></div>' +
+              '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-on-surface-variant">' +
+              '<div class="sm:col-span-1 space-y-1"><div class="font-bold text-on-surface flex items-center gap-1">👤 ' + m.nombre + '</div>' +
+              '<div>💳 C.I: ' + m.cedula + '</div>' +
+              '<div>📞 Telf: ' + m.telefono + '</div></div>' +
+              '<div class="sm:col-span-2 flex flex-col sm:flex-row items-center gap-4 justify-end">' +
+              '<div class="flex flex-col items-center border-r border-white/5 pr-4"><label class="font-label-caps text-[9px] text-outline-variant uppercase tracking-wider mb-1">C. ACTIVOS</label>' +
+              '<input type="number" class="input-electoral text-center font-bold text-sm w-16 py-1 rounded border i-act" value="' + m.cActivos + '" ' + dis + ' data-edo="' + m.estado + '" data-mun="' + m.municipio + '"></div>' +
+              '<div class="flex-1 w-full"><div class="flex justify-around gap-1.5">' + horasHtml + '</div></div>' +
+              '</div></div></div></div>';
+    });
+    html += '</div>';
+    cuerpoModal.innerHTML = html;
+    window.abrirModal('modalMunicipal');
+  };
+
+  window.guardarTodoMunicipal = function() {
+    const tarjetas = document.querySelectorAll('#modalMunicipalBody .tarjeta-municipal');
+    const data = [];
+    tarjetas.forEach(t => {
+      const act = t.querySelector('.i-act');
+      if (act && !act.disabled) {
+        const obj = { estado: act.getAttribute('data-edo'), municipio: act.getAttribute('data-mun'), cActivos: act.value };
+        HORAS_KEYS.forEach(k => { obj[k] = (t.querySelector('.r-' + k) || {value:0}).value; });
+        data.push(obj);
+      }
+    });
+    if (data.length === 0) return Swal.fire('Atención','No hay datos editables para guardar.','warning');
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        window.toggleLoader(false);
+        Swal.fire('Éxito','Monitoreo guardado.','success');
+        window.cerrarModal('modalMunicipal');
+        window.loadMunicipal();
+      })
+      .withFailureHandler(e => { window.toggleLoader(false); Swal.fire('Error', e.message, 'error'); })
+      .guardarMonitoreoMunicipal(data, session.user, session.token);
+  };
+
+  window.filtrarTarjetasMunicipales = function() {
+    const term = document.getElementById('busquedaMunResp').value.toLowerCase();
+    document.querySelectorAll('.tarjeta-municipal').forEach(t => {
+      t.style.display = t.getAttribute('data-search').toLowerCase().includes(term) ? '' : 'none';
+    });
+  };
+
+  // BUG FIX: descarga XLSX real en vez de CSV con nombre engañoso
+  window.descargarExcelMunicipal = function() {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(data => {
+        window.toggleLoader(false);
+        if (!data || data.length < 2) return Swal.fire('Sin datos','No hay datos municipales para exportar.','info');
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [{wch:15},{wch:20},{wch:12},{wch:20},{wch:14},{wch:10},
+                       {wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Directorio Municipal');
+        XLSX.writeFile(wb, 'DIRECTORIO_MUNICIPAL_' + new Date().toLocaleDateString().replace(/\//g,'-') + '.xlsx');
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .obtenerMatrizMunicipal(session.token);
+  };
+
+  // ==========================================
+  // 9. MONITOR ELECTORAL (9 FRANJAS)
+  // ==========================================
+  window.loadData = function() {
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.municipios) return;
+        const tbody = document.getElementById('tablaElectoral');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        const r        = session.user.rol;
+        const esGlobal = (r === 'Admin' || r === 'Analista' || r === 'Operador Auxiliar');
+        const mun      = res.municipios.filter(m => m.municipio && m.municipio.trim() !== '' && (esGlobal || (m.estado && session.user.estado && m.estado.toUpperCase().trim() === session.user.estado.toUpperCase().trim())));
+        dataElectoralCache = mun;
+
+        if (esGlobal) {
+          const agrupado = mun.reduce((acc, m) => { if (!acc[m.estado]) acc[m.estado]=[]; acc[m.estado].push(m); return acc; }, {});
+          Object.keys(agrupado).sort().forEach((edo, i) => {
+            const id = 'edo-' + i;
+            tbody.innerHTML += '<tr class="estado-header cursor-pointer font-bold text-primary hover:bg-surface-container-high transition-colors" onclick="window.toggleEstado(\'' + id + '\', this)">' +
+              '<td colspan="20" class="ps-6 py-3 sticky-col text-left font-body-md text-sm border-b border-white/5">' +
+              '<div class="flex items-center gap-2">' +
+              '<span class="material-symbols-outlined transition-transform duration-200" style="transform: rotate(-90deg);">expand_more</span>' +
+              '<span class="status-dot green"></span>' +
+              '<span>' + edo + '</span>' +
+              '</div></td></tr>';
+            agrupado[edo].forEach(m => { tbody.innerHTML += window.renderFilaMunicipio(m, res.bloqueos, id, false); });
+          });
+        } else {
+          mun.forEach(m => { tbody.innerHTML += window.renderFilaMunicipio(m, res.bloqueos, 'solo', true); });
+        }
+      })
+      .withFailureHandler(err => {
+        Swal.fire({ toast:true, position:'top-end', icon:'error', title:'Error cargando datos', text: err.message, showConfirmButton:false, timer:4000 });
+      })
+      .obtenerDataElectoral(session.user.estado, session.user.rol);
+  };
+
+  window.renderFilaMunicipio = function(m, bloqueosEstado, clase, visible) {
+    const b = bloqueosEstado || {};
+
+    const colorC = parseFloat(m.cEfectividad) >= 100 ? 'text-success' : parseFloat(m.cEfectividad) >= 50 ? 'text-warning' : 'text-danger';
+    const colorM = parseFloat(m.mEfectividad) >= 100 ? 'text-success' : parseFloat(m.mEfectividad) >= 50 ? 'text-warning' : 'text-danger';
+
+    // Inputs de 9 horas
+    const horasHtml = HORAS_KEYS.map(k => {
+      const bloq = b[k] || false;
+      return '<td class="text-center"><input type="number" class="input-electoral ' + k + (bloq ? ' bloqueado' : '') +
+             '" value="' + (m[k] || 0) + '" ' + (bloq ? 'disabled' : '') + '></td>';
+    }).join('');
+
+    return '<tr data-estado="' + m.estado + '" data-mun="' + m.municipio + '" class="' + clase + ' municipio-row hover:bg-white/5 transition-colors border-b border-white/5 text-right font-data-sm text-xs" style="display:' + (visible ? '' : 'none') + '">' +
+      '<td class="ps-8 py-2 text-left font-body-md text-sm border-r border-white/5 sticky-col">' + m.municipio + '</td>' +
+      // Centros
+      '<td class="p-2 border-r border-white/5 text-center text-on-surface-variant opacity-60 bg-surface-variant/10 w-[65px] font-bold cTotales">' + (m.cTotales||0) + '</td>' +
+      '<td class="p-1 border-r border-white/5 text-center w-[65px]"><input type="number" class="input-electoral w-full cActivos" oninput="window.recalcularFila(this,\'centros\')" value="' + (m.cActivos||0) + '"></td>' +
+      '<td class="p-2 border-r border-white/5 text-center w-[60px]"><span class="cFaltan font-bold ' + (m.cFaltan>0?'text-error':'text-tertiary') + '">' + m.cFaltan + '</span></td>' +
+      '<td class="p-2 border-r border-white/5 text-center w-[60px]"><span class="cEfec font-bold ' + (parseFloat(m.cEfectividad)>=100?'text-tertiary':parseFloat(m.cEfectividad)>=50?'text-warning':'text-error') + '">' + m.cEfectividad + '%</span></td>' +
+      // Mesas
+      '<td class="p-2 border-r border-white/5 text-center text-on-surface-variant opacity-60 bg-surface-variant/10 w-[65px] font-bold mTotales">' + (m.mTotales||0) + '</td>' +
+      '<td class="p-1 border-r border-white/5 text-center w-[65px]"><input type="number" class="input-electoral w-full mActivas" oninput="window.recalcularFila(this,\'mesas\')" value="' + (m.mActivas||0) + '"></td>' +
+      '<td class="p-2 border-r border-white/5 text-center w-[60px]"><span class="mFaltan font-bold ' + (m.mFaltan>0?'text-error':'text-tertiary') + '">' + m.mFaltan + '</span></td>' +
+      '<td class="p-2 border-r border-white/5 text-center w-[60px]"><span class="mEfec font-bold ' + (parseFloat(m.mEfectividad)>=100?'text-tertiary':parseFloat(m.mEfectividad)>=50?'text-warning':'text-error') + '">' + m.mEfectividad + '%</span></td>' +
+      // 9 horas
+      horasHtml +
+      '<td class="p-2 text-center w-[90px]"><button class="btn-xs bg-secondary/15 border border-secondary text-secondary hover:bg-secondary/25 transition-all uppercase font-bold" onclick="window.guardarFilaUnica(this)">GUARDAR</button></td>' +
+    '</tr>';
+  };
+
+  window.recalcularFila = function(input, tipo) {
+    const fila = input.closest('tr');
+    const claseTotal  = tipo === 'centros' ? '.cTotales' : '.mTotales';
+    const claseFaltan = tipo === 'centros' ? '.cFaltan'  : '.mFaltan';
+    const claseEfec   = tipo === 'centros' ? '.cEfec'    : '.mEfec';
+
+    const total   = parseInt(fila.querySelector(claseTotal).innerText) || 0;
+    let activos   = parseInt(input.value) || 0;
+    if (activos > total) {
+      Swal.fire({ toast:true, position:'top-end', icon:'error', title:'Límite Superado', text:'No exceder '+total+'.', showConfirmButton:false, timer:3000 });
+      input.value = total; activos = total;
+    }
+    const faltan      = total - activos;
+    const efectividad = total > 0 ? ((activos / total) * 100).toFixed(2) : '0.00';
+    const colorEfec   = parseFloat(efectividad) >= 100 ? 'text-success' : parseFloat(efectividad) >= 50 ? 'text-warning' : 'text-danger';
+
+    const spanF = fila.querySelector(claseFaltan);
+    spanF.innerText   = faltan;
+    spanF.className   = claseFaltan.substring(1) + ' fw-bold ' + (faltan > 0 ? 'text-danger' : 'text-success');
+
+    const spanE = fila.querySelector(claseEfec);
+    spanE.innerText = efectividad + '%';
+    spanE.className = claseEfec.substring(1) + ' fw-bold ' + colorEfec;
+  };
+
+  window.toggleEstado = function(id, el) {
+    const filas = document.querySelectorAll('.' + id);
+    if (filas.length === 0) return;
+    const isHidden = filas[0].style.display === 'none';
+    filas.forEach(f => f.style.display = isHidden ? '' : 'none');
+    const icon = el.querySelector('.material-symbols-outlined');
+    if (icon) icon.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+  };
+
+  window.filtrarTabla = function() {
+    const input = document.getElementById('busquedaEstado').value.toUpperCase();
+    document.querySelectorAll('#tablaElectoral .municipio-row').forEach(f => {
+      f.style.display = f.innerText.toUpperCase().includes(input) ? '' : 'none';
+    });
+    document.querySelectorAll('#tablaElectoral .estado-header').forEach(h => {
+      const idClase = h.getAttribute('onclick').match(/'([^']+)'/)[1];
+      const bajoH   = document.querySelectorAll('.' + idClase);
+      const algunoVis = Array.from(bajoH).some(m => m.style.display !== 'none');
+      h.style.display = (input === '' || algunoVis) ? '' : 'none';
+      if (input !== '' && algunoVis) h.querySelector('span').innerText = '▼';
+    });
+  };
+
+  window.guardarFilaUnica = function(btn) {
+    const tr = btn.closest('tr');
+    const d  = [{ estado: tr.dataset.estado, municipio: tr.dataset.mun,
+                  cActivos: tr.querySelector('.cActivos').value,
+                  mActivas: tr.querySelector('.mActivas').value }];
+    HORAS_KEYS.forEach(k => { d[0][k] = (tr.querySelector('.' + k) || {value:0}).value; });
+
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => { window.toggleLoader(false); Swal.fire({ title:'Éxito', icon:'success', timer:1000, showConfirmButton:false }); window.loadData(); })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .actualizarTablaElectoral(d, session.user, session.token);
+  };
+
+  window.intentarGuardar = function() {
+    const filas = document.querySelectorAll('#tablaElectoral .municipio-row');
+    const datosParaGuardar = [];
+    filas.forEach(tr => {
+      if (tr.style.display !== 'none') {
+        const obj = { estado: tr.dataset.estado, municipio: tr.dataset.mun,
+                      cActivos: tr.querySelector('.cActivos').value,
+                      mActivas: tr.querySelector('.mActivas').value };
+        HORAS_KEYS.forEach(k => { obj[k] = (tr.querySelector('.' + k) || {value:0}).value; });
+        datosParaGuardar.push(obj);
+      }
+    });
+    if (datosParaGuardar.length === 0) return Swal.fire('Atención','No hay datos visibles.','warning');
+    Swal.fire({ title:'¿Confirmar Guardado?', text:'Se actualizarán '+datosParaGuardar.length+' municipios.', icon:'question', showCancelButton:true, confirmButtonColor:'#28a745', confirmButtonText:'SÍ, GUARDAR TODO ✅' })
+      .then(result => {
+        if (result.isConfirmed) {
+          window.toggleLoader(true);
+          google.script.run
+            .withSuccessHandler(() => { window.toggleLoader(false); Swal.fire({ title:'¡Actualizado!', icon:'success', timer:2000, showConfirmButton:false }); window.loadData(); })
+            .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+            .actualizarTablaElectoral(datosParaGuardar, session.user, session.token);
+        }
+      });
+  };
+
+  // ==========================================
+  // 10. INCIDENCIAS
+  // ==========================================
+  window.enviarIncidencia = function() {
+    const bloque    = document.getElementById('incBloque').value;
+    const categoria = document.getElementById('incCategoria').value;
+    const municipio = document.getElementById('incMunicipio').value;
+    const desc      = document.getElementById('incDesc').value;
+    const cant      = document.getElementById('incCantidad') ? document.getElementById('incCantidad').value : 1;
+    const edo       = document.getElementById('incEstado').value;
+    const comuna    = document.getElementById('incComuna') ? document.getElementById('incComuna').value : '';
+
+    const faltantes = [];
+    if (!bloque)    faltantes.push('Bloque');
+    if (!categoria) faltantes.push('Categoría');
+    if (!municipio) faltantes.push('Municipio');
+    if (!edo)       faltantes.push('Estado');
+    if (faltantes.length > 0) return Swal.fire({ icon:'warning', title:'Faltan Datos', html:'<b>'+faltantes.join(', ')+'</b>' });
+
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        window.toggleLoader(false);
+        Swal.fire('Reportado','Incidencia registrada','success');
+        document.getElementById('incDesc').value = '';
+        if (document.getElementById('incCantidad')) document.getElementById('incCantidad').value = '1';
+        if (document.getElementById('incComuna'))   document.getElementById('incComuna').value = '';
+        if (document.getElementById('tab-incidentes').style.display !== 'none') window.loadIncidencias();
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error al enviar', err.message, 'error'); })
+      .registrarIncidencia({ bloque, categoria, estado: edo, municipio, comuna, descripcion: desc, cantidad: cant }, session.user, session.token);
+  };
+
+  window.resolverIncidencia = function(fechaExacta) {
+    Swal.fire({ title:'¿Marcar como Resuelta?', text:'Se registrará en la bitácora.', icon:'question', showCancelButton:true, confirmButtonColor:'#28a745', confirmButtonText:'SÍ, RESOLVER ✅' })
+      .then(result => {
+        if (result.isConfirmed) {
+          window.toggleLoader(true);
+          google.script.run
+            .withSuccessHandler(() => { window.toggleLoader(false); Swal.fire({ title:'Resuelta', icon:'success', timer:1500, showConfirmButton:false }); window.loadIncidencias(); })
+            .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+            .marcarIncidenciaResuelta(fechaExacta, session.user, session.token);
+        }
+      });
+  };
+
+  window.loadIncidencias = function() {
+    if (!session) return;
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(data => {
+        window.toggleLoader(false);
+        const lista = document.getElementById('listaIncidentes');
+        if (!data || data.length === 0) { lista.innerHTML = '<div class="alert alert-light text-center small">No hay reportes.</div>'; return; }
+        
+        const blockLabels = {
+          'B1': '🟥 BLOQUE 1: URGENCIAS',
+          'B2': '🟦 BLOQUE 2: TÉCNICO',
+          'B3': '🟨 BLOQUE 3: LOGÍSTICA',
+          'B4': '🟩 BLOQUE 4: PERSONAL'
+        };
+
+        lista.innerHTML = data.reverse().map(f => {
+          const color      = f[3]==='B1' ? 'danger' : f[3]==='B2' ? 'primary' : f[3]==='B3' ? 'warning' : 'success';
+          const blockLabel = blockLabels[f[3]] || f[3];
+          const htmlComuna = f[9] && f[9] !== 'No aplica' ? '<span class="badge bg-secondary ms-1">🏘️ '+f[9]+'</span>' : '';
+          const estatus    = f[10] || 'PENDIENTE';
+          const badgeEst   = estatus === 'RESUELTA' ? '<span class="badge bg-success ms-1">✅ RESUELTA</span>' : '<span class="badge bg-warning text-dark ms-1">⏳ PENDIENTE</span>';
+          const btnR       = estatus === 'PENDIENTE'
+            ? '<button class="btn btn-xs btn-success mt-2 shadow-sm fw-bold" onclick="window.resolverIncidencia(\''+f[0]+'\')">MARCAR COMO RESUELTA</button>'
+            : '<div class="small text-success mt-1 fw-bold">Resuelta por: '+f[11]+'</div>';
+          return '<div class="alert alert-light border-start border-'+color+' border-4 mb-2 shadow-sm p-2" data-bloque="'+f[3]+'">' +
+            '<div class="d-flex justify-content-between"><div><span class="badge bg-'+color+' mb-1">'+blockLabel+'</span>'+badgeEst+'</div><small class="text-muted" style="font-size:0.65rem;">'+f[0]+'</small></div>' +
+            '<div class="fw-bold text-dark small mt-1">'+f[1]+' - '+f[2]+' '+htmlComuna+'</div>' +
+            '<div class="text-secondary small mt-1">'+f[4]+' <span class="badge bg-secondary">x'+(f[8]||1)+'</span>: <span class="text-dark">'+f[5]+'</span></div>' +
+            '<div class="d-flex justify-content-between align-items-end mt-2"><div>'+btnR+'</div><div class="text-end text-muted" style="font-size:0.6rem;">👤 '+f[6]+' ('+f[7]+')</div></div></div>';
+        }).join('');
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); console.error('Error cargando incidencias:', err.message); })
+      .obtenerIncidencias(session.user.estado, session.user.rol);
+  };
+
+  window.actualizarMunicipiosPorEstado = function() {
+    const estadoSel = document.getElementById('incEstado').value;
+    const selMun    = document.getElementById('incMunicipio');
+    const selCom    = document.getElementById('incComuna');
+    if (!estadoSel) { selMun.innerHTML = '<option value="">-- MUNICIPIO --</option>'; if (selCom) selCom.innerHTML = '<option value="">-- COMUNA --</option>'; return; }
+    google.script.run.withSuccessHandler(res => {
+      if (!res.municipios) return;
+      selMun.innerHTML = '<option value="">-- SELECCIONE MUNICIPIO --</option>';
+      if (selCom) selCom.innerHTML = '<option value="">-- COMUNA (Opcional) --</option>';
+      res.municipios.filter(m => m.estado && m.estado.toUpperCase().trim() === estadoSel.toUpperCase().trim()).forEach(m => {
+        let opt = document.createElement('option'); opt.value = m.municipio; opt.innerText = m.municipio; selMun.appendChild(opt);
+      });
+    }).obtenerDataElectoral(estadoSel, 'Admin');
+  };
+
+  window.filtrarIncidenciasLocal = function() {
+    const busqueda = document.getElementById('busquedaInc').value.toLowerCase();
+    const bloque   = document.getElementById('filtroBloque').value;
+    document.querySelectorAll('#listaIncidentes .alert').forEach(card => {
+      const texto      = card.innerText.toLowerCase();
+      const cardBloque = card.getAttribute('data-bloque');
+      const matchBloque = !bloque || cardBloque === bloque;
+      card.style.display = (texto.includes(busqueda) && matchBloque) ? 'block' : 'none';
+    });
+  };
+
+  window.actualizarNotificaciones = function() {
+    if (!session || document.getElementById('tab-incidentes').style.display !== 'none') return;
+    google.script.run.withSuccessHandler(data => {
+      if (!Array.isArray(data)) return;
+      const nuevas = data.length - incidenciasVistas;
+      if (nuevas > 0) {
+        const b = document.getElementById('badgeIncidencias');
+        b.innerText = nuevas > 9 ? '+9' : nuevas; b.style.display = 'inline-block';
+        if (data[data.length-1][3] === 'B1') {
+          const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+          audio.play().catch(() => {});
+          Swal.fire({ toast:true, position:'top-end', icon:'error', title:'¡NUEVA ALERTA CRÍTICA (B1)!', showConfirmButton:false, showCloseButton:true, timer:7000 });
+        }
+      }
+    }).obtenerIncidencias(session.user.estado, session.user.rol);
+  };
+
+  window.limpiarBadge = function() {
+    google.script.run.withSuccessHandler(data => {
+      if (Array.isArray(data)) {
+        incidenciasVistas = data.length;
+        document.getElementById('badgeIncidencias').style.display = 'none';
+        document.getElementById('badgeIncidencias').innerText = '0';
+      }
+    }).obtenerIncidencias(session.user.estado, session.user.rol);
+  };
+
+  window.cargarCategoriasPorBloque = function() {
+    const bloque  = document.getElementById('incBloque').value;
+    const selCat  = document.getElementById('incCategoria');
+    selCat.innerHTML = '<option value="">-- CATEGORÍA --</option>';
+    const cats = {
+      'B1':[
+        '🚨 Violencia o Amenazas (Seguridad Ciudadana)',
+        '🚫 Sabotaje o Daños (Materiales o local)',
+        '🗳️ Manipulación de Votos (Trampas en resultados)',
+        '😠 Discriminación (Trato desigual)'
+      ],
+      'B2':[
+        '💻 Fallas de Equipos/Sistemas',
+        '📡 Sin Internet o Señal (Conectividad)',
+        '❌ Fallas en Validación de Proyectos',
+        '⚡ Fallas eléctricas',
+        '📝 Problemas Administrativos (Errores en papeles)',
+        '📉 Irregularidades en el Registro (Nombres que no aparecen)'
+      ],
+      'B3':[
+        '📦 Falta de Material (Boletas, actas, sillas)',
+        '🚧 No se puede llegar al Centro (Acceso bloqueado)',
+        '⏰ Retrasos (Abrieron tarde o cerraron antes)',
+        '📢 Falta de Información (La gente no sabe qué hacer)'
+      ],
+      'B4':[
+        '👮 Abuso de Autoridad (Funcionarios que tratan mal)',
+        '👥 Falta de Responsables (facilitadores o voceros oficialmente asignados)',
+        '🤝 Falta de Apoyo Institucional (Nadie supervisa)',
+        '📜 Incumplimiento de Normas (No siguen las reglas)'
+      ]
+    };
+    if (cats[bloque]) cats[bloque].forEach(c => { let o = document.createElement('option'); o.value=c; o.innerText=c; selCat.appendChild(o); });
+  };
+
+  window.descargarFormatoIncidencias = function(formato) {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(datos => {
+        window.toggleLoader(false);
+        if (!datos || datos.length === 0 || datos === 'No hay datos') return Swal.fire('Sin datos','No hay incidencias para exportar.','info');
+        const fecha      = new Date().toLocaleDateString().replace(/\//g,'-');
+        const nombreFile = 'INCIDENCIAS_SALA_NACIONAL_' + fecha;
+        if (formato === 'csv') {
+          const csv = datos.map(fila => fila.map(celda => { let t=celda?celda.toString().replace(/"/g,'""').replace(/\n/g,' '):''; return '"'+t+'"'; }).join(',')).join('\n');
+          const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+          const url  = URL.createObjectURL(blob);
+          const a    = document.createElement('a'); a.href=url; a.download=nombreFile+'.csv';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        } else if (formato === 'xlsx') {
+          const ws = XLSX.utils.aoa_to_sheet(datos);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Incidencias');
+          XLSX.writeFile(wb, nombreFile+'.xlsx');
+        }
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error','No se pudo exportar: '+err.message,'error'); })
+      .obtenerMatrizIncidenciasExportacion(session.token);
+  };
+
+  // ==========================================
+  // 11. ADMINISTRACIÓN Y AUDITORÍA
+  // ==========================================
+  window.actualizarAuditoriaEnVivo = function() {
+    google.script.run.withSuccessHandler(logs => {
+      const term = document.getElementById('listaAuditoria');
+      if (term) term.innerHTML = logs.map(l => '<div>' + l + '</div>').join('');
+    }).obtenerAuditoriaEnVivo();
+  };
+
+  const HORAS_LED = ['h9','h11','h12','h13','h14','h15','h16','h17','h20'];
+
+  window.actualizarLedsMaestros = function() {
+    const el = document.getElementById('estadoMaestro');
+    if (!el) return;
+    google.script.run.withSuccessHandler(config => {
+      HORAS_LED.forEach(h => {
+        const led = document.getElementById('led-' + h);
+        if (led) led.className = config[h] ? 'status-led led-active-red' : 'status-led led-active-green';
+      });
+    }).obtenerConfiguracionBloqueos(el.value);
+  };
+
+  window.actualizarLedsDetallados = function() {
+    const el = document.getElementById('estadoDetallado');
+    if (!el || !el.value) return;
+    google.script.run.withSuccessHandler(config => {
+      HORAS_LED.forEach(h => {
+        const led = document.getElementById('det-led-' + h);
+        if (led) led.className = config[h] ? 'status-led led-active-red' : 'status-led led-active-green';
+      });
+    }).obtenerConfiguracionBloqueos(el.value);
+  };
+
+  window.publicarAviso = function() {
+    const msgEl  = document.getElementById('msgGlobal');
+    const timeEl = document.getElementById('tiempoAviso');
+    if (!msgEl) return;
+    const msg  = msgEl.value.trim();
+    const mins = timeEl ? timeEl.value : 5;
+    if (!msg) return Swal.fire('Atención','Escriba un mensaje para publicar.','warning');
+    window.toggleLoader(true);
+    google.script.run.withSuccessHandler(() => {
+      window.toggleLoader(false); msgEl.value = '';
+      Swal.fire('Aviso Publicado','El comunicado estará visible por '+mins+' minuto(s).','success');
+      window.verificarAvisos();
+    }).enviarAvisoGlobal(msg, mins);
+  };
+
+  window.borrarAviso = function() {
+    window.toggleLoader(true);
+    google.script.run.withSuccessHandler(() => {
+      window.toggleLoader(false);
+      Swal.fire('Aviso Ocultado','El banner ha sido retirado.','info');
+      window.verificarAvisos();
+    }).enviarAvisoGlobal('', 0);
+  };
+
+  window.ejecutarToggle = function(horaId) {
+    const el = document.getElementById('estadoMaestro');
+    if (!el) return;
+    const led = document.getElementById('led-' + horaId);
+    if (!led) return;
+    const estatusActual = led.classList.contains('led-active-red');
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        window.toggleLoader(false); window.actualizarLedsMaestros(); window.loadData();
+        Swal.fire({ title:'Control Maestro', text:el.value+': '+horaId+' actualizado', icon:'success', timer:1500, showConfirmButton:false });
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .actualizarBloqueoDetallado(el.value, horaId, !estatusActual, session.token);
+  };
+
+  window.ejecutarToggleDetallado = function(horaId) {
+    const el = document.getElementById('estadoDetallado');
+    if (!el || !el.value) return Swal.fire('Atención','Seleccione un estado','warning');
+    const led = document.getElementById('det-led-' + horaId);
+    if (!led) return;
+    const estatusActual = led.classList.contains('led-active-red');
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => { window.toggleLoader(false); window.actualizarLedsDetallados(); window.loadData(); })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .actualizarBloqueoDetallado(el.value, horaId, !estatusActual, session.token);
+  };
+
+  window.liberarTodoElEstado = function() {
+    const el = document.getElementById('estadoDetallado');
+    if (!el || !el.value) return Swal.fire('Atención','Seleccione un estado','warning');
+    const estado = el.value;
+    Swal.fire({ title:'¿Pasar a Modo Reloj?', text:'Se ignorarán los bloqueos manuales para '+estado+'.', icon:'question', showCancelButton:true, confirmButtonText:'SÍ, RESTABLECER ⏱️' })
+      .then(result => {
+        if (result.isConfirmed) {
+          window.toggleLoader(true);
+          google.script.run
+            .withSuccessHandler(() => { window.toggleLoader(false); window.actualizarLedsDetallados(); window.loadData(); Swal.fire('Éxito', estado+' volvió al modo automático.','success'); })
+            .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+            .liberarEstadoCompleto(estado, session.token);
+        }
+      });
+  };
+
+  window.cargarEstadosSelectores = function() {
+    const selAdmin   = document.getElementById('estadoMaestro');
+    const selDet     = document.getElementById('estadoDetallado');
+    const selInc     = document.getElementById('incEstado');
+    const selGraf    = document.getElementById('selectGraficoMun');
+    const selGrafH   = document.getElementById('selectGraficoHorasEdo');
+
+    google.script.run.withSuccessHandler(res => {
+      if (!res || !res.municipios) return;
+      const estados  = [...new Set(res.municipios.map(m => m.estado))].sort();
+      const opciones = estados.map(e => '<option value="'+e+'">'+e+'</option>').join('');
+
+      if (selAdmin) selAdmin.innerHTML = '<option value="GLOBAL">🌐 CONTROL NACIONAL</option>' + opciones;
+      if (selDet)   selDet.innerHTML   = '<option value="">-- SELECCIONE ESTADO --</option><option value="GLOBAL">🌐 GLOBAL (TODOS)</option>' + opciones;
+
+      const r        = session.user.rol;
+      const esGlobal = (r === 'Admin' || r === 'Analista' || r === 'Operador 0800' || r === 'Operador Auxiliar');
+
+      if (selInc) {
+        if (esGlobal) { selInc.innerHTML = '<option value="">-- SELECCIONE ESTADO --</option>'+opciones; selInc.disabled = false; }
+        else {
+          selInc.innerHTML = '<option value="'+session.user.estado+'">'+session.user.estado+'</option>';
+          selInc.value = session.user.estado; selInc.disabled = true;
+          setTimeout(() => window.actualizarMunicipiosPorEstado(), 500);
+        }
+      }
+      if (selGraf) {
+        selGraf.innerHTML = esGlobal ? '<option value="">-- SELECCIONE ESTADO --</option>'+opciones
+                                     : '<option value="'+session.user.estado+'">'+session.user.estado+'</option>';
+        if (!esGlobal) selGraf.value = session.user.estado;
+      }
+      if (selGrafH) {
+        selGrafH.innerHTML = esGlobal ? '<option value="">-- SELECCIONE ESTADO --</option>'+opciones
+                                      : '<option value="'+session.user.estado+'">'+session.user.estado+'</option>';
+        if (!esGlobal) selGrafH.value = session.user.estado;
+      }
+    }).obtenerDataElectoral('AMAZONAS','Admin');
+  };
+
+  window.actualizarListaUsuarios = function() {
+    google.script.run.withSuccessHandler(users => {
+      const lista = document.getElementById('listaUsuariosActivos');
+      if (!lista) return;
+      lista.innerHTML = users.map(u =>
+        '<div class="d-flex justify-content-between align-items-center p-2 border-bottom">' +
+        '<div><span class="online-dot me-2"></span><b>'+u.usuario+'</b> ('+u.rol+') - <small>'+u.estado+'</small></div>' +
+        '<button class="btn btn-xs btn-outline-danger" onclick="window.kickUser(\''+u.usuario+'\')">❌</button></div>'
+      ).join('');
+    }).obtenerUsuariosActivos();
+  };
+
+  window.kickUser = function(nombreUsuario) {
+    Swal.fire({ title:'¿Expulsar Usuario?', icon:'warning', showCancelButton:true })
+      .then(result => {
+        if (result.isConfirmed) {
+          google.script.run
+            .withSuccessHandler(() => { Swal.fire('Hecho','Usuario desconectado','success'); window.actualizarListaUsuarios(); })
+            .withFailureHandler(err => Swal.fire('Error', err.message, 'error'))
+            .expulsarUsuario(nombreUsuario, session.token);
+        }
+      });
+  };
+
+  window.verificarAvisos = function() {
+    google.script.run.withSuccessHandler(res => {
+      const banner = document.getElementById('bannerAviso');
+      const textEl = document.getElementById('textoAviso');
+      if (!banner || !textEl) return;
+      if (window.avisoTimeout) clearTimeout(window.avisoTimeout);
+      if (res && res.mensaje && res.mensaje !== '') {
+        banner.style.display = 'block';
+        textEl.innerText = '⚠️ COMUNICADO: ' + res.mensaje + ' ⚠️';
+        if (res.expira) {
+          const ttl = res.expira - new Date().getTime();
+          if (ttl > 0) { window.avisoTimeout = setTimeout(() => { banner.style.display = 'none'; }, ttl); }
+          else banner.style.display = 'none';
+        }
+      } else { banner.style.display = 'none'; textEl.innerText = ''; }
+    }).obtenerAvisoGlobal();
+  };
+
+  // BUG FIX: Implementar validarYGuardar() que estaba referenciada pero no definida
+  window.limpiarModalSup = function() {
+    document.getElementById('supUser').value = '';
+    document.getElementById('supPass').value = '';
+  };
+
+  window.pedirSupervision = function(callbackFn) {
+    _pendingSupAction = callbackFn;
+    window.abrirModal('modalSupervision');
+  };
+
+  window.validarYGuardar = function() {
+    const userSup = document.getElementById('supUser').value.trim();
+    const passSup = document.getElementById('supPass').value.trim();
+    if (!userSup || !passSup) return Swal.fire('Atención','Complete los campos de supervisión.','warning');
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(valido => {
+        window.toggleLoader(false);
+        if (valido) {
+          window.limpiarModalSup();
+          window.cerrarModal('modalSupervision');
+          if (_pendingSupAction) { _pendingSupAction(); _pendingSupAction = null; }
+          Swal.fire({ toast:true, position:'top-end', icon:'success', title:'Supervisión Autorizada ✅', showConfirmButton:false, timer:2000 });
+        } else {
+          Swal.fire('Error','Credenciales de supervisión inválidas ❌','error');
+        }
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .validarSupervision(userSup, passSup);
+  };
+
+  // Inicializar DB_DATA_DEF desde el panel admin
+  window.inicializarDB = function() {
+    Swal.fire({
+      title: '¿Inicializar DB_DATA_DEF?',
+      html: 'Se creará la hoja <b>DB_DATA_DEF</b> con el nuevo esquema de 9 franjas horarias, copiando la estructura de <b>DB_DATA</b>.<br><br><b style="color:#dc3545;">Si ya existe, se limpiará su contenido.</b>',
+      icon: 'warning', showCancelButton: true, confirmButtonColor: '#17a2b8', confirmButtonText: '🔧 SÍ, INICIALIZAR'
+    }).then(result => {
+      if (result.isConfirmed) {
+        window.toggleLoader(true);
+        google.script.run
+          .withSuccessHandler(res => {
+            window.toggleLoader(false);
+            Swal.fire('Completado', res.mensaje + '<br><small>Registros creados: ' + res.filas + '</small>', 'success');
+          })
+          .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+          .inicializarHojaDB_DATA_DEF(session.token);
+      }
+    });
+  };
+
+  // ==========================================
+  // 12. ANALÍTICA Y GRÁFICOS (9 FRANJAS)
+  // ==========================================
+  let chartEfec=null, chartVot=null, chartEv=null, chartInc=null, chartIncEdos=null, chartMunicipalAnalisis=null;
+  let chartResueltas=null, chartCompMun=null, chartHist=null, chartHorasEstado=null, chartIncHoras=null;
+
+  window.renderizarGraficos = function() {
+    if (!session) return;
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        window.toggleLoader(false);
+        ultimoDataBoletin = res;
+
+        const labels24         = Object.keys(res.porEstado).sort();
+        const dataVotantes     = labels24.map(e => res.porEstado[e].votantes);
+        const dataIncidenciaE  = labels24.map(e => res.incidenciasPorEstado[e] || 0);
+
+        const totalMeta   = labels24.reduce((a, e) => a + res.porEstado[e].meta,  0);
+        const totalActual = labels24.reduce((a, e) => a + res.porEstado[e].actual, 0);
+        const porcGlobal  = totalMeta > 0 ? ((totalActual / totalMeta) * 100).toFixed(2) : '0.00';
+
+        let colorClase = 'text-danger', bgClase = 'bg-danger';
+        if (parseFloat(porcGlobal) >= 100) { colorClase = 'text-success'; bgClase = 'bg-success'; }
+        else if (parseFloat(porcGlobal) >= 50) { colorClase = 'text-warning'; bgClase = 'bg-warning'; }
+
+        const pg = document.getElementById('porcentajeGlobal');
+        if (pg) { pg.innerText = porcGlobal + '%'; pg.className = 'fw-bold mb-2 ' + colorClase; }
+        const bp = document.getElementById('barraProgreso');
+        if (bp) { bp.style.width = porcGlobal + '%'; bp.className = 'progress-bar ' + bgClase; }
+        const dg = document.getElementById('detalleCentrosGlobal');
+        if (dg) dg.innerText = totalActual + ' / ' + totalMeta + ' Centros Activos';
+
+        const dSemE = document.getElementById('semaforoEstados');
+        if (dSemE && res.semaforoEstados) dSemE.innerHTML = res.semaforoEstados.map((e,i) =>
+          '<div class="d-flex justify-content-between border-bottom py-1"><span>'+(i+1)+'. <b>'+e.estado+'</b></span><span class="text-danger fw-bold">'+e.pct+'%</span></div>'
+        ).join('');
+
+        const dSemM = document.getElementById('semaforoMunicipios');
+        if (dSemM && res.semaforoMunicipios) dSemM.innerHTML = res.semaforoMunicipios.map((m,i) =>
+          '<div class="d-flex justify-content-between border-bottom py-1"><span>'+(i+1)+'. <b>'+m.municipio+'</b> <small>('+m.estado+')</small></span><span class="text-warning fw-bold">'+m.cantidad+' rep.</span></div>'
+        ).join('');
+
+        // Gráfico: Incidencias Resueltas (Barras)
+        if (chartResueltas) chartResueltas.destroy();
+        const ctxR = document.getElementById('chartIncidenciasResueltas');
+        if (ctxR) {
+          const pendientes = res.resumenIncidencias.reportadas - res.resumenIncidencias.resueltas;
+          chartResueltas = new Chart(ctxR, {
+            type: 'bar',
+            data: {
+              labels: ['Resueltas ✅', 'Pendientes ⏳'],
+              datasets: [{
+                data: [res.resumenIncidencias.resueltas, pendientes > 0 ? pendientes : 0],
+                backgroundColor: ['#28a745', '#ffc107']
+              }]
+            },
+            options: {
+              animation: false,
+              maintainAspectRatio: false,
+              plugins: { legend: { display: false } },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: { precision: 0 }
+                }
+              }
+            }
+          });
+        }
+
+        // Gráfico: Comparativa Estadal vs Municipal
+        if (chartCompMun) chartCompMun.destroy();
+        const ctxComp = document.getElementById('chartComparativaEstadalMunicipal');
+        if (ctxComp) chartCompMun = new Chart(ctxComp, { type:'bar', data:{ labels:['Centros Activos','Total Votos'], datasets:[ { label:'Matriz Estadal', data:[res.comparativaMunicipal.estadalCentros, res.comparativaMunicipal.estadalVotantes], backgroundColor:'#003366' }, { label:'Matriz Municipal', data:[res.comparativaMunicipal.municipalCentros, res.comparativaMunicipal.municipalVotantes], backgroundColor:'#17a2b8' } ] }, options:{ animation:false, maintainAspectRatio:false, plugins:{ legend:{ position:'top' } } } });
+
+        // Gráfico: Histórico
+        if (chartHist) chartHist.destroy();
+        const ctxH = document.getElementById('chartHistorico');
+        const tH   = document.getElementById('textoDiferenciaHistorica');
+        if (ctxH && tH) {
+          const dif = res.historicoNacional.dif;
+          const sgn = dif >= 0 ? '+' : '';
+          tH.innerHTML = 'Diferencia: <span class="'+(dif>=0?'text-success':'text-danger')+'">'+sgn+dif+' votos ('+sgn+res.historicoNacional.pct+'%)</span>';
+          chartHist = new Chart(ctxH, { type:'bar', data:{ labels:['Elección Pasada','Proceso Actual'], datasets:[{ label:'Votantes', data:[res.historicoNacional.pasado, res.historicoNacional.actual], backgroundColor:['#6c757d','#0d6efd'] }] }, options:{ animation:false, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } });
+        }
+
+        // Gráfico: Efectividad Apertura 24 estados
+        if (chartEfec) chartEfec.destroy();
+        chartEfec = new Chart(document.getElementById('chartParticipacion'), { type:'bar', data:{ labels:labels24, datasets:[ { label:'Meta', data:labels24.map(e=>res.porEstado[e].meta), backgroundColor:'#dee2e6' }, { label:'Reportados', data:labels24.map(e=>res.porEstado[e].actual), backgroundColor:'#28a745' } ] }, options:{ animation:false, maintainAspectRatio:false, plugins:{ legend:{ position:'top' } } } });
+
+        // Gráfico: Votantes por Estado
+        if (chartVot) chartVot.destroy();
+        chartVot = new Chart(document.getElementById('chartVotantes'), { type:'bar', data:{ labels:labels24, datasets:[{ label:'Votantes', data:dataVotantes, backgroundColor:'#003366' }] }, options:{ animation:false, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } });
+
+        // Gráfico: Incidencias por Estado
+        if (chartIncEdos) chartIncEdos.destroy();
+        chartIncEdos = new Chart(document.getElementById('chartIncidenciasEstados'), { type:'bar', data:{ labels:labels24, datasets:[{ label:'Reportes', data:dataIncidenciaE, backgroundColor:'#dc3545' }] }, options:{ animation:false, maintainAspectRatio:false, plugins:{ legend:{ display:false } } } });
+
+        // Gráfico: Evolución Nacional 9 cortes (Combo Barra y Línea Ascendente)
+        if (chartEv) chartEv.destroy();
+        let acumuladoNac = 0;
+        const dataAcumuladaNac = HORAS_KEYS.map(k => {
+          acumuladoNac += (res.nacionalHoras[k] || 0);
+          return acumuladoNac;
+        });
+        chartEv = new Chart(document.getElementById('chartEvolucion'), {
+          type: 'bar',
+          data: {
+            labels: HORAS_LABELS,
+            datasets: [
+              {
+                type: 'bar',
+                label: 'Votos en el Bloque',
+                data: HORAS_KEYS.map(k => res.nacionalHoras[k] || 0),
+                backgroundColor: 'rgba(76, 215, 246, 0.6)',
+                borderColor: '#4cd7f6',
+                borderWidth: 1,
+                yAxisID: 'y'
+              },
+              {
+                type: 'line',
+                label: 'Crecimiento Acumulado',
+                data: dataAcumuladaNac,
+                borderColor: '#4edea3',
+                backgroundColor: 'rgba(78, 222, 163, 0.1)',
+                borderWidth: 3,
+                fill: false,
+                tension: 0.4,
+                yAxisID: 'y1'
+              }
+            ]
+          },
+          options: {
+            animation: false,
+            maintainAspectRatio: false,
+            responsive: true,
+            scales: {
+              y: {
+                type: 'linear',
+                display: true,
+                position: 'left',
+                title: { display: true, text: 'Votos por Bloque', color: 'var(--on-surface-variant)' },
+                grid: { color: 'rgba(255, 255, 255, 0.05)' }
+              },
+              y1: {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: { display: true, text: 'Acumulado Total', color: 'var(--on-surface-variant)' },
+                grid: { drawOnChartArea: false }
+              }
+            }
+          }
+        });
+
+        // Gráfico: Incidencias por Bloque Horario (9 franjas)
+        if (chartIncHoras) chartIncHoras.destroy();
+        const ctxIH = document.getElementById('chartIncidenciasHoras');
+        if (ctxIH) chartIncHoras = new Chart(ctxIH, {
+          type:'bar',
+          data:{ labels:['9AM','11AM','12M','1PM','2PM','3PM','4PM','5PM','6-8PM'], datasets:[{ label:'Incidencias', data: HORAS_KEYS.map(k => res.incidenciasPorHora[k]||0), backgroundColor:'#6f42c1' }] },
+          options:{ animation:false, maintainAspectRatio:false }
+        });
+
+        // Top 4 Incidencias (Barras)
+        if (chartInc) chartInc.destroy();
+        chartInc = new Chart(document.getElementById('chartTopIncidencias'), {
+          type: 'bar',
+          data: {
+            labels: res.topIncidenciasGlobal.labels.length > 0 ? res.topIncidenciasGlobal.labels : ['Sin datos'],
+            datasets: [{
+              data: res.topIncidenciasGlobal.data.length > 0 ? res.topIncidenciasGlobal.data : [0],
+              backgroundColor: ['#dc3545', '#ffc107', '#fd7e14', '#0d6efd']
+            }]
+          },
+          options: {
+            animation: false,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: { precision: 0 }
+              }
+            }
+          }
+        });
+
+        window.renderizarGraficoHorasEstado();
+        window.renderizarGraficoMunicipal();
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error','No se pudo cargar analítica: '+err.message,'error'); })
+      .obtenerEstadisticas();
+  };
+
+  window.renderizarGraficoHorasEstado = function() {
+    const ctx = document.getElementById('chartHorasEstado');
+    const el  = document.getElementById('selectGraficoHorasEdo');
+    if (!ctx || !el) return;
+    const estado = el.value;
+    if (!estado || !ultimoDataBoletin || !ultimoDataBoletin.porEstado[estado]) { if (chartHorasEstado) chartHorasEstado.destroy(); return; }
+    const dataEdo = ultimoDataBoletin.porEstado[estado];
+    if (chartHorasEstado) chartHorasEstado.destroy();
+
+    let acumuladoEdo = 0;
+    const dataAcumuladaEdo = HORAS_KEYS.map(k => {
+      acumuladoEdo += (dataEdo[k] || 0);
+      return acumuladoEdo;
+    });
+
+    chartHorasEstado = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: HORAS_LABELS,
+        datasets: [
+          {
+            type: 'bar',
+            label: 'Votos en el Bloque (' + estado + ')',
+            data: HORAS_KEYS.map(k => dataEdo[k] || 0),
+            backgroundColor: 'rgba(253, 126, 20, 0.6)',
+            borderColor: '#fd7e14',
+            borderWidth: 1,
+            yAxisID: 'y'
+          },
+          {
+            type: 'line',
+            label: 'Crecimiento Acumulado (' + estado + ')',
+            data: dataAcumuladaEdo,
+            borderColor: '#4edea3',
+            backgroundColor: 'rgba(78, 222, 163, 0.1)',
+            borderWidth: 3,
+            fill: false,
+            tension: 0.4,
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        animation: false,
+        maintainAspectRatio: false,
+        responsive: true,
+        scales: {
+          y: {
+            type: 'linear',
+            display: true,
+            position: 'left',
+            title: { display: true, text: 'Votos por Bloque', color: 'var(--on-surface-variant)' },
+            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          },
+          y1: {
+            type: 'linear',
+            display: true,
+            position: 'right',
+            title: { display: true, text: 'Acumulado Total', color: 'var(--on-surface-variant)' },
+            grid: { drawOnChartArea: false }
+          }
+        },
+        plugins: { legend: { position: 'top' } }
+      }
+    });
+  };
+
+  window.renderizarGraficoMunicipal = function() {
+    const ctx = document.getElementById('chartMunicipal');
+    const el  = document.getElementById('selectGraficoMun');
+    if (!ctx || !el) return;
+    const estado = el.value;
+    if (!estado || dataElectoralCache.length === 0) { if (chartMunicipalAnalisis) chartMunicipalAnalisis.destroy(); return; }
+    const munData    = dataElectoralCache.filter(m => m.estado === estado);
+    const labels     = munData.map(m => m.municipio);
+    const dataCentros = munData.map(m => m.cActivos);
+    const dataVotos  = munData.map(m => HORAS_KEYS.reduce((s, k) => s + (m[k]||0), 0));
+    if (chartMunicipalAnalisis) chartMunicipalAnalisis.destroy();
+    chartMunicipalAnalisis = new Chart(ctx, {
+      type:'bar',
+      data:{ labels, datasets:[ { label:'Centros Activos', data:dataCentros, backgroundColor:'#17a2b8', yAxisID:'y' }, { label:'Votantes', data:dataVotos, type:'line', borderColor:'#ffc107', backgroundColor:'rgba(255,193,7,0.2)', fill:true, tension:0.4, yAxisID:'y1' } ] },
+      options:{ animation:false, maintainAspectRatio:false, responsive:true, scales:{ y:{ type:'linear', display:true, position:'left', title:{ display:true, text:'Centros' } }, y1:{ type:'linear', display:true, position:'right', grid:{ drawOnChartArea:false }, title:{ display:true, text:'Votantes' } } }, plugins:{ legend:{ position:'top' } } }
+    });
+  };
+
+  // ==========================================
+  // 13. METAS ESTADALES (BUG FIX: antes no se llamaba)
+  // ==========================================
+  window.cargarTablaMetas = function() {
+    const tbody = document.getElementById('tablaMetas');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center p-3"><div class="spinner-border spinner-border-sm text-primary"></div> Cargando...</td></tr>';
+
+    google.script.run
+      .withSuccessHandler(res => {
+        tbody.innerHTML = '';
+        const datos = Object.entries(res.porEstado);
+        const filtrados = (session.user.rol === 'Admin' || session.user.rol === 'Analista')
+          ? datos : datos.filter(d => d[0] === session.user.estado);
+        if (filtrados.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">No hay datos para mostrar.</td></tr>'; return; }
+        filtrados.forEach(([estado, d]) => {
+          const votantes = d.votantes || 0;
+          const meta     = d.meta     || 0;
+          const pct      = meta > 0 ? ((votantes / meta) * 100).toFixed(2) : '0.00';
+          const faltan   = meta - votantes;
+          const colorF   = faltan > 0 ? 'text-danger' : 'text-success';
+          const colorP   = parseFloat(pct) >= 100 ? 'text-success' : parseFloat(pct) >= 50 ? 'text-warning' : 'text-danger';
+          tbody.innerHTML += `<tr>
+            <td class="fw-bold ps-4 text-dark">${estado}</td>
+            <td class="text-center fw-bold">${votantes.toLocaleString()}</td>
+            <td class="text-center text-muted">${meta.toLocaleString()}</td>
+            <td class="text-center fw-bold ${colorF}">${faltan > 0 ? faltan.toLocaleString() : '0 ✅'}</td>
+            <td class="text-center fw-bold ${colorP}">${pct}%</td>
+          </tr>`;
+        });
+      })
+      .withFailureHandler(err => {
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger fw-bold">ERROR: ${err.message}</td></tr>`;
+        Swal.fire('Error Técnico','Error al cargar metas: '+err.message,'error');
+      })
+      .obtenerEstadisticas();
+  };
+
+  // ==========================================
+  // 14. BOLETÍN WHATSAPP
+  // ==========================================
+  window.generarBoletinWhatsApp = function() {
+    if (!ultimoDataBoletin) return Swal.fire('Atención','Aún no hay datos cargados.','warning');
+    const d = ultimoDataBoletin;
+    const totalMeta   = Object.keys(d.porEstado).reduce((a,e) => a + d.porEstado[e].meta,  0);
+    const totalActual = Object.keys(d.porEstado).reduce((a,e) => a + d.porEstado[e].actual, 0);
+    const pct         = totalMeta > 0 ? ((totalActual/totalMeta)*100).toFixed(2) : '0.00';
+    const peorEdo     = d.semaforoEstados[0] ? d.semaforoEstados[0].estado : 'N/A';
+    const peorPct     = d.semaforoEstados[0] ? d.semaforoEstados[0].pct    : '0.00';
+    const totalInc    = d.topIncidenciasGlobal.data.reduce((a,b) => a+b, 0);
+    const votNac      = HORAS_KEYS.reduce((s,k) => s+(d.nacionalHoras[k]||0), 0);
+
+    const texto = '*📊 BOLETÍN EJECUTIVO SALA NACIONAL*\n' +
+                  'Hora de corte: ' + new Date().toLocaleTimeString('es-VE',{hour:'2-digit',minute:'2-digit'}) + '\n\n' +
+                  '🇻🇪 *Apertura Nacional:* ' + pct + '%\n' +
+                  '🏢 *Centros Activos:* ' + totalActual + ' de ' + totalMeta + '\n' +
+                  '🗳️ *Total Votantes Reportados:* ' + votNac.toLocaleString() + '\n\n' +
+                  '🚨 *Alerta de Gestión (Más Rezagado):*\n' +
+                  '- ' + peorEdo + ' (' + peorPct + '%)\n\n' +
+                  '⚠️ *Incidencias Reportadas:* ' + totalInc + ' totales.\n\n' +
+                  '_Generado automáticamente por el Sistema_';
+
+    navigator.clipboard.writeText(texto).then(() => {
+      Swal.fire({ toast:true, position:'top-end', icon:'success', title:'¡Boletín copiado!', showConfirmButton:false, timer:3000 });
+    }).catch(() => Swal.fire('Error','No se pudo copiar el boletín.','error'));
+  };
+
+
+  // ==========================================
+  // 15. MÓDULO CONDOMINIOS / URBANIZACIONES
+  // ==========================================
+  const COND_HORAS_KEYS   = ['h9','h10','h11','h12','h13','h14','h15','h16','h17','h20'];
+  const COND_HORAS_LABELS = ['9AM','10AM','11AM','12M','1PM','2PM','3PM','4PM','5PM','6-8PM'];
+  let condDataCache = [];
+  let condPuedeEditar = false;
+  let condPuedeAgregar = false;
+
+  window.loadCondominios = function() {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(res => {
+        window.toggleLoader(false);
+        if (!res || res.error === 'HOJA_NO_EXISTE') {
+          document.getElementById('tablaCondominios').innerHTML =
+            '<tr><td colspan="15" class="text-center p-8 text-warning font-data-sm text-xs">⚠️ La hoja DB_CONDOMINIOS no existe. Inicialícela desde el Panel Admin.</td></tr>';
+          return;
+        }
+        condDataCache    = res.registros || [];
+        condPuedeEditar  = res.puedeEditar;
+        condPuedeAgregar = res.puedeAgregar;
+
+        // Actualizar botones según permisos
+        const btnAg = document.getElementById('btnAgregarCond');
+        if (btnAg) btnAg.style.display = condPuedeAgregar ? 'flex' : 'none';
+        const btnEx = document.getElementById('btnExportarCondXLSX');
+        if (btnEx) btnEx.style.display = condPuedeAgregar ? 'block' : 'none';
+
+        // Calcular KPIs
+        let totalVot = 0, totalReg = 0, sinRep = 0;
+        condDataCache.forEach(c => {
+          const v = COND_HORAS_KEYS.reduce((s, k) => s + (c[k] || 0), 0);
+          totalVot += v;
+          totalReg += c.totalReg || 0;
+          if (v === 0) sinRep++;
+        });
+        const pct = totalReg > 0 ? ((totalVot / totalReg) * 100).toFixed(2) : '0.00';
+        const k1 = document.getElementById('kpiCondTotal');    if (k1) k1.innerText = condDataCache.length.toLocaleString();
+        const k2 = document.getElementById('kpiCondVotantes'); if (k2) k2.innerText = totalVot.toLocaleString();
+        const k3 = document.getElementById('kpiCondPct');      if (k3) k3.innerText = pct + '%';
+        const k4 = document.getElementById('kpiCondSinRep');   if (k4) k4.innerText = sinRep.toLocaleString();
+
+        // Badge sidebar
+        const badge = document.getElementById('badgeCondSinReporte');
+        if (badge) { badge.innerText = sinRep; badge.style.display = sinRep > 0 ? 'inline-block' : 'none'; }
+
+        // Renderizar tabla
+        window.renderizarTablaCondominios();
+      })
+      .withFailureHandler(err => {
+        window.toggleLoader(false);
+        Swal.fire({ toast:true, position:'top-end', icon:'error', title:'Error cond.', text: err.message, showConfirmButton:false, timer:4000 });
+      })
+      .obtenerDataCondominios(session.user.estado, session.user.rol);
+  };
+
+  window.renderizarTablaCondominios = function() {
+    const tbody = document.getElementById('tablaCondominios');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    if (condDataCache.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-center p-8 text-on-surface-variant font-data-sm text-xs">No hay condominios registrados.</td></tr>';
+      return;
+    }
+    const r = session.user.rol;
+    const esGlobal = (r === 'Admin' || r === 'Analista');
+
+    if (esGlobal) {
+      // Agrupar por Estado
+      const agrupado = condDataCache.reduce((acc, c) => { if (!acc[c.estado]) acc[c.estado]=[]; acc[c.estado].push(c); return acc; }, {});
+      Object.keys(agrupado).sort().forEach((edo, i) => {
+        const id = 'condo-edo-' + i;
+        tbody.innerHTML += '<tr class="estado-header cursor-pointer font-bold text-primary hover:bg-surface-container-high transition-colors" onclick="window.toggleEstado(\'' + id + '\', this)">' +
+          '<td colspan="15" class="ps-6 py-3 sticky-col text-left font-body-md text-sm border-b border-white/5">' +
+          '<div class="flex items-center gap-2"><span class="material-symbols-outlined transition-transform duration-200" style="transform:rotate(-90deg);">expand_more</span>' +
+          '<span class="status-dot green"></span><span>' + edo + ' (' + agrupado[edo].length + ' condominios)</span></div></td></tr>';
+        agrupado[edo].forEach(c => { tbody.innerHTML += window.renderFilaCondominio(c, id, false); });
+      });
+    } else {
+      condDataCache.forEach(c => { tbody.innerHTML += window.renderFilaCondominio(c, 'solo', true); });
+    }
+  };
+
+  window.renderFilaCondominio = function(c, clase, visible) {
+    const dis   = condPuedeEditar ? '' : 'disabled';
+    const totalVot = COND_HORAS_KEYS.reduce((s, k) => s + (c[k] || 0), 0);
+    const pct   = c.totalReg > 0 ? ((totalVot / c.totalReg) * 100).toFixed(1) : '0.0';
+    const pctColor = parseFloat(pct) >= 100 ? 'text-tertiary' : parseFloat(pct) >= 50 ? 'text-warning' : 'text-error';
+
+    const inputsHoras = COND_HORAS_KEYS.map(k =>
+      '<td class="text-center p-1"><input type="number" class="input-electoral cond-h-' + k + '" value="' + (c[k]||0) + '" ' + dis + ' style="width:48px;"></td>'
+    ).join('');
+
+    const esAdmin = (session.user.rol === 'Admin' || session.user.rol === 'Analista');
+    const btnReiniciar = esAdmin
+      ? '<button class="btn-xs bg-error/15 border border-error text-error hover:bg-error/30 uppercase font-bold" title="Reiniciar datos" onclick="window.reiniciarCondFila(this)">↺</button>'
+      : '';
+
+    return '<tr data-estado="' + c.estado + '" data-municipio="' + c.municipio + '" data-cond="' + c.condominio + '" ' +
+      'class="' + clase + ' condo-row hover:bg-white/5 transition-colors border-b border-white/5 text-right font-data-sm text-xs" style="display:' + (visible?'':'none') + '">' +
+      '<td class="ps-8 py-2 text-left sticky-col border-r border-white/5">' +
+        '<div class="font-bold text-on-surface text-xs">' + c.condominio + '</div>' +
+        '<div class="text-[10px] text-on-surface-variant">' + c.municipio + (c.parroquia ? ' / ' + c.parroquia : '') + '</div>' +
+        '<div class="text-[9px] text-outline-variant">' + (c.responsable !== 'No asignado' ? '👤 ' + c.responsable : '') + '</div>' +
+      '</td>' +
+      '<td class="p-2 text-center text-on-surface-variant font-bold text-xs">' + (c.totalReg||0).toLocaleString() + '</td>' +
+      inputsHoras +
+      '<td class="p-2 text-center font-bold text-on-surface">' + totalVot.toLocaleString() + '</td>' +
+      '<td class="p-2 text-center font-bold ' + pctColor + '">' + pct + '%</td>' +
+      '<td class="p-1 text-center">' +
+        '<div class="flex items-center justify-center gap-1">' +
+        '<button class="btn-xs bg-secondary/15 border border-secondary text-secondary hover:bg-secondary/25 uppercase font-bold" onclick="window.guardarFilaCondominio(this)">GUARD.</button>' +
+        btnReiniciar +
+        '</div>' +
+      '</td></tr>';
+  };
+
+  window.guardarFilaCondominio = function(btn) {
+    const tr = btn.closest('tr');
+    const datos = [{
+      estado:     tr.dataset.estado,
+      municipio:  tr.dataset.municipio,
+      condominio: tr.dataset.cond
+    }];
+    COND_HORAS_KEYS.forEach(k => { datos[0][k] = (tr.querySelector('.cond-h-' + k) || {value:0}).value; });
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => { window.toggleLoader(false); Swal.fire({ title:'Guardado', icon:'success', timer:1000, showConfirmButton:false }); window.loadCondominios(); })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .guardarReporteCondominios(datos, session.user, session.token);
+  };
+
+  window.intentarGuardarCondominios = function() {
+    const filas = document.querySelectorAll('#tablaCondominios .condo-row');
+    const datos = [];
+    filas.forEach(tr => {
+      if (tr.style.display !== 'none') {
+        const obj = { estado: tr.dataset.estado, municipio: tr.dataset.municipio, condominio: tr.dataset.cond };
+        COND_HORAS_KEYS.forEach(k => { obj[k] = (tr.querySelector('.cond-h-' + k) || {value:0}).value; });
+        datos.push(obj);
+      }
+    });
+    if (datos.length === 0) return Swal.fire('Atención','No hay datos visibles.','warning');
+    Swal.fire({ title:'¿Confirmar Guardado?', text:'Se actualizarán ' + datos.length + ' condominios.', icon:'question', showCancelButton:true, confirmButtonColor:'#28a745', confirmButtonText:'SÍ, GUARDAR TODO ✅' })
+      .then(result => {
+        if (result.isConfirmed) {
+          window.toggleLoader(true);
+          google.script.run
+            .withSuccessHandler(() => { window.toggleLoader(false); Swal.fire({ title:'¡Actualizado!', icon:'success', timer:2000, showConfirmButton:false }); window.loadCondominios(); })
+            .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+            .guardarReporteCondominios(datos, session.user, session.token);
+        }
+      });
+  };
+
+  window.reiniciarCondFila = function(btn) {
+    const tr = btn.closest('tr');
+    const estado = tr.dataset.estado, municipio = tr.dataset.municipio, cond = tr.dataset.cond;
+    Swal.fire({ title:'¿Reiniciar Condominio?', html:'<b>' + cond + '</b><br>Se pondrán TODOS los votos en 0.', icon:'warning', showCancelButton:true, confirmButtonColor:'#dc3545', confirmButtonText:'SÍ, REINICIAR ↺' })
+      .then(result => {
+        if (result.isConfirmed) {
+          window.toggleLoader(true);
+          google.script.run
+            .withSuccessHandler(() => { window.toggleLoader(false); Swal.fire({ title:'Reiniciado', icon:'success', timer:1500, showConfirmButton:false }); window.loadCondominios(); })
+            .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+            .reiniciarCondominio(estado, municipio, cond, session.user, session.token);
+        }
+      });
+  };
+
+  window.filtrarTablaCondominios = function() {
+    const input = document.getElementById('busquedaCond').value.toUpperCase();
+    document.querySelectorAll('#tablaCondominios .condo-row').forEach(f => {
+      f.style.display = f.innerText.toUpperCase().includes(input) ? '' : 'none';
+    });
+  };
+
+  window.descargarExcelCondominios = function() {
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(data => {
+        window.toggleLoader(false);
+        if (!data || data.length < 2) return Swal.fire('Sin datos','No hay condominios para exportar.','info');
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [{wch:15},{wch:18},{wch:14},{wch:22},{wch:20},{wch:14},{wch:10},
+          {wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10},{wch:10}];
+        XLSX.utils.book_append_sheet(wb, ws, 'Condominios');
+        XLSX.writeFile(wb, 'CONDOMINIOS_' + new Date().toLocaleDateString().replace(/\//g,'-') + '.xlsx');
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .obtenerMatrizCondominiosExport(session.token);
+  };
+
+  window.abrirModalAgregarCondominio = function() {
+    // Cargar estados en el selector del modal
+    const selEdo = document.getElementById('condNuevoEstado');
+    if (selEdo && selEdo.options.length <= 1) {
+      google.script.run.withSuccessHandler(res => {
+        if (!res || !res.municipios) return;
+        const estados = [...new Set(res.municipios.map(m => m.estado))].sort();
+        selEdo.innerHTML = '<option value="">-- ESTADO --</option>' +
+          estados.map(e => '<option value="' + e + '">' + e + '</option>').join('');
+      }).obtenerDataElectoral('AMAZONAS', 'Admin');
+    }
+    // Limpiar campos
+    ['condNuevoParroquia','condNuevoNombre','condNuevoResp','condNuevoTel'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    const tot = document.getElementById('condNuevoTotal'); if (tot) tot.value = '0';
+    const munEl = document.getElementById('condNuevoMunicipio');
+    if (munEl) munEl.innerHTML = '<option value="">-- MUNICIPIO --</option>';
+    window.abrirModal('modalAgregarCondominio');
+  };
+
+  window.actualizarMunicipiosCond = function() {
+    const estadoSel = document.getElementById('condNuevoEstado').value;
+    const selMun = document.getElementById('condNuevoMunicipio');
+    if (!estadoSel) { selMun.innerHTML = '<option value="">-- MUNICIPIO --</option>'; return; }
+    google.script.run.withSuccessHandler(res => {
+      if (!res || !res.municipios) return;
+      const muns = [...new Set(res.municipios.filter(m => m.estado === estadoSel).map(m => m.municipio))].sort();
+      selMun.innerHTML = '<option value="">-- MUNICIPIO --</option>' + muns.map(m => '<option value="' + m + '">' + m + '</option>').join('');
+    }).obtenerDataElectoral(estadoSel, 'Admin');
+  };
+
+  window.guardarNuevoCondominio = function() {
+    const datos = {
+      estado:     document.getElementById('condNuevoEstado').value,
+      municipio:  document.getElementById('condNuevoMunicipio').value,
+      parroquia:  document.getElementById('condNuevoParroquia').value,
+      condominio: document.getElementById('condNuevoNombre').value,
+      responsable: document.getElementById('condNuevoResp').value,
+      telefono:   document.getElementById('condNuevoTel').value,
+      totalReg:   document.getElementById('condNuevoTotal').value
+    };
+    if (!datos.estado || !datos.municipio || !datos.condominio) {
+      return Swal.fire('Atención','Estado, Municipio y Nombre son obligatorios.','warning');
+    }
+    window.toggleLoader(true);
+    google.script.run
+      .withSuccessHandler(() => {
+        window.toggleLoader(false);
+        Swal.fire({ title:'Condominio Agregado ✅', icon:'success', timer:1500, showConfirmButton:false });
+        window.cerrarModal('modalAgregarCondominio');
+        window.loadCondominios();
+      })
+      .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+      .agregarCondominio(datos, session.user, session.token);
+  };
+
+  // ==========================================
+  // 16. FUNCIONES ADMIN AUXILIARES (Condominios + Migración)
+  // ==========================================
+  window.inicializarCondominiosDB = function() {
+    Swal.fire({
+      title: '¿Inicializar DB_CONDOMINIOS?',
+      html: 'Se creará la hoja <b>DB_CONDOMINIOS</b> con estructura de 10 franjas horarias (incluye 10:00 AM).<br><br><b style="color:#dc3545;">Si ya existe, se limpiará su contenido.</b>',
+      icon: 'warning', showCancelButton: true, confirmButtonColor: '#1565c0', confirmButtonText: '🏘️ SÍ, INICIALIZAR'
+    }).then(result => {
+      if (result.isConfirmed) {
+        window.toggleLoader(true);
+        google.script.run
+          .withSuccessHandler(res => {
+            window.toggleLoader(false);
+            Swal.fire('Completado ✅', res.mensaje, 'success');
+          })
+          .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+          .inicializarHojaCondominios(session.token);
+      }
+    });
+  };
+
+  window.ejecutarMigracionContrasenas = function() {
+    Swal.fire({
+      title: '🔐 Migrar Contraseñas a SHA-256',
+      html: 'Esta acción encriptará todas las contraseñas en texto plano.<br><br><b>Ejecutar UNA SOLA VEZ.</b> Después de esto, los usuarios con contraseñas antiguas aún podrán iniciar sesión durante la transición.',
+      icon: 'warning', showCancelButton: true, confirmButtonColor: '#c62828', confirmButtonText: '🔐 SÍ, MIGRAR'
+    }).then(result => {
+      if (result.isConfirmed) {
+        window.toggleLoader(true);
+        google.script.run
+          .withSuccessHandler(res => {
+            window.toggleLoader(false);
+            Swal.fire('Migración Completa ✅', res.migradas + ' contraseñas encriptadas con SHA-256.', 'success');
+          })
+          .withFailureHandler(err => { window.toggleLoader(false); Swal.fire('Error', err.message, 'error'); })
+          .migrarContrasenasTHash();
+      }
+    });
+  };
+
+</script>
