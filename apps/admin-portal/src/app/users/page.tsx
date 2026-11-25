@@ -28,7 +28,12 @@ import {
   ShieldAlert,
   UserCheck,
   UserX,
-  X
+  X,
+  Award,
+  Database,
+  Trash2,
+  Zap,
+  BarChart2
 } from 'lucide-react';
 import { NotificationCenter } from '@/components/NotificationCenter';
 
@@ -46,6 +51,8 @@ interface UserItem {
   turno: string;
   institucion: string;
   legacy_username: string;
+  extension?: string;
+  areas_ids?: string[] | any;
   created_at: string;
   last_sign_in_at: string | null;
 }
@@ -67,6 +74,15 @@ const ROLE_LABELS: Record<string, { label: string; badge: string }> = {
   data_analyst: { label: 'Analista Datos', badge: 'bg-cyan-950/80 text-cyan-300 border-cyan-800/80' },
   auditor: { label: 'Auditor', badge: 'bg-slate-800 text-slate-300 border-slate-700' },
 };
+
+const WORK_AREAS = [
+  'Todas',
+  'SALA DE CONFERENCIAS - P6',
+  'SALA 2 - P5',
+  'SALA 3 - P5',
+  'SALA 4 - P5',
+  'SALA VP'
+];
 
 export default function UsersManagementPage() {
   const router = useRouter();
@@ -98,7 +114,103 @@ export default function UsersManagementPage() {
     phoneNumber: '',
     address: '',
     institucion: '',
+    extension: '',
+    areas: ['Todas'],
   });
+
+  // Estados Scoring Dinámico (Fase 11)
+  const [isScoringOpen, setIsScoringOpen] = useState(false);
+  const [scoringDate, setScoringDate] = useState('2026-11-23');
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loadingScoring, setLoadingScoring] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+
+  // Estados Ciclo de Vida & Purga 500MB (Fase 12)
+  const [isLifecycleOpen, setIsLifecycleOpen] = useState(false);
+  const [storageStats, setStorageStats] = useState<any>(null);
+  const [loadingStorage, setLoadingStorage] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [purgeReport, setPurgeReport] = useState<any[] | null>(null);
+
+  const fetchScoring = async (date: string) => {
+    setLoadingScoring(true);
+    try {
+      const res = await fetch(`/api/admin/scoring?date=${date}`);
+      const data = await res.json();
+      if (data.success) {
+        setLeaderboard(data.leaderboard || []);
+      }
+    } catch (e) {
+      console.error('Error fetching scoring:', e);
+    } finally {
+      setLoadingScoring(false);
+    }
+  };
+
+  const handleRecalculateScoring = async () => {
+    setRecalculating(true);
+    try {
+      const res = await fetch('/api/admin/scoring', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: scoringDate }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeedback({
+          type: 'success',
+          message: `Scoring Dinámico recalculado con éxito: ${data.result?.scores_calculated || 0} agentes evaluados.`
+        });
+        fetchScoring(scoringDate);
+      }
+    } catch (e: any) {
+      setFeedback({ type: 'error', message: e.message || 'Error al recalcular scoring' });
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  const fetchStorageStats = async () => {
+    setLoadingStorage(true);
+    try {
+      const res = await fetch('/api/admin/lifecycle');
+      const data = await res.json();
+      if (data.success) {
+        setStorageStats(data.stats);
+      }
+    } catch (e) {
+      console.error('Error fetching storage stats:', e);
+    } finally {
+      setLoadingStorage(false);
+    }
+  };
+
+  const handleRunPurge = async (dryRun: boolean) => {
+    setPurging(true);
+    setPurgeReport(null);
+    try {
+      const res = await fetch('/api/admin/lifecycle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retentionDays: 90, dryRun }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPurgeReport(data.report || []);
+        setFeedback({
+          type: 'success',
+          message: dryRun
+            ? 'Simulación de purga ejecutada. Revisa el reporte en pantalla.'
+            : 'Mantenimiento nocturno y purga de logs ejecutada satisfactoriamente.'
+        });
+        fetchStorageStats();
+      }
+    } catch (e: any) {
+      setFeedback({ type: 'error', message: e.message || 'Error ejecutando ciclo de vida' });
+    } finally {
+      setPurging(false);
+    }
+  };
 
   // Formulario de Edición
   const [editForm, setEditForm] = useState({
@@ -113,6 +225,8 @@ export default function UsersManagementPage() {
     isActive: true,
     resetCooldown: false,
     newPassword: '',
+    extension: '',
+    areas: ['Todas'],
   });
 
   const fetchUsers = async () => {
@@ -165,6 +279,8 @@ export default function UsersManagementPage() {
       isActive: u.is_active,
       resetCooldown: false,
       newPassword: '',
+      extension: u.extension || '',
+      areas: Array.isArray(u.areas_ids) ? u.areas_ids : ['Todas'],
     });
   };
 
@@ -199,6 +315,8 @@ export default function UsersManagementPage() {
         phoneNumber: '',
         address: '',
         institucion: '',
+        extension: '',
+        areas: ['Todas'],
       });
       fetchUsers();
     } catch (err: any) {
@@ -370,7 +488,29 @@ export default function UsersManagementPage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5">
+            <button
+              onClick={() => {
+                setIsScoringOpen(true);
+                fetchScoring(scoringDate);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-300 font-bold text-xs transition-all cursor-pointer"
+            >
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>Scoring & FIT</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setIsLifecycleOpen(true);
+                fetchStorageStats();
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-800/60 text-purple-300 font-bold text-xs transition-all cursor-pointer"
+            >
+              <Database className="w-4 h-4 text-purple-400" />
+              <span>Purga 500MB</span>
+            </button>
+
             <NotificationCenter />
             <button
               onClick={() => setIsCreateOpen(true)}
@@ -500,6 +640,7 @@ export default function UsersManagementPage() {
                 <tr className="border-b border-slate-800 bg-slate-900/90 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
                   <th className="py-3.5 px-4">Usuario / Identidad</th>
                   <th className="py-3.5 px-4">Rol & Cargo</th>
+                  <th className="py-3.5 px-4">Extensión & Áreas</th>
                   <th className="py-3.5 px-4">Turno / Sede</th>
                   <th className="py-3.5 px-4">Estado</th>
                   <th className="py-3.5 px-4">Cooldown 7d</th>
@@ -509,7 +650,7 @@ export default function UsersManagementPage() {
               <tbody className="divide-y divide-slate-800/60">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-slate-500">
                       <div className="inline-flex items-center gap-2">
                         <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
                         <span>Sincronizando identidades corporativas...</span>
@@ -518,7 +659,7 @@ export default function UsersManagementPage() {
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-slate-500">
                       No se encontraron usuarios con los criterios especificados.
                     </td>
                   </tr>
@@ -562,6 +703,23 @@ export default function UsersManagementPage() {
                             </span>
                             <div className="text-[11px] text-slate-400 font-medium">
                               {u.sub_rol || 'Operador/a'}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Extensión & Áreas */}
+                        <td className="py-3.5 px-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-sky-400">
+                              <Phone className="w-3 h-3 text-sky-500" />
+                              <span>{u.extension ? `Ext. ${u.extension}` : 'Sin Ext.'}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1 max-w-[190px]">
+                              {(Array.isArray(u.areas_ids) ? u.areas_ids : [u.areas_ids || 'Todas']).map((area: string, idx: number) => (
+                                <span key={idx} className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700 font-medium truncate max-w-[180px]">
+                                  {area === 'Todas' ? '🌐 Todas las Salas' : area}
+                                </span>
+                              ))}
                             </div>
                           </div>
                         </td>
@@ -771,6 +929,17 @@ export default function UsersManagementPage() {
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Extensión Telefónica (Briana)</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. 11001"
+                    value={createForm.extension}
+                    onChange={(e) => setCreateForm({ ...createForm, extension: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
+                  />
+                </div>
               </div>
 
               <div>
@@ -782,6 +951,49 @@ export default function UsersManagementPage() {
                   onChange={(e) => setCreateForm({ ...createForm, institucion: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
+              </div>
+
+              {/* Áreas de Trabajo Asys & Oriana */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-200 block">
+                  Áreas de Trabajo Autorizadas (Asys & Oriana)
+                </span>
+                <p className="text-[11px] text-slate-400">
+                  Selecciona los espacios y salas donde este operador tiene autorización para marcar asistencia y operar.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                  {WORK_AREAS.map((area) => {
+                    const isChecked = createForm.areas.includes(area);
+                    return (
+                      <label key={area} className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (area === 'Todas') {
+                              setCreateForm({
+                                ...createForm,
+                                areas: e.target.checked ? ['Todas'] : [],
+                              });
+                            } else {
+                              const newAreas = isChecked
+                                ? createForm.areas.filter((a) => a !== area && a !== 'Todas')
+                                : [...createForm.areas.filter((a) => a !== 'Todas'), area];
+                              setCreateForm({
+                                ...createForm,
+                                areas: newAreas.length === 0 ? ['Todas'] : newAreas,
+                              });
+                            }
+                          }}
+                          className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-0 bg-slate-950 border-slate-700"
+                        />
+                        <span className={`text-[11px] truncate ${isChecked ? 'text-blue-300 font-semibold' : 'text-slate-400'}`}>
+                          {area}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
@@ -898,6 +1110,17 @@ export default function UsersManagementPage() {
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Extensión Telefónica (Briana)</label>
+                  <input
+                    type="text"
+                    placeholder="Ej. 11001"
+                    value={editForm.extension}
+                    onChange={(e) => setEditForm({ ...editForm, extension: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
+                  />
+                </div>
               </div>
 
               <div>
@@ -908,6 +1131,49 @@ export default function UsersManagementPage() {
                   onChange={(e) => setEditForm({ ...editForm, institucion: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
+              </div>
+
+              {/* Áreas de Trabajo Asys & Oriana */}
+              <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-slate-200 block">
+                  Áreas de Trabajo Autorizadas (Asys & Oriana)
+                </span>
+                <p className="text-[11px] text-slate-400">
+                  Selecciona los espacios y salas donde este operador tiene autorización para marcar asistencia y operar.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                  {WORK_AREAS.map((area) => {
+                    const isChecked = editForm.areas.includes(area);
+                    return (
+                      <label key={area} className="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (area === 'Todas') {
+                              setEditForm({
+                                ...editForm,
+                                areas: e.target.checked ? ['Todas'] : [],
+                              });
+                            } else {
+                              const newAreas = isChecked
+                                ? editForm.areas.filter((a) => a !== area && a !== 'Todas')
+                                : [...editForm.areas.filter((a) => a !== 'Todas'), area];
+                              setEditForm({
+                                ...editForm,
+                                areas: newAreas.length === 0 ? ['Todas'] : newAreas,
+                              });
+                            }
+                          }}
+                          className="w-3.5 h-3.5 rounded text-blue-600 focus:ring-0 bg-slate-950 border-slate-700"
+                        />
+                        <span className={`text-[11px] truncate ${isChecked ? 'text-blue-300 font-semibold' : 'text-slate-400'}`}>
+                          {area}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Controles de Cooldown y Estado */}
@@ -1014,6 +1280,309 @@ export default function UsersManagementPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL SCORING DINÁMICO & FIT (FASE 11) ── */}
+      {isScoringOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-600/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                    Scoring Dinámico & Telemetría FIT
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                      30% - 40% - 30%
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Puntualidad Asys (30%) + Telefonía & FIT Briana (40%) + Analítica Oriana (30%)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="date"
+                  value={scoringDate}
+                  onChange={(e) => {
+                    setScoringDate(e.target.value);
+                    fetchScoring(e.target.value);
+                  }}
+                  className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                />
+                <button
+                  onClick={handleRecalculateScoring}
+                  disabled={recalculating}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold text-xs shadow-lg shadow-amber-900/30 transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${recalculating ? 'animate-spin' : ''}`} />
+                  <span>{recalculating ? 'Calculando...' : 'Recalcular'}</span>
+                </button>
+                <button onClick={() => setIsScoringOpen(false)} className="text-slate-400 hover:text-white p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Ranking / Leaderboard */}
+            <div className="rounded-2xl bg-slate-950 border border-slate-800 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/80 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-3 w-10 text-center">#</th>
+                      <th className="py-3 px-4">Operador / Identidad</th>
+                      <th className="py-3 px-4 text-center">Score Final</th>
+                      <th className="py-3 px-4">Asys (30%)</th>
+                      <th className="py-3 px-4">Briana & FIT (40%)</th>
+                      <th className="py-3 px-4">Oriana (30%)</th>
+                      <th className="py-3 px-3 text-center">Módulo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
+                    {loadingScoring ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-slate-500">
+                          <div className="inline-flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4 animate-spin text-amber-500" />
+                            <span>Calculando scoring dinámico y telemetría FIT...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : leaderboard.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-slate-500">
+                          No hay evaluaciones consolidadas para esta fecha. Pulsa "Recalcular" para generar el scoring.
+                        </td>
+                      </tr>
+                    ) : (
+                      leaderboard.map((item, idx) => {
+                        const breakdown = item.score_breakdown || {};
+                        const asys = breakdown.asys || {};
+                        const briana = breakdown.briana || {};
+                        const oriana = breakdown.oriana || {};
+                        const fit = breakdown.fit_telemetry || {};
+
+                        const score = Number(item.final_score);
+                        const scoreBadge = score >= 90
+                          ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                          : score >= 75
+                          ? 'bg-blue-950 text-blue-300 border-blue-800'
+                          : score >= 60
+                          ? 'bg-amber-950 text-amber-300 border-amber-800'
+                          : 'bg-rose-950 text-rose-300 border-rose-800';
+
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-900/40 transition-colors">
+                            <td className="py-3 px-3 text-center font-bold text-slate-500">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3 px-4 font-sans">
+                              <div className="font-bold text-white text-xs">{item.full_name}</div>
+                              <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-0.5 font-mono">
+                                <span>{item.email}</span>
+                                <span className="text-slate-600">|</span>
+                                <span className="text-sky-400">Ext. {item.extension}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-black border ${scoreBadge}`}>
+                                {score.toFixed(1)} pts
+                              </span>
+                            </td>
+                            {/* Asys */}
+                            <td className="py-3 px-4">
+                              <div className="text-slate-200 font-semibold">{asys.score || 0} pts</div>
+                              <div className="text-[10px] text-slate-400">
+                                {asys.retardo_min > 0 ? `Retardo: ${asys.retardo_min} min` : 'Puntual'}
+                              </div>
+                            </td>
+                            {/* Briana & FIT */}
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-200 font-semibold">{briana.score || 0} pts</span>
+                                {fit.fit_minutes !== null && fit.fit_minutes !== undefined && (
+                                  <span className={`text-[9px] px-1.5 py-0.2 rounded border font-semibold ${
+                                    fit.fit_minutes <= 15
+                                      ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                      : 'bg-amber-950 text-amber-300 border-amber-800'
+                                  }`}>
+                                    FIT: {fit.fit_minutes}m
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-slate-400">
+                                {briana.effective_rate_pct || 0}% efect. ({briana.effective_calls || 0}/{briana.total_calls || 0})
+                              </div>
+                            </td>
+                            {/* Oriana */}
+                            <td className="py-3 px-4">
+                              <div className="text-slate-200 font-semibold">{oriana.score || 0} pts</div>
+                              <div className="text-[10px] text-slate-400">
+                                {oriana.accuracy_pct || 0}% prec. ({oriana.records_count || 0} reg)
+                              </div>
+                            </td>
+                            {/* Rol / Dominante */}
+                            <td className="py-3 px-3 text-center">
+                              <span className="text-[9px] px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 uppercase">
+                                {item.dominant_role === 'multi_operator' ? 'Híbrido' : item.dominant_role}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL CICLO DE VIDA & PURGA 500MB (FASE 12) ── */}
+      {isLifecycleOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+                    Ciclo de Vida & Purga Nocturna
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-800/60">
+                      Umbral 500 MB
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Mantenimiento predictivo del almacenamiento dentro de la cuota gratuita de Supabase
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setIsLifecycleOpen(false)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Medidor de Almacenamiento */}
+            {storageStats && (
+              <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Uso de Almacenamiento PostgreSQL
+                  </span>
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md border ${
+                    storageStats.status === 'HEALTHY'
+                      ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                      : storageStats.status === 'WARNING'
+                      ? 'bg-amber-950 text-amber-400 border-amber-800'
+                      : 'bg-rose-950 text-rose-400 border-rose-800'
+                  }`}>
+                    {storageStats.status} ({storageStats.usage_percentage}%)
+                  </span>
+                </div>
+
+                {/* Barra de progreso */}
+                <div className="w-full bg-slate-900 rounded-full h-3 overflow-hidden border border-slate-800">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      storageStats.usage_percentage < 70
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                        : storageStats.usage_percentage < 85
+                        ? 'bg-gradient-to-r from-amber-500 to-yellow-400'
+                        : 'bg-gradient-to-r from-rose-500 to-red-400'
+                    }`}
+                    style={{ width: `${Math.min(100, storageStats.usage_percentage)}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                  <span>Espacio ocupado: <strong className="text-white">{storageStats.database_size_pretty}</strong></span>
+                  <span>Límite Free Tier: <strong className="text-white">{storageStats.quota_pretty}</strong></span>
+                </div>
+              </div>
+            )}
+
+            {/* Tablas Principales */}
+            {storageStats?.largest_tables && (
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-300 block">
+                  Tablas con Mayor Volumen de Almacenamiento
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {storageStats.largest_tables.slice(0, 6).map((t: any) => (
+                    <div key={t.table_name} className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-mono font-bold text-white text-[11px]">{t.table_name}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">~{t.approx_rows} registros</div>
+                      </div>
+                      <span className="font-mono text-purple-300 font-bold text-xs bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/40">
+                        {t.total_size}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reporte de Purga si se ejecutó */}
+            {purgeReport && (
+              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                <span className="text-xs font-bold text-emerald-400 block">
+                  Reporte de Ejecución de Ciclo de Vida:
+                </span>
+                <div className="space-y-1 text-[11px] font-mono text-slate-300">
+                  {purgeReport.map((rep: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800/60">
+                      <span className="text-slate-400">{rep.phase}</span>
+                      <span className="text-white font-bold">
+                        {rep.rows_aggregated > 0 && `+${rep.rows_aggregated} consolidadas `}
+                        {rep.rows_deleted > 0 && `-${rep.rows_deleted} purgadas `}
+                        ({rep.execution_time_ms} ms)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Botones de Acción */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-800">
+              <span className="text-[11px] text-slate-400">
+                La purga consolida agregados diarios en tablas históricas antes de eliminar filas individuales.
+              </span>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  disabled={purging}
+                  onClick={() => handleRunPurge(true)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  {purging ? 'Simulando...' : 'Simular (Dry-Run)'}
+                </button>
+                <button
+                  type="button"
+                  disabled={purging}
+                  onClick={() => {
+                    if (confirm('¿Confirmas la ejecución de la purga nocturna? Se consolidarán los agregados y se compactarán registros > 90 días para preservar el umbral de 500 MB.')) {
+                      handleRunPurge(false);
+                    }
+                  }}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold shadow-lg shadow-purple-900/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{purging ? 'Procesando...' : 'Ejecutar Purga'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

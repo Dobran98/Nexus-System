@@ -73,5 +73,11 @@
         "service": "admin-portal"
       }
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/admin/lifecycle",
+      "schedule": "0 4 * * *"
+    }
   ]
 }

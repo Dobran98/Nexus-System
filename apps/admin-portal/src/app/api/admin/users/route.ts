@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
       phoneNumber = '',
       address = '',
       institucion = '',
+      extension = '',
+      areas = ['Todas'],
     } = body;
 
     if (!email || !password || !fullName || !documentId) {
@@ -139,6 +141,8 @@ export async function POST(req: NextRequest) {
       p_phone: phoneNumber.trim(),
       p_address: address.trim(),
       p_institucion: institucion.trim(),
+      p_extension: extension ? extension.trim() : '',
+      p_areas: Array.isArray(areas) ? areas : ['Todas'],
     });
 
     if (rpcError) {
@@ -150,10 +154,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result?.error || 'No se pudo crear el usuario' }, { status: 400 });
     }
 
+    // Emisión automática de notificación de bienvenida al nuevo colaborador
+    try {
+      await (supabase.from('nexus_notificaciones') as any).insert({
+        user_email: cleanEmail,
+        titulo: 'Bienvenido/a al Ecosistema Nexus',
+        mensaje: `Tu cuenta corporativa ha sido habilitada con el rol ${roleName} (${subRol}) en el turno ${turno}. Extensión asignada: ${result.extension || 'Configurada'}.`,
+        tipo: 'sistema',
+        prioridad: 'alta',
+        leida: false,
+      });
+    } catch (notifErr) {
+      console.warn('Advertencia emitiendo notificación inicial:', notifErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: result.message,
       userId: result.user_id,
+      extension: result.extension,
     });
   } catch (err: any) {
     console.error('POST /api/admin/users error:', err);
@@ -190,6 +209,8 @@ export async function PATCH(req: NextRequest) {
       isActive = true,
       newPassword = null,
       resetCooldown = false,
+      extension = null,
+      areas = null,
     } = body;
 
     if (!userId) {
@@ -209,6 +230,8 @@ export async function PATCH(req: NextRequest) {
       p_is_active: isActive,
       p_new_password: newPassword && newPassword.trim().length >= 6 ? newPassword.trim() : null,
       p_reset_cooldown: !!resetCooldown,
+      p_extension: extension ? extension.trim() : null,
+      p_areas: areas ? areas : null,
     });
 
     if (rpcError) {
@@ -218,6 +241,30 @@ export async function PATCH(req: NextRequest) {
 
     if (!result?.success) {
       return NextResponse.json({ error: result?.error || 'No se pudo actualizar el usuario' }, { status: 400 });
+    }
+
+    // Emisión automática de notificación de actualización
+    try {
+      const { data: targetUser } = await (supabase.from('profiles') as any).select('full_name, id').eq('id', userId).single();
+      const { data: authTarget } = await (supabase.from('auth.users') as any).select('email').eq('id', userId).single();
+      const targetEmail = authTarget?.email;
+
+      if (targetEmail) {
+        let msg = 'Tu perfil corporativo ha sido actualizado por la Administración.';
+        if (newPassword) msg = 'Tu contraseña ha sido restablecida exitosamente por un Administrador de Nexus.';
+        if (resetCooldown) msg = 'Tu restricción semanal de 7 días (cooldown) ha sido liberada por la Administración.';
+
+        await (supabase.from('nexus_notificaciones') as any).insert({
+          user_email: targetEmail,
+          titulo: newPassword ? 'Actualización de Seguridad' : 'Actualización de Perfil',
+          mensaje: msg,
+          tipo: 'sistema',
+          prioridad: 'alta',
+          leida: false,
+        });
+      }
+    } catch (e) {
+      // Ignorar fallback silencioso
     }
 
     return NextResponse.json({
