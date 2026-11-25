@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, UserCheck, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, UserCheck, ShieldCheck, QrCode } from 'lucide-react';
 import { ProfileRestrictionPanel } from '@/components/ProfileRestrictionPanel';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { createSupabaseServerClient } from '@intranet/auth/server';
@@ -81,6 +81,13 @@ export default async function ProfilePage() {
           </div>
 
           <div className="flex items-center space-x-3 text-xs text-slate-400">
+            <Link
+              href="/asistencia"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold text-emerald-300 bg-emerald-950/80 border border-emerald-800/80 hover:bg-emerald-900/60 transition-all shadow-sm"
+            >
+              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Módulo Asys</span>
+            </Link>
             <NotificationCenter />
             <span className="hidden sm:inline-block font-mono text-[11px] text-slate-500">
               {user.email}

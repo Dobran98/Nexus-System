@@ -85,8 +85,8 @@ export default async function AdminHomePage() {
   const canManageUsers = isSuperAdmin || isModuleAdmin || isCoordinadorGeneral;
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Operador';
-  const roleLabel = isBrando 
-    ? 'Superadmin Fundador' 
+  const roleLabel = isBrando
+    ? 'Superadmin Fundador'
     : (roles.length > 0 ? roles.join(', ') : 'Operador / Personal');
   const initials = displayName
     .split(' ')
@@ -203,19 +203,19 @@ export default async function AdminHomePage() {
 
                 <div className="space-y-2">
                   <span className="text-xs font-mono font-medium uppercase tracking-wider text-emerald-400">
-                    Control de Turno
+                    Control de Presencia & Turno
                   </span>
                   <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-emerald-300 transition-colors">
-                    Escaneo de Asistencia
+                    Módulo Asys
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
-                    Marcado de entrada (Clock-In), descansos y salida (Clock-Out) con registro de hora oficial y geolocalización en Supabase.
+                    Marcado de entrada (Clock-In), descansos y salida (Clock-Out) con registro de hora oficial y geolocalización, sincronizado con su ficha de personal.
                   </p>
                 </div>
               </div>
 
               <div className="mt-6 flex items-center justify-between text-sm font-semibold text-emerald-400 group-hover:text-emerald-300 pt-4 border-t border-slate-800">
-                <span>Ingresar al Escáner</span>
+                <span>Ingresar a Asys</span>
                 <span className="h-8 w-8 rounded-full bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-300 group-hover:bg-emerald-600 group-hover:text-white transition-all">
                   <ArrowRight className="h-4 w-4" />
                 </span>
@@ -294,7 +294,7 @@ export default async function AdminHomePage() {
               </div>
             </Link>
 
-            {/* 🟢 MÓDULO 4: PERFIL Y COOLDOWN (ACTIVO AHORA) */}
+            {/* 🟢 MÓDULO 4: PERFIL Y COOLDOWN (ENLAZADO A ASYS) */}
             <Link
               href="/profile"
               className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-teal-500/60 hover:border-teal-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-teal-950/40 transition-all duration-300"
@@ -305,25 +305,25 @@ export default async function AdminHomePage() {
                     <UserCheck className="h-7 w-7" />
                   </div>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-950 text-teal-300 border border-teal-800 uppercase tracking-wide">
-                    ● Activo Ahora
+                    ● Enlazado a Asys
                   </span>
                 </div>
 
                 <div className="space-y-2">
                   <span className="text-xs font-mono font-medium uppercase tracking-wider text-teal-400">
-                    Identidad & Gobernanza
+                    Asys · Ficha de Identidad & Contacto
                   </span>
                   <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-teal-300 transition-colors">
                     Perfil y Cooldown (7 Días)
                   </h3>
                   <p className="text-sm text-slate-400 leading-relaxed">
-                    Edición controlada de teléfono y dirección domiciliaria con bloqueo automático de 7 días continuos.
+                    Edición de datos personales (teléfono y dirección) sincronizados con su ficha de Asys, con política de bloqueo semanal de 7 días.
                   </p>
                 </div>
               </div>
 
               <div className="mt-6 flex items-center justify-between text-sm font-semibold text-teal-400 group-hover:text-teal-300 pt-4 border-t border-slate-800">
-                <span>Gestionar Mi Perfil</span>
+                <span>Gestionar Perfil Asys</span>
                 <span className="h-8 w-8 rounded-full bg-teal-950 border border-teal-800 flex items-center justify-center text-teal-300 group-hover:bg-teal-600 group-hover:text-white transition-all">
                   <ArrowRight className="h-4 w-4" />
                 </span>
