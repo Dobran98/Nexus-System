@@ -13,6 +13,7 @@ import {
   Construction,
 } from 'lucide-react';
 import { SignOutButton } from '../components/SignOutButton';
+import { NotificationCenter } from '../components/NotificationCenter';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
@@ -118,6 +119,9 @@ export default async function AdminHomePage() {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* 🔔 Centro de Notificaciones y Tareas */}
+            <NotificationCenter />
+
             <div className="flex items-center space-x-3 pl-2 border-l border-slate-800">
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-semibold text-slate-200">{displayName}</p>

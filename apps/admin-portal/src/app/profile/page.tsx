@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, UserCheck, ShieldCheck } from 'lucide-react';
 import { ProfileRestrictionPanel } from '@/components/ProfileRestrictionPanel';
+import { NotificationCenter } from '@/components/NotificationCenter';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
@@ -80,6 +81,7 @@ export default async function ProfilePage() {
           </div>
 
           <div className="flex items-center space-x-3 text-xs text-slate-400">
+            <NotificationCenter />
             <span className="hidden sm:inline-block font-mono text-[11px] text-slate-500">
               {user.email}
             </span>
