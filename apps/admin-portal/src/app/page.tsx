@@ -210,40 +210,9 @@ export default async function AdminHomePage() {
         </div>
       </header>
 
-      {/* ── 2. HERO PRINCIPAL ─────────────────────────────────────── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-10">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-slate-900/90 to-slate-950 border border-slate-800/80 p-8 sm:p-10 shadow-2xl">
-          <div className="absolute top-0 right-1/4 -mt-12 h-64 w-64 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 right-10 -mb-12 h-64 w-64 rounded-full bg-emerald-600/10 blur-3xl pointer-events-none" />
-
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="space-y-3 max-w-2xl">
-              <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/40 text-emerald-400 text-xs font-medium">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Módulo Operativo Activo — Fase 1</span>
-              </div>
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                Control y Registro de Asistencia
-              </h1>
-              <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-                Escaneo y registro de turnos de entrada y salida con validación de identidad y geolocalización. El resto de módulos se activan progresivamente.
-              </p>
-            </div>
-
-            <div className="shrink-0">
-              <Link
-                href="/asistencia"
-                className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 text-white font-bold text-base shadow-xl shadow-blue-950/50 transition-all hover:scale-105"
-              >
-                <QrCode className="w-5 h-5" />
-                <span>Abrir Marcado de Asistencia</span>
-                <ArrowRight className="w-4 h-4 ml-1" />
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* ── 2.5 SECCIÓN: ESTACIÓN DE TRABAJO & PUESTO ASIGNADO ── */}
+      {/* ── 2. CONTENIDO PRINCIPAL ─────────────────────────────────── */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8">
+        {/* ── SECCIÓN: ESTACIÓN DE TRABAJO & PUESTO ASIGNADO ── */}
         <section className="p-6 sm:p-7 rounded-3xl bg-slate-900/90 border border-slate-800 shadow-2xl relative overflow-hidden space-y-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
             <div className="flex items-center gap-3.5">
