@@ -5,14 +5,12 @@ import {
   QrCode,
   ArrowRight,
   Sparkles,
-  Zap,
-  Clock,
-  Construction,
   PhoneCall,
   FileSpreadsheet,
   Users,
   LineChart,
   UserCheck,
+  Construction,
 } from 'lucide-react';
 import { SignOutButton } from '../components/SignOutButton';
 import { createSupabaseServerClient } from '@intranet/auth/server';
@@ -59,8 +57,34 @@ export default async function AdminHomePage() {
     roles = [];
   }
 
+  // Traer sub-rol de usuarios para distinguir coordinadores
+  let legacyUser: any = null;
+  try {
+    const { data: legacyData } = await (supabase
+      .from('usuarios') as any)
+      .select('rol, sub_rol')
+      .or(`email.eq.${user.email},usuario.ilike.%${user.email?.split('@')[0]}%`)
+      .maybeSingle();
+    legacyUser = legacyData;
+  } catch {
+    legacyUser = null;
+  }
+
+  // Lógica de Permisos Especiales y Visibilidad
+  const userEmail = (user?.email || '').toLowerCase();
+  const isBrando = userEmail.includes('brando') || userEmail === 'bralez@impress.com';
+  const isSuperAdmin = roles.includes('superadmin') || isBrando;
+  const isModuleAdmin = roles.includes('module_admin') || isSuperAdmin;
+  const isCoordinadorGeneral = legacyUser?.sub_rol?.toLowerCase().includes('coordinador general') || isSuperAdmin;
+
+  // Gestión de Usuarios: SOLO visible para Admin, Superadmin y Coordinador General
+  // (Oculta para operadores, analistas, RRHH e informática general)
+  const canManageUsers = isSuperAdmin || isModuleAdmin || isCoordinadorGeneral;
+
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Operador';
-  const roleLabel = roles.length > 0 ? roles.join(', ') : 'Operador / Personal';
+  const roleLabel = isBrando 
+    ? 'Superadmin Fundador' 
+    : (roles.length > 0 ? roles.join(', ') : 'Operador / Personal');
   const initials = displayName
     .split(' ')
     .map((w: string) => w[0])
@@ -124,7 +148,7 @@ export default async function AdminHomePage() {
                 Control y Registro de Asistencia
               </h1>
               <p className="text-slate-400 text-sm sm:text-base leading-relaxed">
-                Escaneo y registro de turnos de entrada y salida con validación de identidad y geolocalización. El resto de módulos se activarán progresivamente.
+                Escaneo y registro de turnos de entrada y salida con validación de identidad y geolocalización. El resto de módulos se activan progresivamente.
               </p>
             </div>
 
@@ -141,7 +165,7 @@ export default async function AdminHomePage() {
           </div>
         </div>
 
-        {/* ── 3. SECCIÓN: MÓDULO ACTIVO DESTACADO ───────────────────── */}
+        {/* ── 3. SECCIÓN: MÓDULOS DE TRABAJO ────────────────────────── */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -149,7 +173,7 @@ export default async function AdminHomePage() {
                 Módulos de Trabajo
               </h2>
               <p className="text-xs text-slate-400">
-                Acceda al escáner de asistencia habilitado o revise los módulos en desarrollo
+                Seleccione el módulo operativo correspondiente a sus funciones autorizadas
               </p>
             </div>
           </div>
@@ -192,42 +216,7 @@ export default async function AdminHomePage() {
               </div>
             </Link>
 
-            {/* 🚧 MÓDULO 2: INGESTA MASIVA (EN CONSTRUCCIÓN) */}
-            <Link
-              href="/en-construccion?modulo=Ingesta+Masiva"
-              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
-            >
-              <div>
-                <div className="flex items-start justify-between mb-5">
-                  <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
-                    <FileSpreadsheet className="h-6 w-6" />
-                  </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                    🚧 En Construcción
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
-                    Telefonía
-                  </span>
-                  <h3 className="text-xl font-bold text-slate-300 tracking-tight">
-                    Ingesta Masiva de Datos
-                  </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">
-                    Carga por lotes CSV/XLSX con detección heurística de duplicados. Se activará en la Fase 2.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
-                <span>Próximamente disponible</span>
-                <Construction className="h-4 w-4 text-amber-500" />
-              </div>
-            </Link>
-
-            {/* 🚧 MÓDULO 3: LLAMADAS / MARCADOR (EN CONSTRUCCIÓN) */}
-            {/* 🟢 MÓDULO 3: LLAMADAS Y BRIANA (ACTIVO) */}
+            {/* 🟢 MÓDULO 2: LLAMADAS Y BRIANA (ACTIVO) */}
             <Link
               href="/llamadas"
               className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-sky-500/60 hover:border-sky-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-sky-950/40 transition-all duration-300"
@@ -263,7 +252,7 @@ export default async function AdminHomePage() {
               </div>
             </Link>
 
-            {/* 🟢 MÓDULO 4: ORIANA ANALYTICS (ACTIVO) */}
+            {/* 🟢 MÓDULO 3: ORIANA ANALYTICS (ACTIVO) */}
             <Link
               href="/oriana"
               className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-indigo-500/60 hover:border-indigo-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-indigo-950/40 transition-all duration-300"
@@ -299,73 +288,115 @@ export default async function AdminHomePage() {
               </div>
             </Link>
 
-            {/* 🚧 MÓDULO 5: GESTIÓN DE USUARIOS (EN CONSTRUCCIÓN) */}
+            {/* 🟢 MÓDULO 4: PERFIL Y COOLDOWN (ACTIVO AHORA) */}
             <Link
-              href="/en-construccion?modulo=Gestión+de+Usuarios"
-              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
+              href="/profile"
+              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-teal-500/60 hover:border-teal-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-teal-950/40 transition-all duration-300"
             >
               <div>
                 <div className="flex items-start justify-between mb-5">
-                  <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
-                    <Users className="h-6 w-6" />
+                  <div className="h-14 w-14 rounded-2xl bg-teal-950/80 border border-teal-800/50 flex items-center justify-center text-teal-400 group-hover:scale-105 transition-all shadow-md">
+                    <UserCheck className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                    🚧 En Construcción
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-950 text-teal-300 border border-teal-800 uppercase tracking-wide">
+                    ● Activo Ahora
                   </span>
                 </div>
 
                 <div className="space-y-2">
-                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
-                    Gobierno RBAC
+                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-teal-400">
+                    Identidad & Gobernanza
                   </span>
-                  <h3 className="text-xl font-bold text-slate-300 tracking-tight">
-                    Gestión de Usuarios
+                  <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-teal-300 transition-colors">
+                    Perfil y Cooldown (7 Días)
                   </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">
-                    Creación, edición y asignación de roles para el personal corporativo.
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Edición controlada de teléfono y dirección domiciliaria con bloqueo automático de 7 días continuos.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
-                <span>Próximamente disponible</span>
-                <Construction className="h-4 w-4 text-amber-500" />
+              <div className="mt-6 flex items-center justify-between text-sm font-semibold text-teal-400 group-hover:text-teal-300 pt-4 border-t border-slate-800">
+                <span>Gestionar Mi Perfil</span>
+                <span className="h-8 w-8 rounded-full bg-teal-950 border border-teal-800 flex items-center justify-center text-teal-300 group-hover:bg-teal-600 group-hover:text-white transition-all">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
               </div>
             </Link>
 
-            {/* 🚧 MÓDULO 6: PERFIL Y RESTRICCIONES (EN CONSTRUCCIÓN) */}
-            <Link
-              href="/en-construccion?modulo=Perfil+de+Usuario"
-              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
-            >
-              <div>
-                <div className="flex items-start justify-between mb-5">
-                  <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
-                    <UserCheck className="h-6 w-6" />
+            {/* 🔒 MÓDULO 5: INGESTA MASIVA (EXCLUSIVO PARA SUPERADMIN BRANDO) */}
+            {isBrando && (
+              <Link
+                href="/ingest"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border-2 border-purple-500/60 hover:border-purple-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-950/40 transition-all duration-300"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="h-14 w-14 rounded-2xl bg-purple-950/80 border border-purple-800/50 flex items-center justify-center text-purple-400 group-hover:scale-105 transition-all shadow-md">
+                      <FileSpreadsheet className="h-7 w-7" />
+                    </div>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-950 text-purple-300 border border-purple-800 uppercase tracking-wide">
+                      ● Superadmin Brando
+                    </span>
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                    🚧 En Construcción
-                  </span>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-mono font-medium uppercase tracking-wider text-purple-400">
+                      Consola de Experimentación
+                    </span>
+                    <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-purple-300 transition-colors">
+                      Ingesta Masiva de Datos
+                    </h3>
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Carga de lotes CSV/XLSX, deduplicación y asignación de contactos. Módulo reservado para pruebas superadmin.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
-                    Identidad
+                <div className="mt-6 flex items-center justify-between text-sm font-semibold text-purple-400 group-hover:text-purple-300 pt-4 border-t border-slate-800">
+                  <span>Abrir Ingesta de Pruebas</span>
+                  <span className="h-8 w-8 rounded-full bg-purple-950 border border-purple-800 flex items-center justify-center text-purple-300 group-hover:bg-purple-600 group-hover:text-white transition-all">
+                    <ArrowRight className="h-4 w-4" />
                   </span>
-                  <h3 className="text-xl font-bold text-slate-300 tracking-tight">
-                    Perfil y Cooldown
-                  </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">
-                    Edición de datos personales con restricción forzada de 7 días.
-                  </p>
                 </div>
-              </div>
+              </Link>
+            )}
 
-              <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
-                <span>Próximamente disponible</span>
-                <Construction className="h-4 w-4 text-amber-500" />
-              </div>
-            </Link>
+            {/* 🚧 MÓDULO 6: GESTIÓN DE USUARIOS (SOLO ADMIN, SUPERADMIN Y COORD. GENERAL) */}
+            {canManageUsers && (
+              <Link
+                href="/en-construccion?modulo=Gestión+de+Usuarios"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
+              >
+                <div>
+                  <div className="flex items-start justify-between mb-5">
+                    <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
+                      <Users className="h-6 w-6" />
+                    </div>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
+                      🚧 En Construcción (Fase 10)
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
+                      Gobierno RBAC (Admin & Coordinación)
+                    </span>
+                    <h3 className="text-xl font-bold text-slate-300 tracking-tight">
+                      Gestión de Usuarios
+                    </h3>
+                    <p className="text-sm text-slate-500 leading-relaxed">
+                      Creación, edición y asignación de roles para el personal corporativo. Siguiente fase en desarrollo.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
+                  <span>Próximamente disponible</span>
+                  <Construction className="h-4 w-4 text-amber-500" />
+                </div>
+              </Link>
+            )}
 
           </div>
         </section>
@@ -377,7 +408,7 @@ export default async function AdminHomePage() {
           <div className="flex items-center space-x-2">
             <span className="font-semibold text-slate-400">Nexus Intranet Platform</span>
             <span>·</span>
-            <span>Fase 1: Módulo de Asistencia</span>
+            <span>Gobernanza & Operaciones</span>
           </div>
           <div className="flex items-center space-x-6">
             <span>Next.js 14</span>
