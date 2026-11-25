@@ -366,38 +366,38 @@ export default async function AdminHomePage() {
               </Link>
             )}
 
-            {/* 🚧 MÓDULO 6: GESTIÓN DE USUARIOS (SOLO ADMIN, SUPERADMIN Y COORD. GENERAL) */}
+            {/* 🛡️ MÓDULO 6: GESTIÓN DE USUARIOS (SOLO ADMIN, SUPERADMIN Y COORD. GENERAL) */}
             {canManageUsers && (
               <Link
-                href="/en-construccion?modulo=Gestión+de+Usuarios"
-                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/60 border border-slate-800/80 hover:border-slate-700/80 transition-all opacity-85 hover:opacity-100"
+                href="/users"
+                className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900/90 border border-slate-800/80 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-950/20 transition-all"
               >
                 <div>
                   <div className="flex items-start justify-between mb-5">
-                    <div className="h-14 w-14 rounded-2xl bg-slate-800/70 border border-slate-700/60 flex items-center justify-center text-slate-400">
+                    <div className="h-14 w-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 group-hover:scale-105 group-hover:bg-blue-600/20 transition-all">
                       <Users className="h-6 w-6" />
                     </div>
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                      🚧 En Construcción (Fase 10)
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 uppercase tracking-wide">
+                      ● ACTIVO AHORA
                     </span>
                   </div>
 
                   <div className="space-y-2">
-                    <span className="text-xs font-mono font-medium uppercase tracking-wider text-slate-500">
+                    <span className="text-xs font-mono font-medium uppercase tracking-wider text-blue-400">
                       Gobierno RBAC (Admin & Coordinación)
                     </span>
-                    <h3 className="text-xl font-bold text-slate-300 tracking-tight">
+                    <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-blue-200 transition-colors">
                       Gestión de Usuarios
                     </h3>
-                    <p className="text-sm text-slate-500 leading-relaxed">
-                      Creación, edición y asignación de roles para el personal corporativo. Siguiente fase en desarrollo.
+                    <p className="text-sm text-slate-400 leading-relaxed">
+                      Creación, edición y asignación de roles para el personal corporativo. Sincronización automática de credenciales y liberación de cooldowns.
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-6 flex items-center justify-between text-xs font-medium text-slate-500 pt-4 border-t border-slate-800/60">
-                  <span>Próximamente disponible</span>
-                  <Construction className="h-4 w-4 text-amber-500" />
+                <div className="mt-6 flex items-center justify-between text-xs font-semibold text-blue-400 pt-4 border-t border-slate-800/60">
+                  <span>Administrar Personal & Credenciales</span>
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </div>
               </Link>
             )}
