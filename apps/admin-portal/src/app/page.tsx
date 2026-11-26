@@ -23,7 +23,10 @@ import { SignOutButton } from '../components/SignOutButton';
 import { NotificationCenter } from '../components/NotificationCenter';
 import { AdminHeaderActions } from '@/components/AdminHeaderActions';
 import { EncuestasHeaderButton } from '@/components/EncuestasHeaderButton';
+import { ModuleGovernanceButton } from '@/components/ModuleGovernanceButton';
+import { ModuleManualButton } from '@/components/ModuleManualButton';
 import { WorkstationQuickActions } from '@/components/WorkstationQuickActions';
+import { getModuleFlags } from '@/lib/moduleFlags';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
@@ -199,6 +202,31 @@ export default async function AdminHomePage() {
   // (Oculta para operadores, analistas, RRHH e informática general)
   const canManageUsers = isSuperAdmin || isModuleAdmin || isCoordinadorGeneral;
 
+  // Estados de visibilidad de módulos (Feature Flags gobernados por el Fundador Dev)
+  const moduleFlags = getModuleFlags();
+
+  function renderModuleBadge(flag?: any, defaultText: string = '● Activo Ahora') {
+    if (!flag || flag.status === 'public') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 uppercase tracking-wide">
+          {defaultText}
+        </span>
+      );
+    }
+    if (flag.status === 'testing') {
+      return (
+        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/90 text-amber-300 border border-amber-800 uppercase tracking-wide">
+          ● Solo Pruebas Dev
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-950/90 text-rose-300 border border-rose-800 uppercase tracking-wide">
+        ● En Mantenimiento
+      </span>
+    );
+  }
+
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Operador';
   const roleLabel = isFundadorDev
     ? 'Fundador Dev'
@@ -242,10 +270,19 @@ export default async function AdminHomePage() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* 📖 Manuales Operativos Contextuales */}
+            <ModuleManualButton />
+
             {/* 📋 Sondeos & Encuestas Operativas (Analistas, Supervisores y Directores) */}
             <EncuestasHeaderButton
               canManage={isCoordinador || isCoordinadorGeneral || isModuleAdmin || isSuperAdmin || isFundadorDev}
               currentUserEmail={user?.email || ''}
+            />
+
+            {/* 🎛️ Consola de Gobernanza de Módulos (Solo Fundador Dev & Superadmin) */}
+            <ModuleGovernanceButton
+              isSuperAdmin={isSuperAdmin}
+              isFundadorDev={isFundadorDev}
             />
 
             {/* 📢 Botón Rápido de Aviso para Administradores / Superadmin */}
@@ -446,9 +483,7 @@ export default async function AdminHomePage() {
                     <QrCode className="h-7 w-7" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800 uppercase tracking-wide">
-                      ● Activo Ahora
-                    </span>
+                    {renderModuleBadge(moduleFlags?.asys, '● Activo Ahora')}
                     {!todayAttendance && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/90 text-amber-300 border border-amber-800 animate-pulse font-mono">
                         ⚠️ Entrada Pendiente
@@ -489,9 +524,7 @@ export default async function AdminHomePage() {
                     <PhoneCall className="h-7 w-7" />
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-950 text-sky-300 border border-sky-800 uppercase tracking-wide">
-                      ● Activo Ahora
-                    </span>
+                    {renderModuleBadge(moduleFlags?.briana, '● Activo Ahora')}
                     {brianaTasksCount > 0 && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950/90 text-amber-300 border border-amber-800 animate-pulse font-mono">
                         🔥 {brianaTasksCount} Asignadas
@@ -531,9 +564,7 @@ export default async function AdminHomePage() {
                   <div className="h-14 w-14 rounded-2xl bg-indigo-950/80 border border-indigo-800/50 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-all shadow-md">
                     <LineChart className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-950 text-indigo-300 border border-indigo-800 uppercase tracking-wide">
-                    ● Activo Ahora
-                  </span>
+                  {renderModuleBadge(moduleFlags?.oriana, '● Activo Ahora')}
                 </div>
 
                 <div className="space-y-2">
@@ -678,9 +709,7 @@ export default async function AdminHomePage() {
                     <div className="h-14 w-14 rounded-2xl bg-amber-950/80 border border-amber-800/50 flex items-center justify-center text-amber-400 group-hover:scale-105 transition-all shadow-md">
                       <Tags className="h-7 w-7" />
                     </div>
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 uppercase tracking-wide">
-                      ● Activo en Nexus (Brando Dev)
-                    </span>
+                    {renderModuleBadge(moduleFlags?.reclasificacion, '● Activo en Nexus (Brando Dev)')}
                   </div>
 
                   <div className="space-y-2">
@@ -714,9 +743,7 @@ export default async function AdminHomePage() {
                     <div className="h-14 w-14 rounded-2xl bg-cyan-950/80 border border-cyan-800/50 flex items-center justify-center text-cyan-400 group-hover:scale-105 transition-all shadow-md">
                       <Vote className="h-7 w-7" />
                     </div>
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 uppercase tracking-wide">
-                      ● Activo en Nexus (Brando Dev)
-                    </span>
+                    {renderModuleBadge(moduleFlags?.elecciones, '● Activo en Nexus (Brando Dev)')}
                   </div>
 
                   <div className="space-y-2">
@@ -749,9 +776,7 @@ export default async function AdminHomePage() {
                   <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white group-hover:scale-105 transition-all shadow-md">
                     <Compass className="h-7 w-7" />
                   </div>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 uppercase tracking-wide">
-                    ● Enlace GAS Activo
-                  </span>
+                  {renderModuleBadge(moduleFlags?.jade, '● Enlace GAS Activo')}
                 </div>
 
                 <div className="space-y-2">
