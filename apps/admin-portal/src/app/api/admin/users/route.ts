@@ -89,6 +89,32 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // Enriquecer con foto_url desde la tabla legacy `usuarios`
+    try {
+      const { data: legacyFotos } = await (supabase.from('usuarios') as any)
+        .select('email, usuario, foto_url');
+      if (Array.isArray(legacyFotos)) {
+        const fotoMapByEmail = new Map<string, string>();
+        const fotoMapByUser = new Map<string, string>();
+        for (const row of legacyFotos) {
+          if (row.foto_url) {
+            if (row.email) fotoMapByEmail.set(String(row.email).toLowerCase(), row.foto_url);
+            if (row.usuario) fotoMapByUser.set(String(row.usuario).toLowerCase(), row.foto_url);
+          }
+        }
+        userList = userList.map((u: any) => {
+          const byEmail = u.email ? fotoMapByEmail.get(String(u.email).toLowerCase()) : '';
+          const byUser = u.legacy_username ? fotoMapByUser.get(String(u.legacy_username).toLowerCase()) : '';
+          return {
+            ...u,
+            foto_url: byEmail || byUser || ''
+          };
+        });
+      }
+    } catch {
+      // fallback silencioso si no existe columna o falla consulta
+    }
+
     // Calcular estadísticas de resumen
     const stats = {
       total: userList.length,
@@ -198,6 +224,17 @@ export async function POST(req: NextRequest) {
 
     if (!result?.success) {
       return NextResponse.json({ error: result?.error || 'No se pudo crear el usuario' }, { status: 400 });
+    }
+
+    // Guardar foto_url si fue proporcionada
+    if (body.fotoUrl && typeof body.fotoUrl === 'string' && body.fotoUrl.trim()) {
+      try {
+        await (supabase.from('usuarios') as any)
+          .update({ foto_url: body.fotoUrl.trim() })
+          .or(`email.eq.${cleanEmail},usuario.eq.${cleanEmail.split('@')[0]}`);
+      } catch (fotoErr) {
+        console.warn('Advertencia guardando foto_url en POST:', fotoErr);
+      }
     }
 
     // Emisión automática de notificación de bienvenida al nuevo colaborador
@@ -328,6 +365,21 @@ export async function PATCH(req: NextRequest) {
 
     if (!result?.success) {
       return NextResponse.json({ error: result?.error || 'No se pudo actualizar el usuario' }, { status: 400 });
+    }
+
+    // Actualizar foto_url si viene definida en el payload
+    if (body.fotoUrl !== undefined) {
+      try {
+        const { data: authTarget } = await (supabase.from('auth.users') as any).select('email').eq('id', userId).maybeSingle();
+        const targetEmail = authTarget?.email ? String(authTarget.email).toLowerCase() : '';
+        if (targetEmail) {
+          await (supabase.from('usuarios') as any)
+            .update({ foto_url: body.fotoUrl ? String(body.fotoUrl).trim() : '' })
+            .or(`email.eq.${targetEmail},usuario.eq.${targetEmail.split('@')[0]}`);
+        }
+      } catch (fotoErr) {
+        console.warn('Advertencia actualizando foto_url en PATCH:', fotoErr);
+      }
     }
 
     // Emisión automática de notificación de actualización

@@ -125,6 +125,7 @@ export async function GET() {
         areas: areas,
         turno: legacyUser?.turno || 'General',
         extension: extension,
+        fotoUrl: legacyUser?.foto_url || '',
         userId: legacyUser?.id_user || authUser.id,
       }
     });

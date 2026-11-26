@@ -35,9 +35,12 @@ import {
   Zap,
   BarChart2,
   Megaphone,
-  Send
+  Send,
+  QrCode,
+  Upload
 } from 'lucide-react';
 import { NotificationCenter } from '@/components/NotificationCenter';
+import { AsysAdminBridgeModal } from '@/components/AsysAdminBridgeModal';
 
 interface UserItem {
   id: string;
@@ -54,6 +57,7 @@ interface UserItem {
   institucion: string;
   legacy_username: string;
   extension?: string;
+  foto_url?: string;
   areas_ids?: string[] | any;
   created_at: string;
   last_sign_in_at: string | null;
@@ -123,8 +127,46 @@ export default function UsersManagementPage() {
     address: '',
     institucion: '',
     extension: '',
+    fotoUrl: '',
     areas: ['Todas'],
   });
+
+  // Control Administrativo ASYS en Intranet
+  const [isAsysControlOpen, setIsAsysControlOpen] = useState(false);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: 'create' | 'edit') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 200;
+        let w = img.width;
+        let h = img.height;
+        if (w > h) {
+          if (w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+        } else {
+          if (h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          if (target === 'create') {
+            setCreateForm(prev => ({ ...prev, fotoUrl: dataUrl }));
+          } else {
+            setEditForm(prev => ({ ...prev, fotoUrl: dataUrl }));
+          }
+        }
+      };
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Estados Scoring Dinámico (Fase 11)
   const [isScoringOpen, setIsScoringOpen] = useState(false);
@@ -234,6 +276,7 @@ export default function UsersManagementPage() {
     resetCooldown: false,
     newPassword: '',
     extension: '',
+    fotoUrl: '',
     areas: ['Todas'],
   });
 
@@ -346,6 +389,7 @@ export default function UsersManagementPage() {
       resetCooldown: false,
       newPassword: '',
       extension: u.extension || '',
+      fotoUrl: u.foto_url || '',
       areas: Array.isArray(u.areas_ids) ? u.areas_ids : ['Todas'],
     });
   };
@@ -382,6 +426,7 @@ export default function UsersManagementPage() {
         address: '',
         institucion: '',
         extension: '',
+        fotoUrl: '',
         areas: ['Todas'],
       });
       fetchUsers();
@@ -555,6 +600,14 @@ export default function UsersManagementPage() {
           </div>
 
           <div className="flex items-center space-x-2.5">
+            <button
+              onClick={() => setIsAsysControlOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-300 font-bold text-xs transition-all cursor-pointer"
+            >
+              <QrCode className="w-4 h-4 text-emerald-400" />
+              <span>Control ASYS</span>
+            </button>
+
             <button
               onClick={() => {
                 setIsScoringOpen(true);
@@ -747,8 +800,12 @@ export default function UsersManagementPage() {
                         {/* Identidad */}
                         <td className="py-3.5 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-600/30 to-indigo-600/30 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 font-mono text-xs uppercase shrink-0">
-                              {u.full_name.substring(0, 2) || u.email.substring(0, 2)}
+                            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-600/30 to-indigo-600/30 border border-blue-500/30 flex items-center justify-center font-bold text-blue-300 font-mono text-xs uppercase shrink-0 overflow-hidden">
+                              {u.foto_url ? (
+                                <img src={u.foto_url} alt={u.full_name} className="h-full w-full object-cover" />
+                              ) : (
+                                u.full_name.substring(0, 2) || u.email.substring(0, 2)
+                              )}
                             </div>
                             <div>
                               <div className="font-bold text-white text-sm flex items-center gap-2">
@@ -1004,6 +1061,33 @@ export default function UsersManagementPage() {
                   />
                 </div>
 
+                <div className="col-span-1 sm:col-span-2 p-3 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 overflow-hidden shrink-0">
+                    {createForm.fotoUrl ? (
+                      <img src={createForm.fotoUrl} alt="Vista previa" className="h-full w-full object-cover" />
+                    ) : (
+                      (createForm.fullName.substring(0, 2) || 'NX').toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Foto de Perfil (Intranet & ASYS)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="URL de imagen o suba un archivo..."
+                        value={createForm.fotoUrl}
+                        onChange={(e) => setCreateForm({ ...createForm, fotoUrl: e.target.value })}
+                        className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <label className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 cursor-pointer flex items-center gap-1.5 shrink-0 border border-slate-700">
+                        <Upload className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Subir</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'create')} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider mb-1">Extensión Telefónica (Briana)</label>
                   <input
@@ -1183,6 +1267,33 @@ export default function UsersManagementPage() {
                     onChange={(e) => setEditForm({ ...editForm, phoneNumber: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
+                </div>
+
+                <div className="col-span-1 sm:col-span-2 p-3 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 overflow-hidden shrink-0">
+                    {editForm.fotoUrl ? (
+                      <img src={editForm.fotoUrl} alt="Vista previa" className="h-full w-full object-cover" />
+                    ) : (
+                      (editForm.fullName.substring(0, 2) || 'NX').toUpperCase()
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-wider">Foto de Perfil (Intranet & ASYS)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="URL de imagen o suba un archivo..."
+                        value={editForm.fotoUrl}
+                        onChange={(e) => setEditForm({ ...editForm, fotoUrl: e.target.value })}
+                        className="flex-1 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <label className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 cursor-pointer flex items-center gap-1.5 shrink-0 border border-slate-700">
+                        <Upload className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Subir</span>
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'edit')} />
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
                 <div>
@@ -1879,6 +1990,11 @@ export default function UsersManagementPage() {
         </div>
       )}
 
+      <AsysAdminBridgeModal
+        isOpen={isAsysControlOpen}
+        onClose={() => setIsAsysControlOpen(false)}
+        usersList={users}
+      />
     </div>
   );
 }

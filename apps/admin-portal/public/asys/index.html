@@ -1803,7 +1803,7 @@
             name: u.name,
             role: u.role || (u.isAdmin ? (u.isSuperAdmin ? 'Superadmin' : 'Admin') : 'Operador'),
             subRol: u.subRol || (u.isSuperAdmin ? 'Superadmin' : (u.isAdmin ? 'coordinador general' : 'Operador/a')),
-            foto: '',
+            foto: u.fotoUrl || '',
             areas: u.areas || [],
             email: u.email,
             masterQRId: "QR-MAESTRO-ASISTENCIA-V1"
@@ -5613,7 +5613,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     name: u.name,
                     role: u.role || (u.isAdmin ? (u.isSuperAdmin ? 'Superadmin' : 'Admin') : 'Operador'),
                     subRol: u.subRol || (u.isSuperAdmin ? 'Superadmin' : (u.isAdmin ? 'coordinador general' : 'Operador/a')),
-                    foto: '',
+                    foto: u.fotoUrl || '',
                     areas: u.areas || [],
                     email: u.email,
                     masterQRId: "QR-MAESTRO-ASISTENCIA-V1"

@@ -125,10 +125,10 @@ export default async function AdminHomePage() {
       todayAttendance = attList[0];
       const latest = attList[0];
       const isLatestEntrada = String(latest.tipo || '').toLowerCase() === 'entrada';
-      const timeStr = new Date(latest.timestamp).toLocaleTimeString('es-VE', { 
-        hour: '2-digit', 
+      const timeStr = new Date(latest.timestamp).toLocaleTimeString('es-VE', {
+        hour: '2-digit',
         minute: '2-digit',
-        hour12: true 
+        hour12: true
       });
 
       if (isLatestEntrada) {
@@ -230,13 +230,13 @@ export default async function AdminHomePage() {
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Operador';
   const roleLabel = isFundadorDev
     ? 'Fundador Dev'
-    : (isSuperAdmin 
-        ? 'Superadmin' 
-        : (isModuleAdmin 
-            ? 'Admin' 
-            : (isCoordinadorGeneral 
-                ? 'Coordinador General' 
-                : (isCoordinador ? 'Coordinador' : (roles.includes('supervisor') ? 'Supervisor' : 'Analista - Operador')))));
+    : (isSuperAdmin
+      ? 'Superadmin'
+      : (isModuleAdmin
+        ? 'Admin'
+        : (isCoordinadorGeneral
+          ? 'Coordinador General'
+          : (isCoordinador ? 'Coordinador' : (roles.includes('supervisor') ? 'Supervisor' : 'Analista - Operador')))));
   const initials = displayName
     .split(' ')
     .map((w: string) => w[0])
@@ -298,8 +298,12 @@ export default async function AdminHomePage() {
                   <span className="text-blue-400 font-semibold">@{currentUsername}</span> · {roleLabel}
                 </p>
               </div>
-              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200 shadow-sm">
-                {initials}
+              <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200 shadow-sm overflow-hidden">
+                {legacyUser?.foto_url ? (
+                  <img src={legacyUser.foto_url} alt={displayName} className="h-full w-full object-cover" />
+                ) : (
+                  initials
+                )}
               </div>
               <SignOutButton />
             </div>
@@ -367,30 +371,28 @@ export default async function AdminHomePage() {
             <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">1. Asistencia Asys</span>
-                <span className={`text-xs font-semibold block mt-0.5 ${
-                  attendanceState.isDentro 
-                    ? 'text-emerald-400 font-bold' 
-                    : (attendanceState.hasSalida ? 'text-slate-400 font-bold' : 'text-amber-400 font-bold')
-                }`}>
-                  {attendanceState.isDentro 
-                    ? `🟢 DENTRO (${attendanceState.lastTime})` 
+                <span className={`text-xs font-semibold block mt-0.5 ${attendanceState.isDentro
+                  ? 'text-emerald-400 font-bold'
+                  : (attendanceState.hasSalida ? 'text-slate-400 font-bold' : 'text-amber-400 font-bold')
+                  }`}>
+                  {attendanceState.isDentro
+                    ? `🟢 DENTRO (${attendanceState.lastTime})`
                     : (attendanceState.hasSalida ? `🔴 Fuera / Salida (${attendanceState.lastTime})` : '⚠️ Entrada Pendiente')}
                 </span>
                 <span className="text-[10px] text-slate-500 block">
-                  {attendanceState.isDentro 
-                    ? 'Jornada activa en sede' 
+                  {attendanceState.isDentro
+                    ? 'Jornada activa en sede'
                     : (attendanceState.hasSalida ? 'Jornada concluida hoy' : 'Escanea tu QR en Asys')}
                 </span>
               </div>
               <Link
                 href="/asistencia"
-                className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                  attendanceState.isDentro 
-                    ? 'bg-rose-950/40 text-rose-300 border-rose-800/60 hover:bg-rose-900/60'
-                    : (attendanceState.hasSalida
-                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                        : 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-black shadow-md')
-                }`}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${attendanceState.isDentro
+                  ? 'bg-rose-950/40 text-rose-300 border-rose-800/60 hover:bg-rose-900/60'
+                  : (attendanceState.hasSalida
+                    ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                    : 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-black shadow-md')
+                  }`}
               >
                 {attendanceState.isDentro ? 'Marcar Salida' : (attendanceState.hasSalida ? 'Ver Registro' : 'Marcar Ahora')}
               </Link>
@@ -435,9 +437,8 @@ export default async function AdminHomePage() {
             </div>
 
             {/* 4. Reclasificación & Especiales */}
-            <div className={`p-3.5 rounded-2xl bg-slate-950/60 border flex items-center justify-between transition-all ${
-              reclasifTasksCount > 0 ? 'border-amber-500/60 shadow-lg shadow-amber-950/30' : 'border-slate-800/80'
-            }`}>
+            <div className={`p-3.5 rounded-2xl bg-slate-950/60 border flex items-center justify-between transition-all ${reclasifTasksCount > 0 ? 'border-amber-500/60 shadow-lg shadow-amber-950/30' : 'border-slate-800/80'
+              }`}>
               <div>
                 <span className="text-[10px] font-mono uppercase text-amber-400 font-bold block">4. Reclasificación</span>
                 <span className="text-xs font-semibold text-white block mt-0.5">
