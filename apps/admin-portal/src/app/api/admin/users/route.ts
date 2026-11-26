@@ -79,7 +79,9 @@ export async function GET(req: NextRequest) {
         const uSubRol = String(u.sub_rol || '').toLowerCase();
         const uName = String(u.full_name || '').toLowerCase();
         const isTargetSuper = uRole === 'superadmin' || 
+                              uRole === 'fundador_dev' ||
                               uSubRol.includes('superadmin') || 
+                              uSubRol.includes('fundador') ||
                               uEmail.includes('brando') || 
                               uEmail.includes('bralez') ||
                               uName.includes('brando');
@@ -166,6 +168,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'La contraseña debe contener al menos 6 caracteres' }, { status: 400 });
     }
 
+    // Regla estricta de Gobierno RBAC:
+    if (roleName === 'fundador_dev') {
+      return NextResponse.json({ error: 'El rol Fundador Dev es exclusivo e inmutable del creador del sistema.' }, { status: 403 });
+    }
+    if (roleName === 'superadmin' && !authStatus.isSuperAdmin) {
+      return NextResponse.json({ error: 'Solo un Superadministrador puede crear o asignar nuevas credenciales de SuperAdmin.' }, { status: 403 });
+    }
+
     const { data: result, error: rpcError } = await (supabase.rpc as any)('nexus_admin_create_user', {
       p_email: cleanEmail,
       p_password: password,
@@ -248,6 +258,14 @@ export async function PATCH(req: NextRequest) {
       extension = null,
       areas = null,
     } = body;
+
+    // Regla estricta de Gobierno RBAC:
+    if (roleName === 'fundador_dev') {
+      return NextResponse.json({ error: 'El rol Fundador Dev no puede ser asignado ni modificado por terceros.' }, { status: 403 });
+    }
+    if (roleName === 'superadmin' && !authStatus.isSuperAdmin) {
+      return NextResponse.json({ error: 'Solo un Superadministrador puede promover o modificar credenciales de SuperAdmin.' }, { status: 403 });
+    }
 
     if (!userId) {
       return NextResponse.json({ error: 'Identificador de usuario (userId) requerido' }, { status: 400 });

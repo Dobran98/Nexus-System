@@ -1,0 +1,227 @@
+<div class="p-6 md:p-8 w-full h-full pb-24 overflow-y-auto bg-surface">
+  <div class="max-w-4xl mx-auto flex flex-col gap-6">
+
+    <!-- Header Details -->
+    <div>
+      <h2 class="font-headline-md text-2xl text-on-surface font-semibold tracking-tight">Reportar Actividad Realizada</h2>
+      <p class="text-on-surface-variant text-sm mt-1">Suministre la información detallada de la ejecución y las evidencias correspondientes.</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+      <form id="formRendicion" onsubmit="enviarRendicion(event); return false;">
+        <input type="hidden" id="idActividadOculto">
+
+        <!-- Seccion Resumen Planificacion -->
+        <div class="p-6 md:p-8 border-b border-outline-variant/50 bg-surface-container-lowest form-section">
+          <h3 class="font-headline-sm text-lg font-semibold text-primary flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-[20px] bg-primary/10 p-1.5 rounded-md">info</span>
+            1. Información Base
+          </h3>
+          <div class="bg-surface-container-low p-4 rounded-lg border border-outline-variant/50 flex flex-col gap-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-label-bold text-on-surface-variant uppercase tracking-wider">ID de Actividad</span>
+              <span class="px-2.5 py-1 bg-primary-container text-on-primary-container rounded-md text-xs font-bold" id="txt-id-actividad"></span>
+            </div>
+            <div class="mt-2">
+              <span class="text-xs font-label-bold text-on-surface-variant uppercase tracking-wider block mb-1">Descripción Planificada</span>
+              <p class="text-sm text-on-surface font-medium" id="txt-desc-actividad">Cargando detalles...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seccion Resultados Reales -->
+        <div class="p-6 md:p-8 border-b border-outline-variant/50 bg-surface form-section">
+          <h3 class="font-headline-sm text-lg font-semibold text-primary flex items-center gap-2 mb-6">
+            <span class="material-symbols-outlined text-[20px] bg-primary/10 p-1.5 rounded-md">fact_check</span>
+            2. Resultados Reales y Demografía
+          </h3>
+          <div class="mb-5">
+            <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Descripción de lo Ejecutado <span class="text-error">*</span></label>
+            <textarea id="descFinal" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-3 text-sm text-on-surface transition-colors min-h-[100px] resize-y placeholder:text-on-surface-variant/50" placeholder="Detalle cómo se llevó a cabo la actividad, novedades, logros..." required></textarea>
+          </div>
+          
+          <div class="mb-6">
+            <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Línea de Transformación Abarcada (Real) <span class="text-error">*</span></label>
+            <select id="transFinal" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" required>
+              <option value="">Seleccione...</option>
+              <option value="T1- Economía Productiva">T1- Economía Productiva</option>
+              <option value="T2- Ciudades Humanas y Servicios">T2- Ciudades Humanas y Servicios</option>
+              <option value="T3- Seguridad y Paz">T3- Seguridad y Paz</option>
+              <option value="T4- Suprema Felicidad Social">T4- Suprema Felicidad Social</option>
+              <option value="T5- Organización y Planificación Popular">T5- Organización y Planificación Popular</option>
+              <option value="T6- Ecosocialismo, Ciencia y Tecnología">T6- Ecosocialismo, Ciencia y Tecnología</option>
+            </select>
+          </div>
+
+          <div class="mb-6">
+            <div>
+              <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Categoría <span class="text-error">*</span></label>
+              <select id="tipoActCategoria" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" required onchange="toggleOtroInput('tipoActCategoria')">
+                <option value="Reunión">Reunión</option>
+                <option value="Asambleas">Asambleas</option>
+                <option value="Visitas">Visitas</option>
+                <option value="Jornadas">Jornadas</option>
+                <option value="Supervisión">Supervisión</option>
+                <option value="Diagnóstico">Diagnóstico</option>
+                <option value="Inauguraciones">Inauguraciones</option>
+                <option value="Formaciones">Formaciones</option>
+                <option value="Acompañamiento a Rendición de Cuentas">Acompañamiento a Rendición de Cuentas</option>
+                <option value="Acompañamiento a Proyectos">Acompañamiento a Proyectos</option>
+                <option value="Coordinación">Coordinación</option>
+                <option value="Atención a Denuncias">Atención a Denuncias</option>
+                <option value="Asesorías y Orientaciones">Asesorías y Orientaciones</option>
+                <option value="Otros">Otros (Especificar manual)</option>
+              </select>
+              <input type="text" id="tipoActCategoria-otro" class="w-full bg-white border border-secondary focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface mt-2" placeholder="Especifique la categoría..." style="display: none;">
+            </div>
+          </div>
+
+          <!-- BLOQUE DE CANTIDADES Y DEMOGRAFÍA -->
+          <div class="bg-surface-container-low p-5 rounded-lg border border-outline-variant/50 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block font-label-bold text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">Total Participantes <span class="text-error">*</span></label>
+                  <input type="number" id="partReales" class="w-full bg-white border border-outline-variant focus:border-primary rounded-lg p-2 text-sm" required min="0"/>
+                </div>
+                <div>
+                  <label class="block font-label-bold text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">Total Familias <span class="text-error">*</span></label>
+                  <input type="number" id="famReales" class="w-full bg-white border border-outline-variant focus:border-primary rounded-lg p-2 text-sm" required min="0"/>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block font-label-bold text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">Comunas Vinculadas <span class="text-error">*</span></label>
+                  <input type="number" id="comunasVinculadas" class="w-full bg-white border border-outline-variant focus:border-primary rounded-lg p-2 text-sm" required min="0"/>
+                </div>
+                <div>
+                  <label class="block font-label-bold text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">Circuitos Vinculados <span class="text-error">*</span></label>
+                  <input type="number" id="circuitosVinculados" class="w-full bg-white border border-outline-variant focus:border-primary rounded-lg p-2 text-sm" required min="0"/>
+                </div>
+              </div>
+            </div>
+
+            <p class="text-xs font-label-bold text-primary uppercase tracking-wider mb-3 border-b border-outline-variant/50 pb-1">Desglose por Género:</p>
+            <div class="grid grid-cols-2 gap-5 mb-6">
+              <div>
+                <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Hombres</label>
+                <input type="number" id="demoHombres" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" min="0" value="0">
+              </div>
+              <div>
+                <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Mujeres</label>
+                <input type="number" id="demoMujeres" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" min="0" value="0">
+              </div>
+            </div>
+
+            <p class="text-xs font-label-bold text-primary uppercase tracking-wider mb-3 border-b border-outline-variant/50 pb-1">Desglose por Edades:</p>
+            <div class="grid grid-cols-3 gap-5">
+              <div>
+                <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Jóvenes</label>
+                <input type="number" id="demoJovenes" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" min="0" value="0">
+              </div>
+              <div>
+                <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Adultos</label>
+                <input type="number" id="demoAdultos" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" min="0" value="0">
+              </div>
+              <div>
+                <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Adultos Mayores</label>
+                <input type="number" id="demoMayores" class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors" min="0" value="0">
+              </div>
+            </div>
+          </div>
+          <!-- FIN BLOQUE DEMOGRAFÍA -->
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-surface-container-low p-5 rounded-lg border border-outline-variant/50">
+            <div>
+              <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-2">Instituciones que Asistieron</label>
+              <div class="flex gap-2">
+                <input type="text" id="instReal-input" class="flex-1 bg-white border border-outline-variant focus:border-primary rounded-lg px-3 py-2 text-sm text-on-surface transition-colors" placeholder="Añadir institución...">
+                <button type="button" class="bg-secondary text-white hover:bg-[#004e5c] px-3 py-2 rounded-lg flex items-center justify-center transition-colors shadow-sm" onclick="agregarTag('instReales')">
+                  <span class="material-symbols-outlined text-[20px]">add</span>
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3" id="instReales-tags"></div>
+              <input type="hidden" id="institucionesReales" value="">
+            </div>
+            <div>
+              <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-2">Medios que Asistieron</label>
+              <div class="flex gap-2">
+                <input type="text" id="medReal-input" class="flex-1 bg-white border border-outline-variant focus:border-primary rounded-lg px-3 py-2 text-sm text-on-surface transition-colors" placeholder="Añadir medio...">
+                <button type="button" class="bg-yellow-600 text-white hover:bg-yellow-700 px-3 py-2 rounded-lg flex items-center justify-center transition-colors shadow-sm" onclick="agregarTag('mediosReales')">
+                  <span class="material-symbols-outlined text-[20px]">add</span>
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-3" id="mediosReales-tags"></div>
+              <input type="hidden" id="mediosReales" value="">
+            </div>
+          </div>
+        </div>
+
+        <!-- Seccion Evidencias -->
+        <div class="p-6 md:p-8 bg-surface-container-lowest">
+          <h3 class="font-headline-sm text-lg font-semibold text-primary flex items-center gap-2 mb-6">
+            <span class="material-symbols-outlined text-[20px] bg-primary/10 p-1.5 rounded-md">photo_library</span>
+            3. Evidencias Fotográficas
+          </h3>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-surface p-4 rounded-xl border border-outline-variant flex flex-col h-full">
+              <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-3 flex items-center gap-1.5"><span class="material-symbols-outlined text-[16px] text-primary">stars</span> Foto 1 (Principal) <span class="text-error">*</span></label>
+              <input type="file" id="foto1" accept="image/*" class="w-full text-xs text-on-surface-variant file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary-container file:text-primary hover:file:bg-primary/20 transition-colors mb-3" onchange="previsualizar(this, 'prev1')" required>
+              <div class="mt-auto aspect-video bg-surface-container-low rounded-lg border border-dashed border-outline-variant flex items-center justify-center overflow-hidden relative">
+                <span class="material-symbols-outlined text-outline-variant text-3xl" id="icon-prev1">image</span>
+                <img id="prev1" class="absolute inset-0 w-full h-full object-cover z-10" style="display:none;">
+              </div>
+            </div>
+
+            <div class="bg-surface p-4 rounded-xl border border-outline-variant flex flex-col h-full">
+              <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-3">Foto 2 (Opcional)</label>
+              <input type="file" id="foto2" accept="image/*" class="w-full text-xs text-on-surface-variant file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-surface-variant file:text-on-surface hover:file:bg-surface-dim transition-colors mb-3" onchange="previsualizar(this, 'prev2')">
+              <div class="mt-auto aspect-video bg-surface-container-low rounded-lg border border-dashed border-outline-variant flex items-center justify-center overflow-hidden relative">
+                <span class="material-symbols-outlined text-outline-variant text-3xl" id="icon-prev2">image</span>
+                <img id="prev2" class="absolute inset-0 w-full h-full object-cover z-10" style="display:none;">
+              </div>
+            </div>
+
+            <div class="bg-surface p-4 rounded-xl border border-outline-variant flex flex-col h-full">
+              <label class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-3">Foto 3 (Opcional)</label>
+              <input type="file" id="foto3" accept="image/*" class="w-full text-xs text-on-surface-variant file:mr-3 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-surface-variant file:text-on-surface hover:file:bg-surface-dim transition-colors mb-3" onchange="previsualizar(this, 'prev3')">
+              <div class="mt-auto aspect-video bg-surface-container-low rounded-lg border border-dashed border-outline-variant flex items-center justify-center overflow-hidden relative">
+                <span class="material-symbols-outlined text-outline-variant text-3xl" id="icon-prev3">image</span>
+                <img id="prev3" class="absolute inset-0 w-full h-full object-cover z-10" style="display:none;">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Actions Footer -->
+        <div class="p-6 bg-surface-container flex flex-col-reverse sm:flex-row justify-end border-t border-outline-variant/50 gap-3">
+          <button type="button" class="px-5 py-2.5 bg-white border border-error text-error hover:bg-error-container rounded-lg font-label-bold text-sm transition-colors flex items-center justify-center gap-2" onclick="cargarVista('mis_actividades', 'Mis Actividades')">
+            <span class="material-symbols-outlined text-[18px]">close</span> Cancelar
+          </button>
+          <button type="submit" id="btn-enviar-rendicion" class="px-6 py-2.5 bg-primary hover:bg-[#002113] text-on-primary rounded-lg font-label-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">send</span> Enviar Reporte
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+var oldPrevisualizar = window.previsualizar;
+window.previsualizar = function(input, idImg) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            var img = document.getElementById(idImg);
+            img.src = e.target.result;
+            img.style.display = 'block';
+            var icon = document.getElementById('icon-' + idImg);
+            if(icon) icon.style.display = 'none';
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+};
+</script>

@@ -29,9 +29,13 @@ export async function GET() {
       .eq('user_id', authUser.id);
 
     const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-    let isSuperAdmin = roleNames.includes('superadmin') || email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez');
-    const isModuleAdmin = roleNames.includes('module_admin') || isSuperAdmin;
-    const isSupervisor = roleNames.includes('supervisor') || isModuleAdmin;
+    const isFundadorDev = email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez') || roleNames.includes('fundador_dev');
+    let isSuperAdmin = roleNames.includes('superadmin') || isFundadorDev;
+    const isModuleAdmin = roleNames.includes('admin') || roleNames.includes('module_admin') || isSuperAdmin;
+    const isCoordinadorGeneral = roleNames.includes('coordinador_general') || isModuleAdmin;
+    const isCoordinador = roleNames.includes('coordinador') || isCoordinadorGeneral;
+    const isSupervisor = roleNames.includes('supervisor') || isCoordinador;
+    const isAnalistaOperador = roleNames.includes('analista_operador') || roleNames.includes('multi_operator') || roleNames.includes('operator');
 
     // 3. Obtener registro de la tabla legacy `usuarios`
     let legacyUser: any = null;
@@ -55,20 +59,39 @@ export async function GET() {
       }
     }
 
-    // 4. Mapear datos consolidados de identidad
+    // 4. Mapear datos consolidados de identidad con la jerarquía oficial
     const username = legacyUser?.usuario || email.split('@')[0];
     const fullName = profile?.full_name || legacyUser?.nombre_apellido || email.split('@')[0];
     
-    // Si es superadmin, rol y subrol directos de Superadmin
-    let resolvedRole = legacyUser?.rol || (isSuperAdmin ? 'Superadmin' : (isModuleAdmin ? 'Admin' : (isSupervisor ? 'Analista' : 'Operador')));
-    let resolvedSubRol = legacyUser?.sub_rol || (isSuperAdmin ? 'Superadmin' : (isSupervisor ? 'Coordinador General' : 'Operador/a'));
+    // Jerarquía oficial (del más bajo al más alto):
+    // 1. Analista - Operador | 2. Supervisor | 3. Coordinador | 4. Coordinador General - Admin | 5. Superadmin | 6. Fundador Dev
+    let resolvedRole = legacyUser?.rol || 'Analista - Operador';
+    let resolvedSubRol = legacyUser?.sub_rol || 'Analista - Operador';
 
-    if (isSuperAdmin) {
+    if (isFundadorDev) {
+      resolvedRole = 'Fundador Dev';
+      resolvedSubRol = 'Superadmin - Fundador Dev';
+      if (!roleNames.includes('fundador_dev')) roleNames.unshift('fundador_dev');
+      if (!roleNames.includes('superadmin')) roleNames.unshift('superadmin');
+    } else if (isSuperAdmin) {
       resolvedRole = 'Superadmin';
       resolvedSubRol = 'Superadmin';
-      if (!roleNames.includes('superadmin')) {
-        roleNames.unshift('superadmin');
-      }
+      if (!roleNames.includes('superadmin')) roleNames.unshift('superadmin');
+    } else if (isModuleAdmin) {
+      resolvedRole = 'Admin';
+      resolvedSubRol = 'Coordinador General - Admin';
+    } else if (isCoordinadorGeneral) {
+      resolvedRole = 'Coordinador General';
+      resolvedSubRol = 'Coordinador General';
+    } else if (isCoordinador) {
+      resolvedRole = 'Coordinador';
+      resolvedSubRol = 'Coordinador de Área';
+    } else if (isSupervisor) {
+      resolvedRole = 'Supervisor';
+      resolvedSubRol = 'Supervisor de Sala';
+    } else {
+      resolvedRole = 'Analista - Operador';
+      resolvedSubRol = 'Analista - Operador';
     }
 
     // Áreas de trabajo permitidas
@@ -93,7 +116,12 @@ export async function GET() {
         roles: roleNames,
         isAdmin: isSuperAdmin || isModuleAdmin || resolvedRole.toLowerCase() === 'admin',
         isSuperAdmin: isSuperAdmin,
+        isFundadorDev: isFundadorDev,
+        isCoordinadorGeneral: isCoordinadorGeneral,
+        isCoordinador: isCoordinador,
         isSupervisor: isSupervisor,
+        isAnalistaOperador: isAnalistaOperador,
+        roleRank: isFundadorDev ? 60 : (isSuperAdmin ? 50 : (isModuleAdmin || isCoordinadorGeneral ? 40 : (isCoordinador ? 30 : (isSupervisor ? 20 : 10)))),
         areas: areas,
         turno: legacyUser?.turno || 'General',
         extension: extension,

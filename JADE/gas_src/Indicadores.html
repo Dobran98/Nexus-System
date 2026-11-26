@@ -1,0 +1,186 @@
+<div class="p-6 md:p-8 w-full h-full pb-24 overflow-y-auto bg-surface">
+  <div class="max-w-5xl mx-auto flex flex-col gap-6">
+
+    <!-- Header -->
+    <div
+      class="bg-gradient-to-br from-primary to-secondary p-8 rounded-xl text-white shadow-md relative overflow-hidden">
+      <div class="relative z-10">
+        <h2 class="text-2xl font-bold mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-3xl">settings</span>
+          Gestión de Indicadores de Evaluación
+        </h2>
+        <p class="opacity-90 max-w-2xl text-sm leading-relaxed">
+          Define el peso (puntaje máximo) de cada parámetro para evaluar las actividades.
+          Puedes agregar, editar o eliminar indicadores dinámicamente.
+        </p>
+      </div>
+      <span class="material-symbols-outlined absolute -right-4 -bottom-10 text-[150px] opacity-10">analytics</span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex gap-1 bg-surface-container-low p-1 rounded-xl border border-outline-variant w-fit">
+      <button id="tab-ind-btn-pesos" onclick="verTabIndicadores('pesos')"
+        class="px-5 py-2 rounded-lg text-sm font-bold text-white bg-primary transition-all">
+        📊 Pesos y Criterios
+      </button>
+      <button id="tab-ind-btn-lista" onclick="verTabIndicadores('lista')"
+        class="px-5 py-2 rounded-lg text-sm font-bold text-on-surface-variant hover:text-on-surface transition-all">
+        📋 Lista de Indicadores
+      </button>
+    </div>
+
+    <!-- Tab: Pesos y Criterios -->
+    <div id="tab-ind-pesos">
+      <form id="formIndicadores" onsubmit="guardarIndicadores(event); return false;"
+        class="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+
+        <!-- Sección 1: Impacto -->
+        <div class="p-6 md:p-8 border-b border-outline-variant/50 bg-surface-container-lowest">
+          <h3 class="font-headline-sm text-lg font-semibold text-primary flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-[22px]">grade</span> 1. Criterios de Impacto Político/Social
+          </h3>
+          <p class="text-sm text-on-surface-variant mb-6">Puntaje base que recibe la actividad según su nivel de
+            impacto.</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label
+                class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Actividad
+                Recurrente (Pts)</label>
+              <input type="number" id="ind-recurrente"
+                class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors"
+                required min="0" max="100">
+            </div>
+            <div>
+              <label
+                class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Impacto
+                Nacional (Pts)</label>
+              <input type="number" id="ind-nacional"
+                class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors"
+                required min="0" max="100">
+            </div>
+            <div>
+              <label
+                class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Impacto
+                Presidencial (Pts)</label>
+              <input type="number" id="ind-presidencial"
+                class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors"
+                required min="0" max="100">
+            </div>
+          </div>
+        </div>
+
+        <!-- Sección 2: Eficiencia -->
+        <div class="p-6 md:p-8 border-b border-outline-variant/50 bg-surface">
+          <h3 class="font-headline-sm text-lg font-semibold text-primary flex items-center gap-2 mb-2">
+            <span class="material-symbols-outlined text-[22px]">trending_up</span> 2. Criterios de Eficiencia Operativa
+          </h3>
+          <p class="text-sm text-on-surface-variant mb-6">Puntos asignados si logran el 100% o más de su meta
+            planificada y suben todas las evidencias.</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div>
+              <label
+                class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Cumplimiento
+                Participantes (Pts)</label>
+              <input type="number" id="ind-meta-part"
+                class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors"
+                required min="0" max="100">
+            </div>
+            <div>
+              <label
+                class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Cumplimiento
+                Familias (Pts)</label>
+              <input type="number" id="ind-meta-fam"
+                class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors"
+                required min="0" max="100">
+            </div>
+            <div>
+              <label
+                class="block font-label-bold text-xs text-on-surface-variant uppercase tracking-wider mb-1.5">Evidencias
+                Completas (3 Fotos) (Pts)</label>
+              <input type="number" id="ind-evidencias"
+                class="w-full bg-white border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary rounded-lg p-2.5 text-sm text-on-surface transition-colors"
+                required min="0" max="100">
+            </div>
+          </div>
+        </div>
+
+        <!-- Simulación de suma -->
+        <div
+          class="p-6 md:p-8 bg-surface-container-lowest border-b border-outline-variant/50 flex flex-col items-center">
+          <div
+            class="bg-surface-container-low border border-dashed border-outline-variant p-6 rounded-lg text-center w-full max-w-lg">
+            <span class="font-bold text-on-surface-variant block mb-2">Simulación de Suma Máxima (Presidencial + Metas +
+              Fotos):</span>
+            <div class="flex items-end justify-center gap-2">
+              <span id="suma-total" class="text-4xl font-bold text-primary">0</span>
+              <span class="text-xl text-on-surface-variant font-medium mb-1">/ 100 pts.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Acciones -->
+        <div class="p-6 bg-surface-container flex justify-end gap-3">
+          <button type="button"
+            class="px-5 py-2.5 bg-white border border-outline-variant text-on-surface hover:bg-surface-variant rounded-lg font-label-bold text-sm transition-colors"
+            onclick="cargarVista('visor', 'Dashboard Global')">Cancelar</button>
+          <button type="submit" id="btn-guardar-ind"
+            class="px-6 py-2.5 bg-primary hover:bg-[#002113] text-on-primary rounded-lg font-label-bold text-sm shadow-sm transition-colors flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">save</span> Guardar Parámetros
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Tab: Lista de Indicadores -->
+    <div id="tab-ind-lista" style="display:none;">
+      <div class="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+
+        <!-- Encabezado CRUD -->
+        <div class="p-5 border-b border-outline-variant flex items-center justify-between bg-surface-container-lowest">
+          <div>
+            <h3 class="font-bold text-lg text-on-surface">Indicadores Personalizados</h3>
+            <p class="text-xs text-on-surface-variant mt-0.5">Agrega sub-indicadores para asignar puntos por criterios
+              específicos de evaluación.</p>
+          </div>
+          <button onclick="abrirModalSubIndicador()"
+            class="bg-primary text-on-primary px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-secondary transition-colors shadow-sm">
+            <span class="material-symbols-outlined text-[18px]">add</span> Nuevo Indicador
+          </button>
+        </div>
+
+        <!-- Tabla de sub-indicadores -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr
+                class="bg-surface-container-low text-on-surface-variant text-[11px] uppercase tracking-wider font-bold">
+                <th class="p-4 border-b border-outline-variant/50">Nombre del Indicador</th>
+                <th class="p-4 border-b border-outline-variant/50">Criterio / Condición</th>
+                <th class="p-4 border-b border-outline-variant/50 text-center">Puntaje Máx.</th>
+                <th class="p-4 border-b border-outline-variant/50 text-center">Estado</th>
+                <th class="p-4 border-b border-outline-variant/50 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-sub-indicadores" class="text-sm">
+              <tr id="row-no-indicadores">
+                <td colspan="5" class="text-center py-12 text-on-surface-variant">
+                  <span class="material-symbols-outlined text-4xl block mb-2 opacity-30">list</span>
+                  <p>No hay indicadores personalizados. Agrega uno con el botón superior.</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Info sobre sub-indicadores -->
+        <div class="p-4 bg-surface-container-lowest border-t border-outline-variant/50">
+          <p class="text-xs text-on-surface-variant flex items-center gap-2">
+            <span class="material-symbols-outlined text-[16px]">info</span>
+            Los indicadores personalizados se suman al puntaje base de impacto durante la evaluación del analista.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

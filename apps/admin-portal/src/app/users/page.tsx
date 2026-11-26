@@ -69,11 +69,16 @@ interface Stats {
 }
 
 const ROLE_LABELS: Record<string, { label: string; badge: string }> = {
-  superadmin: { label: 'SuperAdmin', badge: 'bg-purple-950/80 text-purple-300 border-purple-800/80' },
-  module_admin: { label: 'Admin Módulo', badge: 'bg-blue-950/80 text-blue-300 border-blue-800/80' },
-  supervisor: { label: 'Supervisor', badge: 'bg-amber-950/80 text-amber-300 border-amber-800/80' },
-  multi_operator: { label: 'Operador', badge: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80' },
-  data_analyst: { label: 'Analista Datos', badge: 'bg-cyan-950/80 text-cyan-300 border-cyan-800/80' },
+  fundador_dev: { label: 'Fundador Dev', badge: 'bg-gradient-to-r from-amber-500/20 to-rose-500/20 text-amber-300 border-amber-500/60 font-black' },
+  superadmin: { label: 'Superadmin', badge: 'bg-purple-950/80 text-purple-300 border-purple-800/80 font-bold' },
+  admin: { label: 'Admin', badge: 'bg-blue-950/80 text-blue-300 border-blue-800/80 font-bold' },
+  module_admin: { label: 'Admin', badge: 'bg-blue-950/80 text-blue-300 border-blue-800/80 font-bold' },
+  coordinador_general: { label: 'Coordinador General', badge: 'bg-indigo-950/80 text-indigo-300 border-indigo-800/80 font-bold' },
+  coordinador: { label: 'Coordinador', badge: 'bg-teal-950/80 text-teal-300 border-teal-800/80 font-semibold' },
+  supervisor: { label: 'Supervisor', badge: 'bg-amber-950/80 text-amber-300 border-amber-800/80 font-semibold' },
+  analista_operador: { label: 'Analista - Operador', badge: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80 font-medium' },
+  multi_operator: { label: 'Analista - Operador', badge: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80 font-medium' },
+  data_analyst: { label: 'Analista - Operador', badge: 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80 font-medium' },
   auditor: { label: 'Auditor', badge: 'bg-slate-800 text-slate-300 border-slate-700' },
 };
 
@@ -953,12 +958,12 @@ export default function UsersManagementPage() {
                     onChange={(e) => setCreateForm({ ...createForm, roleName: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="multi_operator">Operador Multifunción</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="data_analyst">Analista de Datos</option>
-                    <option value="module_admin">Administrador de Módulo</option>
-                    {isCurrentUserSuperAdmin && <option value="superadmin">SuperAdmin</option>}
-                    <option value="auditor">Auditor (Solo Lectura)</option>
+                    <option value="analista_operador">1. Analista - Operador</option>
+                    <option value="supervisor">2. Supervisor</option>
+                    <option value="coordinador">3. Coordinador</option>
+                    <option value="coordinador_general">4. Coordinador General</option>
+                    <option value="admin">4. Admin</option>
+                    {isCurrentUserSuperAdmin && <option value="superadmin">5. Superadmin</option>}
                   </select>
                 </div>
 
@@ -1136,12 +1141,12 @@ export default function UsersManagementPage() {
                     onChange={(e) => setEditForm({ ...editForm, roleName: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="multi_operator">Operador Multifunción</option>
-                    <option value="supervisor">Supervisor</option>
-                    <option value="data_analyst">Analista de Datos</option>
-                    <option value="module_admin">Administrador de Módulo</option>
-                    {isCurrentUserSuperAdmin && <option value="superadmin">SuperAdmin</option>}
-                    <option value="auditor">Auditor (Solo Lectura)</option>
+                    <option value="analista_operador">1. Analista - Operador</option>
+                    <option value="supervisor">2. Supervisor</option>
+                    <option value="coordinador">3. Coordinador</option>
+                    <option value="coordinador_general">4. Coordinador General</option>
+                    <option value="admin">4. Admin</option>
+                    {isCurrentUserSuperAdmin && <option value="superadmin">5. Superadmin</option>}
                   </select>
                 </div>
 

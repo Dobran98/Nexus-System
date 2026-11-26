@@ -17,10 +17,12 @@ import {
   Phone,
   MapPin,
   Clock,
+  Compass,
 } from 'lucide-react';
 import { SignOutButton } from '../components/SignOutButton';
 import { NotificationCenter } from '../components/NotificationCenter';
 import { AdminHeaderActions } from '@/components/AdminHeaderActions';
+import { EncuestasHeaderButton } from '@/components/EncuestasHeaderButton';
 import { WorkstationQuickActions } from '@/components/WorkstationQuickActions';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
@@ -187,18 +189,26 @@ export default async function AdminHomePage() {
   // Lógica de Permisos Especiales y Visibilidad
   const userEmail = (user?.email || '').toLowerCase();
   const isBrando = userEmail.includes('brando') || userEmail === 'bralez@impress.com';
-  const isSuperAdmin = roles.includes('superadmin') || isBrando;
-  const isModuleAdmin = roles.includes('module_admin') || isSuperAdmin;
+  const isFundadorDev = isBrando || roles.includes('fundador_dev');
+  const isSuperAdmin = roles.includes('superadmin') || isFundadorDev;
+  const isModuleAdmin = roles.includes('module_admin') || roles.includes('admin') || isSuperAdmin;
   const isCoordinadorGeneral = legacyUser?.sub_rol?.toLowerCase().includes('coordinador general') || isSuperAdmin;
+  const isCoordinador = roles.includes('coordinador') || isCoordinadorGeneral;
 
   // Gestión de Usuarios: SOLO visible para Admin, Superadmin y Coordinador General
   // (Oculta para operadores, analistas, RRHH e informática general)
   const canManageUsers = isSuperAdmin || isModuleAdmin || isCoordinadorGeneral;
 
   const displayName = profile?.full_name ?? user?.email?.split('@')[0] ?? 'Operador';
-  const roleLabel = isBrando
-    ? 'Superadmin Fundador'
-    : (roles.length > 0 ? roles.join(', ') : 'Operador / Personal');
+  const roleLabel = isFundadorDev
+    ? 'Fundador Dev'
+    : (isSuperAdmin 
+        ? 'Superadmin' 
+        : (isModuleAdmin 
+            ? 'Admin' 
+            : (isCoordinadorGeneral 
+                ? 'Coordinador General' 
+                : (isCoordinador ? 'Coordinador' : (roles.includes('supervisor') ? 'Supervisor' : 'Analista - Operador')))));
   const initials = displayName
     .split(' ')
     .map((w: string) => w[0])
@@ -232,6 +242,12 @@ export default async function AdminHomePage() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* 📋 Sondeos & Encuestas Operativas (Analistas, Supervisores y Directores) */}
+            <EncuestasHeaderButton
+              canManage={isCoordinador || isCoordinadorGeneral || isModuleAdmin || isSuperAdmin || isFundadorDev}
+              currentUserEmail={user?.email || ''}
+            />
+
             {/* 📢 Botón Rápido de Aviso para Administradores / Superadmin */}
             <AdminHeaderActions canEmitAviso={isSuperAdmin} currentUserEmail={user?.email || ''} />
 
@@ -722,6 +738,40 @@ export default async function AdminHomePage() {
                 </div>
               </Link>
             )}
+
+            {/* 💎 MÓDULO 9: JADE — CONTROL, PLANIFICACIÓN & RENDICIÓN */}
+            <Link
+              href="/planificacion"
+              className="group relative flex flex-col justify-between p-7 rounded-2xl bg-slate-900 border border-emerald-500/40 hover:border-emerald-400 hover:-translate-y-1 hover:shadow-2xl hover:shadow-emerald-950/40 transition-all duration-300"
+            >
+              <div>
+                <div className="flex items-start justify-between mb-5">
+                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white group-hover:scale-105 transition-all shadow-md">
+                    <Compass className="h-7 w-7" />
+                  </div>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 uppercase tracking-wide">
+                    ● Enlace GAS Activo
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-xs font-mono font-medium uppercase tracking-wider text-emerald-400">
+                    Planificación Territorial & Rendición
+                  </span>
+                  <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-emerald-200 transition-colors">
+                    JADE Planificación & Misiones
+                  </h3>
+                  <p className="text-sm text-slate-400 leading-relaxed">
+                    Control y planificación de actividades comunales, misiones territoriales, classroom, rendición de cuentas y monitor general.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between text-xs font-semibold text-emerald-400 pt-4 border-t border-slate-800/60">
+                <span>Acceder a JADE Planificación</span>
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </Link>
 
           </div>
         </section>

@@ -1,0 +1,123 @@
+<div class="p-6 md:p-8 flex flex-col gap-6 w-full h-full pb-24 overflow-y-auto bg-surface">
+<!-- Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-3xl font-bold text-on-surface tracking-tight">Visión General Nacional</h2>
+<p class="text-on-surface-variant mt-2 text-sm">Métricas principales y estado de ejecución por territorio.</p>
+</div>
+<div class="flex gap-2">
+  <select id="filtro-tiempo-visor" class="bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-sm" onchange="aplicarFiltroVisor()">
+    <option value="TODOS">Todos los tiempos</option>
+    <option value="SEMANA">Esta Semana</option>
+    <option value="MES">Este Mes</option>
+    <option value="TRIMESTRE">Este Trimestre</option>
+  </select>
+</div>
+</div>
+<!-- KPIs -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+  <div class="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex flex-col relative overflow-hidden group">
+    <div class="absolute right-0 top-0 w-2 h-full bg-primary/20 group-hover:bg-primary transition-colors"></div>
+    <span class="text-on-surface-variant font-label-bold text-xs uppercase tracking-wider mb-2">Total Planificado</span>
+    <span class="text-4xl font-bold text-on-surface" id="kpi-total">0</span>
+  </div>
+  <div class="bg-white p-6 rounded-xl border border-[#4caf50]/30 shadow-sm flex flex-col relative overflow-hidden group">
+    <div class="absolute right-0 top-0 w-2 h-full bg-[#4caf50]/20 group-hover:bg-[#4caf50] transition-colors"></div>
+    <span class="text-[#2e7d32] font-label-bold text-xs uppercase tracking-wider mb-2">Ejecutadas / Validadas</span>
+    <span class="text-4xl font-bold text-on-surface" id="kpi-ejecutadas">0</span>
+  </div>
+  <div class="bg-white p-6 rounded-xl border border-[#ff9800]/30 shadow-sm flex flex-col relative overflow-hidden group">
+    <div class="absolute right-0 top-0 w-2 h-full bg-[#ff9800]/20 group-hover:bg-[#ff9800] transition-colors"></div>
+    <span class="text-[#ef6c00] font-label-bold text-xs uppercase tracking-wider mb-2">Pendientes / En Proceso</span>
+    <span class="text-4xl font-bold text-on-surface" id="kpi-pendientes">0</span>
+  </div>
+  <div class="bg-white p-6 rounded-xl border border-[#e53935]/30 shadow-sm flex flex-col relative overflow-hidden group">
+    <div class="absolute right-0 top-0 w-2 h-full bg-[#e53935]/20 group-hover:bg-[#e53935] transition-colors"></div>
+    <span class="text-[#c62828] font-label-bold text-xs uppercase tracking-wider mb-2">Incumplidas / Canceladas</span>
+    <span class="text-4xl font-bold text-on-surface" id="kpi-incumplidas">0</span>
+  </div>
+</div>
+<!-- Central Section: Map & Panel -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Map Container -->
+<div class="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-outline-variant flex flex-col relative min-h-[500px]">
+<h3 class="font-headline-md text-xl font-bold text-on-surface mb-6">Mapa de Calor Operativo</h3>
+<div class="flex-1 flex items-center justify-center relative bg-surface-container-low rounded-lg overflow-hidden border border-outline-variant/50" id="map-wrapper" style="position:relative; overflow:hidden;">
+  <div style="position:absolute; bottom:15px; right:15px; z-index:10; display:flex; gap:10px;">
+    <button class="bg-white border border-outline-variant hover:bg-surface-variant text-on-surface rounded-full w-10 h-10 flex items-center justify-center shadow-sm transition-colors" onclick="zoomMapa(1.2)"><span class="material-symbols-outlined">zoom_in</span></button>
+    <button class="bg-white border border-outline-variant hover:bg-surface-variant text-on-surface rounded-full w-10 h-10 flex items-center justify-center shadow-sm transition-colors" onclick="zoomMapa(0.8)"><span class="material-symbols-outlined">zoom_out</span></button>
+    <button class="bg-white border border-outline-variant hover:bg-surface-variant text-on-surface rounded-full w-10 h-10 flex items-center justify-center shadow-sm transition-colors" onclick="resetZoomMapa()"><span class="material-symbols-outlined">refresh</span></button>
+  </div>
+  <div id="zoom-container" style="transform-origin: center center; transition: transform 0.1s ease-out; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+      <div id="mapa-container" style="width: 100%; height: 100%; display:flex; justify-content:center; align-items:center;">
+          <div class="text-on-surface-variant flex flex-col items-center gap-2">
+             <span class="material-symbols-outlined animate-spin text-4xl">sync</span>
+             <span>Cargando mapa...</span>
+          </div>
+      </div>
+  </div>
+</div>
+</div>
+<!-- Side Panel -->
+<div class="bg-white rounded-xl p-6 shadow-sm border border-outline-variant flex flex-col">
+<div class="flex items-center justify-between border-b border-outline-variant/50 pb-4 mb-4">
+<h3 class="font-headline-md text-lg font-bold text-on-surface">Detalles de Estado</h3>
+<span class="material-symbols-outlined text-on-surface-variant">location_on</span>
+</div>
+<div class="flex flex-col gap-6" id="detalle-estado-visor">
+  <div class="text-center text-on-surface-variant/50 py-10 flex flex-col items-center">
+    <span class="material-symbols-outlined text-6xl mb-4">map</span>
+    <p>Seleccione un estado en el mapa para ver sus detalles.</p>
+  </div>
+</div>
+</div>
+</div>
+<!-- Gráficos -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant">
+    <h3 class="font-headline-md text-lg font-bold text-on-surface mb-4">Estado General de Actividades</h3>
+    <div class="relative h-64"><canvas id="graficoEstatus"></canvas></div>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant">
+    <h3 class="font-headline-md text-lg font-bold text-on-surface mb-4">Líneas de Transformación</h3>
+    <div class="relative h-64"><canvas id="graficoTransf"></canvas></div>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant">
+    <h3 class="font-headline-md text-lg font-bold text-on-surface mb-4">Niveles de Impacto</h3>
+    <div class="relative h-64"><canvas id="graficoImpacto"></canvas></div>
+  </div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant">
+    <h3 class="font-headline-md text-lg font-bold text-on-surface mb-4">Top 5 Estados con Mayor Ejecución</h3>
+    <div class="relative h-72"><canvas id="graficoEstados"></canvas></div>
+  </div>
+  <div class="bg-white p-6 rounded-xl shadow-sm border border-outline-variant">
+    <h3 class="font-headline-md text-lg font-bold text-on-surface mb-4">Análisis de Fallas Operativas</h3>
+    <div class="relative h-72"><canvas id="graficoNegativos"></canvas></div>
+  </div>
+</div>
+<!-- Tabla Completa -->
+<div class="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+  <div class="p-6 border-b border-outline-variant/50 flex justify-between items-center">
+    <h3 class="font-headline-md text-lg font-bold text-on-surface">Métricas por Territorio</h3>
+    <button onclick="exportarVisorExcel()" class="bg-primary text-on-primary px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-secondary transition-colors shadow-md">
+      <span class="material-symbols-outlined text-[18px]">download</span> Exportar a Excel
+    </button>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="bg-surface-container-low text-on-surface-variant font-label-bold text-xs uppercase tracking-wider">
+          <th class="p-4 border-b border-outline-variant/50">Estado</th>
+          <th class="p-4 border-b border-outline-variant/50">Planificadas</th>
+          <th class="p-4 border-b border-outline-variant/50">Ejecutadas</th>
+          <th class="p-4 border-b border-outline-variant/50">Eficiencia Operativa</th>
+        </tr>
+      </thead>
+      <tbody id="tabla-visor" class="text-sm">
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>

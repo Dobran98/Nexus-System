@@ -1,0 +1,150 @@
+<div class="login-wrapper">
+  <div class="login-bg-animated"></div>
+  <div class="particle" style="width: 300px; height: 300px; top: -10%; left: -10%; animation-delay: 0s;"></div>
+  <div class="particle" style="width: 400px; height: 400px; bottom: -20%; right: -10%; animation-delay: -5s;"></div>
+
+  <div class="login-box" id="login-card">
+    <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 25px;">
+      <!-- Logo JADE Image -->
+      <img src="https://i.imgur.com/IaoEKoN.png" alt="Logo JADE" class="logo-login-img">
+      
+      <p style="font-size: 0.8rem; color: #7f8c8d; text-transform: uppercase; letter-spacing: 2px;">Sistema de
+        Planificación</p>
+    </div>
+
+    <div id="form-login-basico" style="text-align: left;">
+      <div class="input-group-modern">
+        <span class="material-symbols-outlined">person</span>
+        <input type="text" id="usuario" class="input-modern" placeholder="Ingresa tu usuario" autocomplete="off"
+          onkeypress="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('clave').focus(); }">
+      </div>
+
+      <div class="input-group-modern" style="margin-bottom: 30px;">
+        <span class="material-symbols-outlined">lock</span>
+        <input type="password" id="clave" class="input-modern" placeholder="••••••••"
+          onkeypress="if(event.key === 'Enter') { event.preventDefault(); if(!document.getElementById('btn-login').disabled) iniciarSesion(); }">
+      </div>
+
+      <button class="btn-shimmer" id="btn-login" onclick="iniciarSesion()">
+        <span>Acceder al Sistema</span>
+      </button>
+    </div>
+
+    <div id="form-login-2fa" style="text-align: left; display: none;">
+      <p style="text-align:center; color:#2c3e50; font-weight:bold; margin-bottom:15px; font-size:0.9rem;">
+        Autenticación de Operador
+      </p>
+      <div class="input-group-modern" style="margin-bottom: 30px;">
+        <span class="material-symbols-outlined">desk</span>
+        <input type="text" id="id-extension" class="input-modern" placeholder="XX" autocomplete="off" maxlength="5"
+          onkeydown="if(event.key === 'Backspace' && this.value.length <= 3) event.preventDefault();"
+          oninput="var v = this.value.replace(/\D/g, ''); this.value = v.startsWith('110') ? v : '110' + v.replace(/^110/, '');"
+          onkeypress="if(event.key === 'Enter') { event.preventDefault(); verificar2FA(); }">
+      </div>
+      <button class="btn-shimmer" id="btn-2fa" onclick="verificar2FA()">
+        <span>Verificar ID</span>
+      </button>
+    </div>
+
+    <div id="error-container" style="opacity: 0; transition: opacity 0.3s; margin-top: 20px;">
+      <p id="error-msg"
+        style="color: #e74c3c; background: #fadbd8; font-size: 0.9rem; font-weight: bold; text-align: center; padding: 10px; border-radius: 8px; display: none;">
+        <span id="error-txt"></span>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  var infoUsuarioGlobal = null;
+
+  function mostrarError(mensaje) {
+    var errorContainer = document.getElementById("error-container");
+    var errorMsg = document.getElementById("error-msg");
+    document.getElementById("error-txt").innerText = mensaje;
+    errorMsg.style.display = "block";
+    errorContainer.style.opacity = "1";
+
+    var loginCard = document.getElementById("login-card");
+    loginCard.classList.remove("shake-animation");
+    void loginCard.offsetWidth;
+    loginCard.classList.add("shake-animation");
+  }
+
+  function iniciarSesion() {
+    var user = document.getElementById("usuario").value.trim();
+    var pass = document.getElementById("clave").value;
+    var btn = document.getElementById("btn-login");
+    var btnText = btn.querySelector("span");
+
+    if (user === "" || pass === "") { mostrarError("Por favor ingresa usuario y contraseña."); return; }
+
+    btnText.innerText = "Verificando...";
+    btn.disabled = true;
+    document.getElementById("error-container").style.opacity = "0";
+
+    google.script.run.withSuccessHandler(procesarRespuesta).verificarLogin(user, pass);
+  }
+
+  function procesarRespuesta(respuesta) {
+    var btn = document.getElementById("btn-login");
+    var btnText = btn.querySelector("span");
+
+    if (respuesta.exito) {
+      if (respuesta.requiere2FA) {
+        infoUsuarioGlobal = respuesta;
+        document.getElementById('form-login-basico').style.display = 'none';
+        document.getElementById('form-login-2fa').style.display = 'block';
+        var extInput = document.getElementById('id-extension');
+        extInput.value = '110';
+        extInput.focus();
+        // Colocar cursor al final
+        setTimeout(() => { extInput.setSelectionRange(3, 3); }, 10);
+        
+        btnText.innerText = "Acceder al Sistema";
+        btn.disabled = false;
+        return;
+      }
+      concederAcceso(respuesta);
+    } else {
+      btnText.innerText = "Acceder al Sistema";
+      btn.disabled = false;
+      mostrarError(respuesta.mensaje);
+    }
+  }
+
+  function verificar2FA() {
+    var ext = document.getElementById("id-extension").value.trim();
+    if (!/^110\d{2}$/.test(ext)) {
+      mostrarError("ID de extensión inválido. Debe ser 110 seguido de 2 dígitos.");
+      return;
+    }
+    var btn = document.getElementById("btn-2fa");
+    btn.disabled = true;
+    btn.querySelector("span").innerText = "Registrando...";
+    document.getElementById("error-container").style.opacity = "0";
+    
+    google.script.run.withSuccessHandler(function(res) {
+      if (res.exito) {
+        concederAcceso(infoUsuarioGlobal);
+      } else {
+        btn.disabled = false;
+        btn.querySelector("span").innerText = "Verificar ID";
+        mostrarError(res.mensaje || "Error al registrar extensión");
+      }
+    }).registrar2FA(infoUsuarioGlobal.usuario, ext);
+  }
+
+  function concederAcceso(respuesta) {
+    var btn = document.getElementById(respuesta.requiere2FA ? "btn-2fa" : "btn-login");
+    btn.querySelector("span").innerText = "¡Acceso Concedido!";
+    btn.style.background = "linear-gradient(135deg, #2e7d32, #4caf50)";
+    document.getElementById("login-card").style.transform = "scale(0.95)";
+    document.getElementById("login-card").style.opacity = "0.8";
+
+    google.script.run.withSuccessHandler(function (htmlDashboard) {
+      document.getElementById('app-root').innerHTML = htmlDashboard;
+      inicializarDashboard(respuesta);
+    }).cargarVistaDashboard();
+  }
+</script>
