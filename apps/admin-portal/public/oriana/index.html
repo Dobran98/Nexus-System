@@ -24,51 +24,62 @@
     ══════════════════════════════════════════════════════════════════════ -->
     <div id="login-overlay">
       <div class="login-card">
-        <div class="login-logo">ORIANA</div>
-        <p class="login-subtitle">Sistema de Gestión</p>
+        <!-- Indicador de Sincronización Nexus SSO (Cero Flash) -->
+        <div id="oriana-sso-loader" style="text-align:center; padding:25px 10px;">
+          <div class="login-logo" style="margin-bottom:8px; font-size:24px; font-weight:900; letter-spacing:1px; color:#3b82f6;">ORIANA</div>
+          <div style="width:48px; height:48px; border:3px solid rgba(59, 130, 246, 0.15); border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; margin:16px auto;"></div>
+          <h5 style="font-size:15px; font-weight:700; color:#f8fafc; margin:0 0 6px 0;">Conectando Command Center...</h5>
+          <p style="font-size:12px; color:#94a3b8; margin:0;">Sincronizando sesión segura con Nexus Intranet</p>
+        </div>
 
-        <div class="form-group" style="text-align:left;">
-          <label>Usuario</label>
-          <div style="position:relative;">
-            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:18px;pointer-events:none;">person</span>
-            <input class="input-icon-left" type="text" id="login-user" placeholder="Ingrese su usuario"
-              onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+        <!-- Formulario Legacy (solo visible si no hay sesión activa en Nexus) -->
+        <div id="oriana-legacy-form" style="display:none;">
+          <div class="login-logo">ORIANA</div>
+          <p class="login-subtitle">Sistema de Gestión</p>
+
+          <div class="form-group" style="text-align:left;">
+            <label>Usuario</label>
+            <div style="position:relative;">
+              <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:18px;pointer-events:none;">person</span>
+              <input class="input-icon-left" type="text" id="login-user" placeholder="Ingrese su usuario"
+                onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+            </div>
           </div>
-        </div>
 
-        <div class="form-group" style="text-align:left;">
-          <label>Contraseña</label>
-          <div style="position:relative;">
-            <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:18px;pointer-events:none;">lock</span>
-            <input class="input-icon-left" type="password" id="login-pass" placeholder="Contraseña"
-              onkeydown="if(event.key==='Enter') doLogin()">
+          <div class="form-group" style="text-align:left;">
+            <label>Contraseña</label>
+            <div style="position:relative;">
+              <span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--on-surface-variant);font-size:18px;pointer-events:none;">lock</span>
+              <input class="input-icon-left" type="password" id="login-pass" placeholder="Contraseña"
+                onkeydown="if(event.key==='Enter') doLogin()">
+            </div>
           </div>
-        </div>
 
-        <!-- Selector de Área de Trabajo (visible para Operadores/Analistas, exc Admins) -->
-        <div class="form-group hidden" id="login-area-wrapper" style="text-align:left;">
-          <label style="color:var(--primary);display:flex;align-items:center;gap:6px;">
-            <span class="material-symbols-outlined" style="font-size:18px;">workspaces</span>
-            Área de Trabajo
-          </label>
-          <select id="login-area-select" style="width:100%; padding:12px; border-radius:var(--r-lg); background:var(--surface-container-high); border:1px solid rgba(255,255,255,0.08); color:var(--on-surface); font-family:var(--font); font-size:14px; outline:none; cursor:pointer; margin-top:6px;">
-            <option value="" disabled selected>Seleccione su área de trabajo...</option>
-          </select>
-          <p style="font-size:12px;color:var(--on-surface-variant);margin-top:8px;">
-            Seleccione el área operativa en la que trabajó en esta jornada.
-          </p>
-        </div>
+          <!-- Selector de Área de Trabajo (visible para Operadores/Analistas, exc Admins) -->
+          <div class="form-group hidden" id="login-area-wrapper" style="text-align:left;">
+            <label style="color:var(--primary);display:flex;align-items:center;gap:6px;">
+              <span class="material-symbols-outlined" style="font-size:18px;">workspaces</span>
+              Área de Trabajo
+            </label>
+            <select id="login-area-select" style="width:100%; padding:12px; border-radius:var(--r-lg); background:var(--surface-container-high); border:1px solid rgba(255,255,255,0.08); color:var(--on-surface); font-family:var(--font); font-size:14px; outline:none; cursor:pointer; margin-top:6px;">
+              <option value="" disabled selected>Seleccione su área de trabajo...</option>
+            </select>
+            <p style="font-size:12px;color:var(--on-surface-variant);margin-top:8px;">
+              Seleccione el área operativa en la que trabajó en esta jornada.
+            </p>
+          </div>
 
-        <button class="btn btn-primary btn-lg" onclick="doLogin()" id="btn-login" style="width:100%;margin-top:8px;">
-          <span class="material-symbols-outlined">login</span>
-          Ingresar
-        </button>
-        <div class="loader" id="loader-login"></div>
-        <p id="login-msg" style="color:var(--error);margin-top:10px;font-size:13px;text-align:center;min-height:20px;"></p>
+          <button class="btn btn-primary btn-lg" onclick="doLogin()" id="btn-login" style="width:100%;margin-top:8px;">
+            <span class="material-symbols-outlined">login</span>
+            Ingresar
+          </button>
+          <div class="loader" id="loader-login"></div>
+          <p id="login-msg" style="color:var(--error);margin-top:10px;font-size:13px;text-align:center;min-height:20px;"></p>
 
-        <div class="audit-alert">
-          <span class="material-symbols-outlined" style="flex-shrink:0;">warning</span>
-          Tenga la cautela de que su reporte diario está en constante auditoría y se validará la cantidad de llamadas indicadas.
+          <div class="audit-alert">
+            <span class="material-symbols-outlined" style="flex-shrink:0;">warning</span>
+            Tenga la cautela de que su reporte diario está en constante auditoría y se validará la cantidad de llamadas indicadas.
+          </div>
         </div>
       </div>
     </div>

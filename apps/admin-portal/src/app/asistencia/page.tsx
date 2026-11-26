@@ -73,11 +73,11 @@ export default async function AsistenciaPortalPage() {
       </header>
 
       {/* Asys Core SPA Frame */}
-      <main className="flex-1 w-full h-full relative">
+      <main className="flex-1 w-full h-full relative bg-[#0e1117]">
         <iframe
           src={`/asys/index.html?uid=${user.id}`}
           title="ASYS Sistema de Control de Asistencia y Seguridad Institucional"
-          className="w-full h-full border-0 absolute inset-0 bg-[#f8f9fc]"
+          className="w-full h-full border-0 absolute inset-0 bg-[#0e1117]"
           allow="geolocation; camera"
         />
       </main>

@@ -218,15 +218,22 @@ window.confirmarIngresoOriana = function() {
       
       // Nexus Single Sign-On (SSO) Automático
       try {
-        const ssoRes = await fetch('/api/auth/me');
+        const ssoRes = await fetch('/api/auth/me?t=' + Date.now());
         const ssoData = await ssoRes.json();
         if (ssoData && ssoData.authenticated && ssoData.user) {
           console.log('[Oriana] Nexus SSO Sesión activa detectada:', ssoData.user.email);
           window.mostrarTarjetaIngresoOriana(ssoData.user);
+          return;
         }
       } catch (ssoErr) {
         console.warn('[Oriana] Verificación SSO silenciosa:', ssoErr);
       }
+
+      // Si no hay sesión SSO activa, revelar formulario tradicional
+      const ssoLoader = document.getElementById('oriana-sso-loader');
+      const legacyForm = document.getElementById('oriana-legacy-form');
+      if (ssoLoader) ssoLoader.style.display = 'none';
+      if (legacyForm) legacyForm.style.display = 'block';
     } catch (e) {
       console.error('Error cargando configuración inicial:', e);
       toast.error('No se pudo cargar la configuración de campañas del servidor.');

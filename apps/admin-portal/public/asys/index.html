@@ -1384,7 +1384,14 @@
 <body id="page-top">
 
     <!-- Contenedor principal de la aplicación -->
-    <div id="app-container"></div>
+    <div id="app-container">
+        <!-- Loader inicial de transición Nexus (Cero Flash) -->
+        <div id="asys-sso-splash" style="min-height: 85vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 20%, #151922 0%, #0c0e14 100%); color: #e2e8f0; font-family: 'Inter', sans-serif;">
+            <div style="width: 52px; height: 52px; border: 3px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 18px;"></div>
+            <h5 style="font-size: 17px; font-weight: 800; color: #ffffff; margin: 0 0 6px 0; letter-spacing: -0.3px;">Sincronizando Módulo de Asistencia ASYS...</h5>
+            <p style="font-size: 13px; color: #94a3b8; margin: 0;">Verificando credenciales seguras con Nexus Intranet</p>
+        </div>
+    </div>
 
     <!-- Modal de Confirmación y Activación GPS -->
     <div class="modal fade" id="gpsPromptModal" tabindex="-1" role="dialog" aria-labelledby="gpsPromptModalLabel" aria-hidden="true" data-backdrop="static">
@@ -1763,30 +1770,29 @@
 
     window.mostrarTarjetaIngresoAsys = function(userData) {
         window._ssoUserAsys = userData;
-        loadLoginPage();
-        setTimeout(function() {
-            const container = document.querySelector('.p-5');
-            if (!container) return;
-            const initials = (userData.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
-            
-            container.innerHTML = `
-                <div class="text-center mb-4">
-                    <div style="width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); color: white; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; margin: 0 auto 12px auto; box-shadow: 0 4px 16px rgba(16,185,129,0.35);">
+        const appContainer = document.getElementById('app-container');
+        if (!appContainer) return;
+        const initials = (userData.name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        
+        appContainer.innerHTML = `
+            <div style="min-height: 100vh; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 20%, #151922 0%, #0c0e14 100%); padding: 20px; font-family: 'Inter', sans-serif;">
+                <div style="max-width: 440px; width: 100%; background: rgba(25, 29, 37, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 24px; padding: 32px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); text-align: center;">
+                    <div style="width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #10b981, #059669); color: white; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; margin: 0 auto 16px auto; box-shadow: 0 4px 18px rgba(16,185,129,0.35); border: 2px solid rgba(255,255,255,0.12);">
                         ${initials}
                     </div>
-                    <div style="display: inline-flex; align-items: center; gap: 5px; padding: 3px 12px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-size: 11px; font-weight: 600; margin-bottom: 10px;">
+                    <div style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; font-size: 11px; font-weight: 700; margin-bottom: 12px;">
                         <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
                         Sesión Nexus Conectada
                     </div>
-                    <h1 class="h4 text-gray-900 mb-1" style="font-weight: 800;">${userData.name}</h1>
-                    <p class="text-muted" style="font-size: 13px; margin: 0;">Panel de ${userData.subRol || userData.role || 'Personal'} · <span style="color:#059669;">${userData.email}</span></p>
-                </div>
+                    <h2 style="font-size: 20px; font-weight: 800; color: #ffffff; margin: 0 0 6px 0;">${userData.name}</h2>
+                    <p style="color: #94a3b8; font-size: 13px; margin: 0 0 24px 0;">Panel de ${userData.subRol || userData.role || 'Personal'} · <span style="color:#10b981;">${userData.email}</span></p>
 
-                <button class="btn btn-primary btn-user btn-block" onclick="window.confirmarIngresoAsys()" style="padding: 14px; font-weight: 800; font-size: 14px; border-radius: 12px; background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 4px 14px rgba(37,99,235,0.3); cursor: pointer;">
-                    Ingresar al Módulo de Asistencia →
-                </button>
-            `;
-        }, 80);
+                    <button onclick="window.confirmarIngresoAsys()" style="width: 100%; padding: 14px; font-weight: 800; font-size: 15px; border-radius: 14px; background: linear-gradient(135deg, #10b981, #059669); border: none; color: white; box-shadow: 0 4px 16px rgba(16,185,129,0.3); cursor: pointer; transition: transform 0.15s ease;">
+                        Ingresar al Módulo de Asistencia →
+                    </button>
+                </div>
+            </div>
+        `;
     };
 
     window.confirmarIngresoAsys = function() {
@@ -3671,9 +3677,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function routeByRole(u) {
         const subRolNorm = normalizeSubRol(u.subRol);
-        if (subRolNorm === 'coordinador general' || subRolNorm === 'superadmin') {
+        const isSuperOrAdmin = u.isSuperAdmin || u.isAdmin || u.role === 'Superadmin' || u.role === 'Admin' || subRolNorm === 'superadmin' || subRolNorm === 'coordinador general';
+        if (isSuperOrAdmin) {
             loadAdminDashboard();
-        } else if (subRolNorm === 'coordinador de area') {
+        } else if (subRolNorm === 'coordinador de area' || u.role === 'Supervisor') {
             loadCoordinadorDashboard();
         } else {
             loadUserDashboard(); 

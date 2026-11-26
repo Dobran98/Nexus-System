@@ -1676,24 +1676,34 @@
   </div>
 
   <div id="login-page" class="login-container">
-    <div class="login-card">
-      <div class="icon-box-blue"><i class="fas fa-shield-halved"></i></div>
-      <h2 class="mt-3">Sistema Briana</h2>
-      <div class="mt-4">
-        <div class="mb-3 custom-input"><i class="fas fa-user"></i><input type="text" id="usuario" placeholder="Usuario"
-            onkeydown="if(event.key === 'Enter') login()">
-        </div>
-        <div class="mb-3 custom-input"><i class="fas fa-lock"></i><input type="password" id="password"
-            placeholder="Contraseña" onkeydown="if(event.key === 'Enter') login()"></div>
-        <div class="mb-4 custom-input"><i class="fas fa-headset"></i><input type="text" id="extension"
-            placeholder="Extensión" maxlength="5"
-            oninput="if(this.value.length > 0) { if(!this.value.startsWith('110')) this.value = '110'; this.value = '110' + this.value.substring(3).replace(/\D/g,'').slice(0,2); }"
-            onkeydown="if(this.selectionStart < 3 && event.key === 'Backspace') { if(this.value.length <= 3) this.value = ''; else event.preventDefault(); } if(event.key === 'Enter') login();">
-        </div>
-        <button class="btn btn-modern-blue w-100" onclick="login()">Iniciar Sesión</button>
+    <div class="login-card" id="briana-login-card">
+      <!-- Indicador de Sincronización Nexus SSO (Cero Flash) -->
+      <div id="briana-sso-loader" style="text-align: center; padding: 25px 10px;">
+        <div style="width: 50px; height: 50px; border: 3px solid rgba(2, 132, 199, 0.15); border-top-color: #0284c7; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px auto;"></div>
+        <h5 style="font-size: 16px; font-weight: 800; color: #0f172a; margin: 0 0 6px 0; letter-spacing: -0.3px;">Conectando a Briana...</h5>
+        <p style="font-size: 12px; color: #64748b; margin: 0;">Sincronizando sesión segura con Nexus Intranet</p>
       </div>
-      <div id="loader-login" class="mt-3 text-center" style="display:none;">
-        <div class="spinner-border text-primary spinner-border-sm"></div>
+
+      <!-- Formulario Legacy (solo visible si no hay sesión activa en Nexus) -->
+      <div id="briana-legacy-form" style="display: none;">
+        <div class="icon-box-blue"><i class="fas fa-shield-halved"></i></div>
+        <h2 class="mt-3">Sistema Briana</h2>
+        <div class="mt-4">
+          <div class="mb-3 custom-input"><i class="fas fa-user"></i><input type="text" id="usuario" placeholder="Usuario"
+              onkeydown="if(event.key === 'Enter') login()">
+          </div>
+          <div class="mb-3 custom-input"><i class="fas fa-lock"></i><input type="password" id="password"
+              placeholder="Contraseña" onkeydown="if(event.key === 'Enter') login()"></div>
+          <div class="mb-4 custom-input"><i class="fas fa-headset"></i><input type="text" id="extension"
+              placeholder="Extensión" maxlength="5"
+              oninput="if(this.value.length > 0) { if(!this.value.startsWith('110')) this.value = '110'; this.value = '110' + this.value.substring(3).replace(/\D/g,'').slice(0,2); }"
+              onkeydown="if(this.selectionStart < 3 && event.key === 'Backspace') { if(this.value.length <= 3) this.value = ''; else event.preventDefault(); } if(event.key === 'Enter') login();">
+          </div>
+          <button class="btn btn-modern-blue w-100" onclick="login()">Iniciar Sesión</button>
+        </div>
+        <div id="loader-login" class="mt-3 text-center" style="display:none;">
+          <div class="spinner-border text-primary spinner-border-sm"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -5999,7 +6009,7 @@ function getAppUrl() { return window.location.href; }
   async function verificarSesion() {
     // Nexus Single Sign-On (SSO) Automático
     try {
-      const ssoRes = await fetch('/api/auth/me');
+      const ssoRes = await fetch('/api/auth/me?t=' + Date.now());
       const ssoData = await ssoRes.json();
       if (ssoData && ssoData.authenticated && ssoData.user) {
         console.log('[Briana] Nexus SSO Sesión activa detectada:', ssoData.user.email);
@@ -6009,6 +6019,12 @@ function getAppUrl() { return window.location.href; }
     } catch (ssoErr) {
       console.warn('[Briana] Verificación SSO silenciosa:', ssoErr);
     }
+
+    // Si no hay sesión SSO activa, revelar formulario tradicional
+    const ssoLoader = document.getElementById('briana-sso-loader');
+    const legacyForm = document.getElementById('briana-legacy-form');
+    if (ssoLoader) ssoLoader.style.display = 'none';
+    if (legacyForm) legacyForm.style.display = 'block';
 
     const savedUser = localStorage.getItem('usuario_briana');
     const savedRol = localStorage.getItem('rol_briana');

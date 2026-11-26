@@ -5,11 +5,21 @@ import Link from 'next/link';
 import { 
   Zap, CheckCircle2, AlertTriangle, Phone, 
   MapPin, Clock, ArrowRight, X, Laptop, ShieldCheck,
-  Building, ExternalLink
+  Building, ExternalLink, UserCheck
 } from 'lucide-react';
 
 interface WorkstationQuickActionsProps {
   todayAttendance: any;
+  attendanceState?: {
+    isDentro: boolean;
+    hasEntrada: boolean;
+    hasSalida: boolean;
+    lastTipo: string | null;
+    lastTime: string | null;
+    statusBadgeText: string;
+    statusBadgeClass: string;
+  };
+  currentUsername?: string;
   userExtension?: string;
   userArea: string;
   turno: string;
@@ -20,6 +30,8 @@ interface WorkstationQuickActionsProps {
 
 export function WorkstationQuickActions({
   todayAttendance,
+  attendanceState,
+  currentUsername,
   userExtension,
   userArea,
   turno,
@@ -69,9 +81,13 @@ export function WorkstationQuickActions({
 
             {/* Puesto Técnico */}
             <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+              <div className="flex items-center gap-2 text-blue-300">
+                <UserCheck className="w-4 h-4 text-blue-400" />
+                <span className="font-bold">@{currentUsername || 'operador'}</span>
+              </div>
               <div className="flex items-center gap-2 text-sky-300">
                 <Phone className="w-4 h-4 text-sky-400" />
-                <span>{userExtension ? `Ext: ${userExtension}` : 'Sin Extensión'}</span>
+                <span>{userExtension ? `Ext: ${userExtension}` : 'Sin PBX'}</span>
               </div>
               <div className="flex items-center gap-2 text-slate-300">
                 <MapPin className="w-4 h-4 text-indigo-400" />
@@ -89,21 +105,35 @@ export function WorkstationQuickActions({
               <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
                   <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                    todayAttendance ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'
+                    attendanceState?.isDentro 
+                      ? 'bg-emerald-950 text-emerald-400' 
+                      : (attendanceState?.hasSalida ? 'bg-slate-800 text-slate-400' : 'bg-amber-950 text-amber-400')
                   }`}>
-                    {todayAttendance ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                    {attendanceState?.isDentro ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-white">1. Asistencia en Asys</span>
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                        todayAttendance ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800' : 'bg-amber-950/80 text-amber-300 border-amber-800'
+                        attendanceState?.isDentro
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800 font-bold'
+                          : (attendanceState?.hasSalida 
+                              ? 'bg-slate-800 text-slate-300 border-slate-700' 
+                              : 'bg-amber-950/80 text-amber-300 border-amber-800 animate-pulse')
                       }`}>
-                        {todayAttendance ? 'Marcada' : 'Pendiente'}
+                        {attendanceState?.isDentro
+                          ? `🟢 DENTRO (${attendanceState.lastTime})`
+                          : (attendanceState?.hasSalida 
+                              ? `🔴 Salida Marcada (${attendanceState.lastTime})` 
+                              : '⚠️ Pendiente')}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      {todayAttendance ? 'Tu entrada del día fue registrada satisfactoriamente.' : 'Debes ponchar entrada escaneando tu QR antes de atender carga.'}
+                      {attendanceState?.isDentro
+                        ? `Tu entrada fue registrada a las ${attendanceState.lastTime}. Estás activo en sede.`
+                        : (attendanceState?.hasSalida
+                            ? `Jornada finalizada a las ${attendanceState.lastTime}. Salida registrada.`
+                            : 'Debes ponchar entrada escaneando tu QR en Asys antes de atender carga.')}
                     </p>
                   </div>
                 </div>
@@ -112,12 +142,14 @@ export function WorkstationQuickActions({
                   href="/asistencia"
                   onClick={() => setIsOpen(false)}
                   className={`px-3 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                    todayAttendance 
-                      ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' 
-                      : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md'
+                    attendanceState?.isDentro
+                      ? 'bg-rose-950/60 text-rose-300 border border-rose-800/60 hover:bg-rose-900/60'
+                      : (attendanceState?.hasSalida 
+                          ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' 
+                          : 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-black shadow-md')
                   }`}
                 >
-                  {todayAttendance ? 'Ver Marcado' : 'Ponchar Ahora'}
+                  {attendanceState?.isDentro ? 'Marcar Salida' : (attendanceState?.hasSalida ? 'Ver Registro' : 'Ponchar Ahora')}
                 </Link>
               </div>
 

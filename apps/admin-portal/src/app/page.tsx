@@ -92,19 +92,61 @@ export default async function AdminHomePage() {
     userExtension = '';
   }
 
-  // 2. Obtener Asistencia de Hoy (Asys)
+  // Nombre de usuario técnico registrado en auditoría y actividades
+  const currentUsername = legacyUser?.usuario || user.email?.split('@')[0] || 'operador';
+
+  // 2. Obtener Asistencia de Hoy (Asys) con estado DENTRO / FUERA
   const todayDateStr = new Date().toISOString().split('T')[0];
   let todayAttendance: any = null;
+  let attendanceState = {
+    isDentro: false,
+    hasEntrada: false,
+    hasSalida: false,
+    lastTipo: null as string | null,
+    lastTime: null as string | null,
+    statusBadgeText: '● FUERA · EN ESPERA DE ENTRADA',
+    statusBadgeClass: 'bg-amber-950/80 text-amber-300 border-amber-800/60 animate-pulse'
+  };
+
   try {
     const { data: attList } = await (supabase
       .from('asistencias') as any)
       .select('timestamp, tipo, estado')
       .gte('timestamp', `${todayDateStr}T00:00:00Z`)
-      .or(`id_usuario.eq.${legacyUser?.usuario || user.email?.split('@')[0]},nombre_completo.ilike.%${profile?.full_name || ''}%`)
-      .order('timestamp', { ascending: true })
-      .limit(1);
+      .or(`id_usuario.eq.${currentUsername},id_usuario.eq.${user.email?.split('@')[0]},nombre_completo.ilike.%${profile?.full_name || ''}%`)
+      .order('timestamp', { ascending: false });
+
     if (attList && attList.length > 0) {
       todayAttendance = attList[0];
+      const latest = attList[0];
+      const isLatestEntrada = String(latest.tipo || '').toLowerCase() === 'entrada';
+      const timeStr = new Date(latest.timestamp).toLocaleTimeString('es-VE', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      if (isLatestEntrada) {
+        attendanceState = {
+          isDentro: true,
+          hasEntrada: true,
+          hasSalida: false,
+          lastTipo: 'Entrada',
+          lastTime: timeStr,
+          statusBadgeText: `● DENTRO (Entrada ${timeStr})`,
+          statusBadgeClass: 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60 font-bold'
+        };
+      } else {
+        attendanceState = {
+          isDentro: false,
+          hasEntrada: true,
+          hasSalida: true,
+          lastTipo: 'Salida',
+          lastTime: timeStr,
+          statusBadgeText: `● FUERA (Salida ${timeStr})`,
+          statusBadgeClass: 'bg-slate-800 text-slate-300 border-slate-700 font-bold'
+        };
+      }
     }
   } catch {
     todayAttendance = null;
@@ -198,8 +240,10 @@ export default async function AdminHomePage() {
 
             <div className="flex items-center space-x-3 pl-2 border-l border-slate-800">
               <div className="text-right hidden sm:block">
-                <p className="text-xs font-semibold text-slate-200">{displayName}</p>
-                <p className="text-[11px] text-slate-400">{roleLabel}</p>
+                <p className="text-xs font-bold text-slate-200">{displayName}</p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  <span className="text-blue-400 font-semibold">@{currentUsername}</span> · {roleLabel}
+                </p>
               </div>
               <div className="h-9 w-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-200 shadow-sm">
                 {initials}
@@ -222,16 +266,16 @@ export default async function AdminHomePage() {
                 </div>
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-base font-bold text-white tracking-tight">
                     Mi Estación de Trabajo & Puesto Operativo
                   </h2>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border font-semibold ${
-                    todayAttendance 
-                      ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60'
-                      : 'bg-amber-950/80 text-amber-300 border-amber-800/60 animate-pulse'
-                  }`}>
-                    {todayAttendance ? '● PUESTO EN SERVICIO' : '● EN ESPERA DE MARCADO'}
+                  <span className="text-xs font-mono px-2.5 py-0.5 rounded-lg bg-blue-950/80 text-blue-300 border border-blue-800/60 font-bold flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                    @{currentUsername}
+                  </span>
+                  <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${attendanceState.statusBadgeClass}`}>
+                    {attendanceState.statusBadgeText}
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
@@ -244,6 +288,8 @@ export default async function AdminHomePage() {
             <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
               <WorkstationQuickActions
                 todayAttendance={todayAttendance}
+                attendanceState={attendanceState}
+                currentUsername={currentUsername}
                 userExtension={userExtension}
                 userArea={userAreas[0] || 'Sede Central'}
                 turno={legacyUser?.turno || 'Mañana'}
@@ -268,22 +314,32 @@ export default async function AdminHomePage() {
             <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-mono uppercase text-slate-400 font-bold block">1. Asistencia Asys</span>
-                <span className={`text-xs font-semibold block mt-0.5 ${todayAttendance ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {todayAttendance ? 'Marcada con Éxito' : 'Pendiente de Marcado'}
+                <span className={`text-xs font-semibold block mt-0.5 ${
+                  attendanceState.isDentro 
+                    ? 'text-emerald-400 font-bold' 
+                    : (attendanceState.hasSalida ? 'text-slate-400 font-bold' : 'text-amber-400 font-bold')
+                }`}>
+                  {attendanceState.isDentro 
+                    ? `🟢 DENTRO (${attendanceState.lastTime})` 
+                    : (attendanceState.hasSalida ? `🔴 Fuera / Salida (${attendanceState.lastTime})` : '⚠️ Entrada Pendiente')}
                 </span>
                 <span className="text-[10px] text-slate-500 block">
-                  {todayAttendance ? 'Entrada registrada' : 'Escanea tu QR en Asys'}
+                  {attendanceState.isDentro 
+                    ? 'Jornada activa en sede' 
+                    : (attendanceState.hasSalida ? 'Jornada concluida hoy' : 'Escanea tu QR en Asys')}
                 </span>
               </div>
               <Link
                 href="/asistencia"
                 className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
-                  todayAttendance 
-                    ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/40 hover:bg-emerald-900/60'
-                    : 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-black shadow-md'
+                  attendanceState.isDentro 
+                    ? 'bg-rose-950/40 text-rose-300 border-rose-800/60 hover:bg-rose-900/60'
+                    : (attendanceState.hasSalida
+                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                        : 'bg-amber-600 hover:bg-amber-500 text-slate-950 font-black shadow-md')
                 }`}
               >
-                {todayAttendance ? 'Ver Turno' : 'Marcar Ahora'}
+                {attendanceState.isDentro ? 'Marcar Salida' : (attendanceState.hasSalida ? 'Ver Registro' : 'Marcar Ahora')}
               </Link>
             </div>
 

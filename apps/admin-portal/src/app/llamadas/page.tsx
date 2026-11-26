@@ -66,11 +66,11 @@ export default async function LlamadasPortalPage() {
       </header>
 
       {/* Briana Core SPA Frame */}
-      <main className="flex-1 w-full h-full relative">
+      <main className="flex-1 w-full h-full relative bg-slate-950">
         <iframe
           src="/briana/index.html"
           title="BRIANA Sistema de Telefonía Celular y Contact Center"
-          className="w-full h-full border-0 absolute inset-0 bg-[#f8fafc]"
+          className="w-full h-full border-0 absolute inset-0 bg-slate-950"
           allow="microphone; camera; clipboard-write"
         />
       </main>
