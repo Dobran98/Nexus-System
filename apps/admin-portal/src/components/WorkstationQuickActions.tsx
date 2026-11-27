@@ -87,7 +87,7 @@ export function WorkstationQuickActions({
               </div>
               <div className="flex items-center gap-2 text-sky-300">
                 <Phone className="w-4 h-4 text-sky-400" />
-                <span>{userExtension ? `Ext: ${userExtension}` : 'Sin PBX'}</span>
+                <span>{userExtension ? `Ext / Terminal: ${userExtension}` : 'Samsung SIM'}</span>
               </div>
               <div className="flex items-center gap-2 text-slate-300">
                 <MapPin className="w-4 h-4 text-indigo-400" />
@@ -179,7 +179,7 @@ export function WorkstationQuickActions({
                 </div>
 
                 <Link
-                  href="/briana"
+                  href="/llamadas"
                   onClick={() => setIsOpen(false)}
                   className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-all shrink-0 flex items-center gap-1.5 shadow-md shadow-sky-950/40"
                 >

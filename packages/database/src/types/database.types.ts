@@ -653,7 +653,7 @@ isOneToOne: false
 { Args: { "required_role": string }; Returns: boolean
                            },
 "current_user_privilege_level":
-{ Args: Record<PropertyKey, never>; Returns: number
+{ Args: Record<string, never>; Returns: number
                            },
 "fn_archive_and_purge_lifecycle":
 { Args: { "p_dry_run"?: boolean,"p_retention_days"?: number }; Returns: Database["public"]['CompositeTypes']["purge_execution_report"][]
@@ -675,7 +675,7 @@ isOneToOne: false
 { Args: { "p_month": number,"p_parent_table": string,"p_year": number }; Returns: undefined
                            },
 "fn_get_storage_usage_report":
-{ Args: Record<PropertyKey, never>; Returns: {
+{ Args: Record<string, never>; Returns: {
               "newest_record": string,"oldest_record": string,"row_count": number,"size_mb": number,"table_name": string
             }[]
                            },

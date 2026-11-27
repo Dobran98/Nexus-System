@@ -1,7 +1,11 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
-const FLAGS_FILE = path.join(process.cwd(), 'data', 'nexus_module_flags.json');
+const PRIMARY_FLAGS_FILE = path.join(process.cwd(), 'data', 'nexus_module_flags.json');
+const TMP_FLAGS_FILE = path.join(os.tmpdir(), 'nexus_module_flags.json');
+
+let memoryFlagsCache: Record<string, ModuleFlag> | null = null;
 
 export interface ModuleFlag {
   id: string;
@@ -91,32 +95,47 @@ export const DEFAULT_FLAGS: Record<string, ModuleFlag> = {
 };
 
 export function getModuleFlags(): Record<string, ModuleFlag> {
-  try {
-    if (!fs.existsSync(path.dirname(FLAGS_FILE))) {
-      fs.mkdirSync(path.dirname(FLAGS_FILE), { recursive: true });
+  if (memoryFlagsCache) return { ...DEFAULT_FLAGS, ...memoryFlagsCache };
+
+  for (const candidate of [TMP_FLAGS_FILE, PRIMARY_FLAGS_FILE]) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const data = fs.readFileSync(candidate, 'utf-8');
+        const parsed = JSON.parse(data);
+        const resolved: Record<string, ModuleFlag> = { ...DEFAULT_FLAGS, ...parsed };
+        memoryFlagsCache = resolved;
+        return resolved;
+      }
+    } catch {
+      // probar siguiente ruta
     }
-    if (!fs.existsSync(FLAGS_FILE)) {
-      fs.writeFileSync(FLAGS_FILE, JSON.stringify(DEFAULT_FLAGS, null, 2), 'utf-8');
-      return DEFAULT_FLAGS;
-    }
-    const data = fs.readFileSync(FLAGS_FILE, 'utf-8');
-    const parsed = JSON.parse(data);
-    return { ...DEFAULT_FLAGS, ...parsed };
-  } catch (err) {
-    console.error('Error leyendo module flags:', err);
-    return DEFAULT_FLAGS;
   }
+
+  try {
+    fs.mkdirSync(path.dirname(PRIMARY_FLAGS_FILE), { recursive: true });
+    fs.writeFileSync(PRIMARY_FLAGS_FILE, JSON.stringify(DEFAULT_FLAGS, null, 2), 'utf-8');
+  } catch {
+    try {
+      fs.writeFileSync(TMP_FLAGS_FILE, JSON.stringify(DEFAULT_FLAGS, null, 2), 'utf-8');
+    } catch {
+      // fallback silencioso en memoria
+    }
+  }
+  const initialFlags: Record<string, ModuleFlag> = { ...DEFAULT_FLAGS };
+  memoryFlagsCache = initialFlags;
+  return initialFlags;
 }
 
 export function saveModuleFlags(flags: Record<string, ModuleFlag>): boolean {
-  try {
-    if (!fs.existsSync(path.dirname(FLAGS_FILE))) {
-      fs.mkdirSync(path.dirname(FLAGS_FILE), { recursive: true });
+  memoryFlagsCache = { ...DEFAULT_FLAGS, ...flags };
+  for (const candidate of [PRIMARY_FLAGS_FILE, TMP_FLAGS_FILE]) {
+    try {
+      fs.mkdirSync(path.dirname(candidate), { recursive: true });
+      fs.writeFileSync(candidate, JSON.stringify(memoryFlagsCache, null, 2), 'utf-8');
+      return true;
+    } catch {
+      // en Vercel process.cwd() es solo lectura; usar os.tmpdir()
     }
-    fs.writeFileSync(FLAGS_FILE, JSON.stringify(flags, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('Error guardando module flags:', err);
-    return false;
   }
+  return true;
 }

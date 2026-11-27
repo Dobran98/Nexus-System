@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { isFounderEmail } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export async function GET() {
       .eq('user_id', authUser.id);
 
     const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-    const isFundadorDev = email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez') || roleNames.includes('fundador_dev');
+    const isFundadorDev = isFounderEmail(email) || roleNames.includes('fundador_dev');
     let isSuperAdmin = roleNames.includes('superadmin') || isFundadorDev;
     const isModuleAdmin = roleNames.includes('admin') || roleNames.includes('module_admin') || isSuperAdmin;
     const isCoordinadorGeneral = roleNames.includes('coordinador_general') || isModuleAdmin;
@@ -100,8 +101,25 @@ export async function GET() {
       areas = legacyUser.areas_ids;
     }
 
-    // Extensión asignada (o fallback de seguridad)
-    const extension = '110' + (String(Math.abs(hashString(email)) % 90 + 10).padStart(2, '0'));
+    // Extensión real asignada o dispositivo Samsung activo (fallback determinista)
+    let extension = legacyUser?.dispositivo_vinculado_id || '';
+    if (!extension) {
+      try {
+        const { data: extRow } = await (supabase
+          .from('briana_extensiones') as any)
+          .select('extension')
+          .eq('usuario', username)
+          .order('fecha', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        extension = extRow?.extension || '';
+      } catch {
+        extension = '';
+      }
+    }
+    if (!extension) {
+      extension = '110' + (String(Math.abs(hashString(email)) % 90 + 10).padStart(2, '0'));
+    }
 
     return NextResponse.json({
       authenticated: true,

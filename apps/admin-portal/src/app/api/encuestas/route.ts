@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { getUserRbacContext } from '@/lib/rbac';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
-const STORAGE_FILE = path.join(process.cwd(), 'data', 'nexus_encuestas.json');
+const PRIMARY_STORAGE_FILE = path.join(process.cwd(), 'data', 'nexus_encuestas.json');
+const TMP_STORAGE_FILE = path.join(os.tmpdir(), 'nexus_encuestas.json');
+let memorySurveysCache: Survey[] | null = null;
 
 interface Question {
   id: string;
@@ -117,34 +121,42 @@ const DEFAULT_SURVEYS: Survey[] = [
 ];
 
 function readSurveys(): Survey[] {
-  try {
-    if (!fs.existsSync(path.dirname(STORAGE_FILE))) {
-      fs.mkdirSync(path.dirname(STORAGE_FILE), { recursive: true });
+  if (memorySurveysCache) return memorySurveysCache;
+
+  for (const candidate of [TMP_STORAGE_FILE, PRIMARY_STORAGE_FILE]) {
+    try {
+      if (fs.existsSync(candidate)) {
+        const data = fs.readFileSync(candidate, 'utf-8');
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          const resolved: Survey[] = parsed;
+          memorySurveysCache = resolved;
+          return resolved;
+        }
+      }
+    } catch {
+      // probar siguiente ruta
     }
-    if (!fs.existsSync(STORAGE_FILE)) {
-      fs.writeFileSync(STORAGE_FILE, JSON.stringify(DEFAULT_SURVEYS, null, 2), 'utf-8');
-      return DEFAULT_SURVEYS;
-    }
-    const data = fs.readFileSync(STORAGE_FILE, 'utf-8');
-    const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : DEFAULT_SURVEYS;
-  } catch (err) {
-    console.error('Error reading surveys file:', err);
-    return DEFAULT_SURVEYS;
   }
+
+  const initialSurveys: Survey[] = DEFAULT_SURVEYS.map((s) => ({ ...s, responses: [...s.responses] }));
+  memorySurveysCache = initialSurveys;
+  writeSurveys(initialSurveys);
+  return initialSurveys;
 }
 
 function writeSurveys(surveys: Survey[]): boolean {
-  try {
-    if (!fs.existsSync(path.dirname(STORAGE_FILE))) {
-      fs.mkdirSync(path.dirname(STORAGE_FILE), { recursive: true });
+  memorySurveysCache = surveys;
+  for (const candidate of [PRIMARY_STORAGE_FILE, TMP_STORAGE_FILE]) {
+    try {
+      fs.mkdirSync(path.dirname(candidate), { recursive: true });
+      fs.writeFileSync(candidate, JSON.stringify(surveys, null, 2), 'utf-8');
+      return true;
+    } catch {
+      // fallback os.tmpdir() en Vercel Serverless
     }
-    fs.writeFileSync(STORAGE_FILE, JSON.stringify(surveys, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('Error writing surveys file:', err);
-    return false;
   }
+  return true;
 }
 
 // ── GET: LISTAR ENCUESTAS Y RESULTADOS SEGÚN ROL ─────────────────────────────
@@ -158,17 +170,8 @@ export async function GET(req: NextRequest) {
     }
 
     const email = authData.user.email || '';
-    const { data: rolesData } = await (supabase.from('user_roles') as any)
-      .select('roles!inner(name)')
-      .eq('user_id', authData.user.id);
-    const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-
-    const isFundadorDev = email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez') || roleNames.includes('fundador_dev');
-    const isSuperAdmin = roleNames.includes('superadmin') || isFundadorDev;
-    const isModuleAdmin = roleNames.includes('admin') || roleNames.includes('module_admin') || isSuperAdmin;
-    const isCoordinadorGeneral = roleNames.includes('coordinador_general') || isModuleAdmin;
-    const isCoordinador = roleNames.includes('coordinador') || isCoordinadorGeneral;
-    const canManageSurveys = isCoordinador;
+    const rbac = await getUserRbacContext(supabase, authData.user);
+    const canManageSurveys = rbac.isAdminOrCoord;
 
     const allSurveys = readSurveys();
 
@@ -268,17 +271,14 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     const userName = profile?.full_name || email.split('@')[0];
 
-    const { data: rolesData } = await (supabase.from('user_roles') as any)
-      .select('roles!inner(name)')
-      .eq('user_id', authData.user.id);
-    const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-
-    const isFundadorDev = email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez') || roleNames.includes('fundador_dev');
-    const isSuperAdmin = roleNames.includes('superadmin') || isFundadorDev;
+    const rbac = await getUserRbacContext(supabase, authData.user);
+    const roleNames = rbac.roleNames;
+    const isFundadorDev = rbac.isFundadorDev;
+    const isSuperAdmin = rbac.isSuperAdmin;
     const isModuleAdmin = roleNames.includes('admin') || roleNames.includes('module_admin') || isSuperAdmin;
     const isCoordinadorGeneral = roleNames.includes('coordinador_general') || isModuleAdmin;
-    const isCoordinador = roleNames.includes('coordinador') || isCoordinadorGeneral;
-    const canManageSurveys = isCoordinador;
+    const isCoordinador = rbac.isAdminOrCoord;
+    const canManageSurveys = rbac.isAdminOrCoord;
 
     const userRole = isFundadorDev 
       ? 'Fundador Dev' 
@@ -331,12 +331,14 @@ export async function POST(req: NextRequest) {
       // Emisión de notificación de confirmación
       try {
         await (supabase.from('nexus_notificaciones') as any).insert({
+          user_id: authData.user.id,
           user_email: email,
           titulo: 'Encuesta Registrada',
-          mensaje: `Hemos recibido tu evaluación para "${survey.title}". ¡Gracias por tu participación!`,
+          descripcion: `Hemos recibido tu evaluación para "${survey.title}". ¡Gracias por tu participación!`,
+          modulo: 'encuestas',
           tipo: 'sistema',
           prioridad: 'baja',
-          leida: false,
+          estado: 'pendiente',
         });
       } catch (notifErr) {
         console.warn('Advertencia emitiendo notificación de encuesta:', notifErr);
@@ -386,12 +388,14 @@ export async function POST(req: NextRequest) {
       // Notificación global a los operadores/supervisores
       try {
         await (supabase.from('nexus_notificaciones') as any).insert({
-          user_email: 'todos@impress.com',
+          user_id: null,
+          user_email: 'global@impress.com',
           titulo: `Nueva Encuesta: ${newSurvey.title}`,
-          mensaje: `Se ha publicado un nuevo sondeo institucional por ${userName}. Tu opinión es fundamental para mejorar los puestos operativos.`,
+          descripcion: `Se ha publicado un nuevo sondeo institucional por ${userName}. Tu opinión es fundamental para mejorar los puestos operativos.`,
+          modulo: 'encuestas',
           tipo: 'aviso',
           prioridad: 'media',
-          leida: false,
+          estado: 'pendiente',
         });
       } catch (notifErr) {
         console.warn('Advertencia emitiendo notificación general:', notifErr);

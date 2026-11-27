@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { getUserRbacContext } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,11 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const rbac = await getUserRbacContext(supabase, user);
+    if (!rbac.isSupervisorOrAbove) {
+      return NextResponse.json({ error: 'Acceso restringido: Se requieren privilegios de Supervisor o superior.' }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));

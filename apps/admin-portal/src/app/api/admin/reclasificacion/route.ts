@@ -92,10 +92,10 @@ export async function GET(request: NextRequest) {
         query = query.eq('lote_id', loteId);
       }
 
-      // Buscar registros asignados al usuario o sin asignar si es admin/desarrollador
-      const isBrando = user.email?.toLowerCase().includes('dobran') || user.email?.toLowerCase().includes('brando');
+      // Buscar registros asignados al usuario o todos si es Admin / Coordinador / Fundador
+      const canViewAll = rbac.isAdminOrCoord || rbac.isFundadorDev;
       
-      if (!isBrando) {
+      if (!canViewAll) {
         query = query.or(`asignado_a_usuario.eq.${userIdentifier},asignado_a_usuario.eq.${userName}`);
       }
 
@@ -106,9 +106,9 @@ export async function GET(request: NextRequest) {
 
       if (recError) throw recError;
 
-      // Si no tiene registros asignados y hay un lote disponible, traer un pool de prueba
+      // Si no tiene registros asignados y hay un lote disponible, traer un pool de prueba para Admin
       let finalRecords = records || [];
-      if (finalRecords.length === 0 && isBrando) {
+      if (finalRecords.length === 0 && canViewAll) {
         const { data: unassigned } = await (supabase
           .from('reclasificacion_registros')
           .select('*')
@@ -184,6 +184,9 @@ export async function POST(request: NextRequest) {
 
     // Repartir automáticamente registros de un lote entre una lista de operadores
     if (action === 'repartir') {
+      if (!rbac.isSupervisorOrAbove) {
+        return NextResponse.json({ error: 'Acceso restringido: Solo Supervisores o superiores pueden repartir lotes.' }, { status: 403 });
+      }
       const { lote_id, operators } = body;
       if (!lote_id || !operators || !Array.isArray(operators) || operators.length === 0) {
         return NextResponse.json({ error: 'lote_id y lista de operators son requeridos' }, { status: 400 });

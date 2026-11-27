@@ -1,57 +1,79 @@
-# 🔵 MANUAL DEL MÓDULO BRIANA — TELEFONÍA CELULAR & CONTACT CENTER
+# 🔵 MANUAL DEL MÓDULO BRIANA — MARCADO REMOTO SAMSUNG (SIM & WHATSAPP)
 
-**Ruta en Nexus:** `/llamadas`  
+**Ruta en Nexus:** `/llamadas` · **App Android:** `BrianaDialer.apk` (Samsung Galaxy A57 / A37)  
 **Público:** `Analista - Operador`, `Supervisor`, `Coordinador`, `Admin`
 
 ---
 
-## 1. Propósito del Módulo
+## 1. Propósito y Arquitectura del Módulo
 
-**BRIANA** es la plataforma de Contact Center sin central PBX física. Permite operar campañas salientes de llamadas masivas directamente desde teléfonos móviles corporativos (terminales asignados con extensión `110XX`) mediante un **Discador Guiado** y **Tipificación en Tiempo Real**.
+**BRIANA** elimina el costo de centrales VoIP/PBX externas conectando el navegador del operador en PC con la flota rotativa de teléfonos **Samsung Galaxy A57 y A37** con línea celular física (SIM propia) y **WhatsApp**, mediante **Supabase Realtime** y la aplicación nativa **BrianaDialer** (Kotlin + Android `TelecomManager` + `InCallService` + `NotificationListenerService`).
 
 ```
-[Extensión 110XX] ──▶ [Lote Asignado] ──▶ [Llamar Siguiente] ──▶ [Encuesta/Incidencia]
-                                                                        │
-                        [Siguiente Contacto] ◀── [Tipificar Resultado] ◀┘
+[PC Operador (/llamadas)] ──(Supabase Realtime)──▶ [APK BrianaDialer (Samsung)]
+       ▲                                                 │              │
+       │                                           [Llamada SIM]  [WhatsApp]
+       │                                           Telecom API    NotifMonitor
+       │                                                 │              │
+[Modal Cierre Obligatorio] ◀──(Telemetría Exacta)────────┴──────────────┘
 ```
 
 ---
 
-## 2. Flujo de Trabajo para el Analista - Operador
+## 2. Preparación del Teléfono Samsung (Inicio de Turno)
 
-1. Ingrese a **Módulo Briana** desde el Lobby o pulse **"Abrir Discador"** en su Estación de Trabajo.
-2. Verifique en la tarjeta de bienvenida Nexus su nombre y **Extensión (`110XX`)** y haga clic en **"Ingresar a Briana"**.
-3. En la sección **Campañas Salientes**, seleccione la campaña activa asignada a su puesto.
-4. Pulse **"Llamar Siguiente"**:
-   - El sistema abrirá el marcador telefónico del dispositivo o mostrará el número del ciudadano.
-   - Se iniciará la medición automática del **FIT (*First Interaction Time*)** para el Scoring de desempeño.
-5. Durante la llamada, complete los campos del formulario dinámico de la campaña.
-6. Al colgar, seleccione la **Tipificación Exacta**:
-   - **Contacto Efectivo / Encuesta Completa**
-   - **No Contesta / Buzón de Voz**
-   - **Número Equivocado / Fuera de Servicio**
-   - **Rechaza / Ocupado (Reintentar)**
-7. Pulse **"Guardar y Continuar"** para avanzar automáticamente al próximo número del lote.
+Como los teléfonos rotan diariamente entre operadores, cada teléfono cuenta con un **Modo Turno Operador**:
+
+1. Abra la app **BrianaDialer** en el Samsung asignado.
+2. En la primera configuración del equipo:
+   - Pulse **"Activar Modo Turno Operador"** y acepte establecer BrianaDialer como app de marcado predeterminada durante la jornada.
+   - Pulse **"Permiso Monitor WhatsApp (Notificaciones)"** y habilite el acceso para **BrianaDialer** en los ajustes de Android.
+   - En Ajustes → Aplicaciones → BrianaDialer → Batería, seleccione **"No restringido"** para evitar cortes en OneUI cuando la pantalla se apague.
+3. En pantalla aparecerá el **Código Único de Vinculación** del teléfono (ej. `BRN-4829`) junto con su nivel de batería y red.
+
+---
+
+## 3. Flujo Operativo en PC (`/llamadas` → Marcador SIM)
+
+### Paso A: Vincular Sesión
+1. Ingrese a `/llamadas` con su sesión personal de Nexus.
+2. Introduzca el código `BRN-XXXX` que muestra su Samsung y pulse **"Vincular y Comenzar Turno"**.
+3. El sistema asignará automáticamente el siguiente contacto disponible de `contacts_queue` (priorizando reprogramados cuya hora ya venció).
+
+### Paso B: Realizar la Llamada (SIM o WhatsApp)
+- **Opción 1 — Llamar por SIM (Samsung):**
+  - Al pulsar el botón verde en PC, la APK ejecuta `TelecomManager.placeCall()` usando la SIM física del teléfono.
+  - Puede pulsar **"Colgar Llamada"** desde la PC o colgar desde la pantalla del Samsung (`Call.disconnect()`).
+- **Opción 2 — Llamar por WhatsApp:**
+  - Al pulsar **"Llamar por WhatsApp"**, la APK normaliza automáticamente el teléfono (ej. `0414...` → `58414...`) y abre el chat directo en WhatsApp / WhatsApp Business.
+  - Toque el ícono de llamada VoIP en la pantalla del Samsung. El servicio `BrianaWhatsAppMonitorService` detecta timbre, conexión real y colgado automáticamente.
+  - *Nota técnica:* Por restricción de WhatsApp en Android, si necesita colgar una llamada WhatsApp en curso hágalo desde el botón rojo en el teléfono (o use *"Cancelar Espera WhatsApp"* en PC si canceló antes de pulsar llamar).
+
+### Paso C: Detección Automática vs Modal Obligatorio de Cierre
+- **Si la llamada NUNCA conectó** (`DIALING`/`RINGING` → `DISCONNECTED` sin pasar por `ACTIVE`): Briana la registra automáticamente como **No Efectiva** (`sin_respuesta`, `ocupado`, `rechazada` o `cancelada_antes_de_conectar`) con `0s` de conversación y carga el siguiente número.
+- **Si la llamada SÍ conectó** (`STATE_ACTIVE` alcanzado, cronómetro real en marcha): al finalizar la llamada se abre automáticamente en la PC el **Modal Obligatorio de Cierre** para tipificar:
+  1. **Efectiva:** Contacto exitoso con el titular (+ notas opcionales).
+  2. **No efectiva / Buzón de voz / Cortada:** Sub-opciones *Buzón de Voz* o *Cortada / Incompleta* (no infla las llamadas efectivas y reencola según máximo de intentos).
+  3. **Reprogramar llamada:** Selector exacto de fecha y hora para volver a asignar el contacto en ese horario.
+  4. **Número equivocado / No pertenece al titular:** Marca el registro como `invalid_number` para excluirlo de futuros reintentos y auditar calidad de data.
+
+### Paso D: Cierre de Turno
+Al finalizar su jornada, pulse **"Cerrar Turno y Liberar Teléfono"** en PC y desactive el **Modo Turno** en la APK para restaurar el marcador nativo de Samsung y liberar el equipo.
+
+---
+
+## 4. Dashboard Ejecutivo en Tiempo Real (`Dashboard Admin`)
+
+Los roles `Supervisor`, `Coordinador`, `Coordinador General` y `Admin` disponen de la pestaña **Dashboard Admin** en `/llamadas`, actualizada en vivo con **Supabase Realtime**:
+
+| Vista / Herramienta | Capacidad Operativa |
+| :--- | :--- |
+| **KPIs Globales** | Total de data, total llamados, pendientes, llamadas efectivas vs. fallidas y porcentaje de efectividad. |
+| **Flota Samsung en Vivo** | Estado de cada A57/A37, PIN activo, operador en turno, porcentaje de batería y tipo de red (`WIFI` / `CELLULAR`). |
+| **Análisis de Persistencia** | Métrica de efectividad acumulada al **1er**, **2do**, **3er** y **4to+ intento**. |
+| **Trazabilidad por Intento** | Filtros de búsqueda por contacto, operador o teléfono mostrando duración real, origen (`pc_web` / `android_app`) y causa exacta de corte (`ended_by`). |
+| **Reprogramados & Inválidos** | Listado vivo de citas programadas y auditoría de números marcados como no titulares. |
+| **Cargar Contactos (`Modal`)** | Importación directa de listados a `contacts_queue` con deduplicación telefónica por lotes. |
 
 > [!TIP]
-> **Meta de Cadencia:** Mantenga un intervalo inferior a **30 segundos** entre la finalización de una llamada y el inicio de la siguiente para optimizar su puntaje en el **Scoring Dinámico (40% del peso total)**.
-
----
-
-## 3. Supervisión y Gestión de Campañas
-
-Los usuarios con rol `Supervisor`, `Coordinador` o `Admin` tienen acceso al panel lateral de administración de Briana:
-
-| Sección | Capacidad Operativa |
-| :--- | :--- |
-| **Campañas Salientes** | Crear campañas, cargar listados de contactos y activar/pausar colas de marcado. |
-| **Asignación de Lotes** | Distribuir contactos pendientes entre operadores activos o reasignar lotes rezagados. |
-| **Formularios Dinámicos** | Diseñar preguntas personalizadas que aparecen al operador durante la llamada. |
-| **Reportes y Exportación** | Descargar sábanas de gestión telefónica en formato **Excel (`.xlsx`)** con métricas de efectividad. |
-
----
-
-## 4. Preguntas Frecuentes (FAQ)
-
-- **¿Qué hago si la llamada se corta antes de terminar el formulario?** Tipifique como *"Llamada Interrumpida"* para que el sistema reprograme el contacto sin contabilizarlo como rechazo.
-- **No veo contactos en mi cola:** Verifique en su Estación de Trabajo si tiene lotes asignados; de lo contrario, solicite a su Supervisor la asignación de un nuevo lote mediante el modal de carga.
+> **Modo Legacy (`Briana Clásico`):** Para consultar campañas históricas de extensiones `110XX`, utilice el selector **"Briana Clásico"** en la barra superior de `/llamadas`.

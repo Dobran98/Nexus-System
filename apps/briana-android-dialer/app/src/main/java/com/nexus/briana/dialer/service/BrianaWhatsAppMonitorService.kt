@@ -48,7 +48,6 @@ class BrianaWhatsAppMonitorService : NotificationListenerService() {
         val notification = sbn.notification ?: return
         val isCallCategory = notification.category == Notification.CATEGORY_CALL
         val text = (notification.extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: "").lowercase()
-        val title = (notification.extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: "").lowercase()
 
         if (!isCallCategory && !text.contains("llam") && !text.contains("call") && !text.contains("marcando")) {
             return

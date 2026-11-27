@@ -29,7 +29,6 @@ export async function middleware(request: NextRequest) {
   // 1. Excluir rutas públicas o estáticas directas
   if (
     PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) ||
-    pathname.startsWith('/oriana') ||
     pathname.includes('.')
   ) {
     return NextResponse.next();

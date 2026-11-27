@@ -1,6 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
 import { getModuleFlags, ModuleFlag } from '@/lib/moduleFlags';
 
+const DEFAULT_SUPABASE_URL = 'https://pzkqjdkphcwmblbyorbr.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6a3FqZGtwaGN3bWJsYnlvcmJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5NzE1NjEsImV4cCI6MjEwOTU0NzU2MX0.g2PTG7bzasuMj5Z_UoOrBmEDkLgUTTfT-pMtcs_EgoE';
+
+const FOUNDER_USERNAMES = new Set(['brando', 'bralez', 'dobran', 'dobrando']);
+
+export function isFounderEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  const localPart = clean.split('@')[0] || '';
+  return FOUNDER_USERNAMES.has(localPart);
+}
+
 export const SUPERVISOR_AND_ABOVE_ROLES = [
   'fundador_dev',
   'superadmin',
@@ -21,8 +34,8 @@ export const ADMIN_AND_COORD_ROLES = [
 ];
 
 export function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -38,7 +51,6 @@ export interface UserRbacContext {
 
 export async function getUserRbacContext(supabase: any, user: { id: string; email?: string | null }): Promise<UserRbacContext> {
   const email = (user.email || '').toLowerCase();
-  const isBrando = email.includes('brando') || email.includes('bralez');
 
   let roleNames: string[] = [];
   try {
@@ -50,7 +62,7 @@ export async function getUserRbacContext(supabase: any, user: { id: string; emai
     roleNames = [];
   }
 
-  const isFundadorDev = isBrando || roleNames.includes('fundador_dev');
+  const isFundadorDev = isFounderEmail(email) || roleNames.includes('fundador_dev');
   const isSuperAdmin = isFundadorDev || roleNames.includes('superadmin');
   const isAdminOrCoord = isSuperAdmin || roleNames.some((r) => ADMIN_AND_COORD_ROLES.includes(r));
   const isSupervisorOrAbove = isAdminOrCoord || roleNames.some((r) => SUPERVISOR_AND_ABOVE_ROLES.includes(r));

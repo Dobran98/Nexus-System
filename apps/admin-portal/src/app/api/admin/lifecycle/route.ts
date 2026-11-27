@@ -1,21 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { getServiceSupabase, getUserRbacContext } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const action = searchParams.get('action');
     const isVercelCron = request.headers.get('x-vercel-cron') === '1';
     const authHeader = request.headers.get('authorization');
     const cronSecret = process.env.CRON_SECRET;
-    const isCronAuthorized = cronSecret && authHeader === `Bearer ${cronSecret}`;
+    const isCronAuthorized = cronSecret
+      ? authHeader === `Bearer ${cronSecret}`
+      : isVercelCron;
 
-    // Si viene como invocación de Cron (de Vercel o explícito)
-    if (isVercelCron || isCronAuthorized || action === 'cron_purge') {
-      const supabase = await createSupabaseServerClient();
-      const { data, error } = await (supabase.rpc as any)('archive_and_purge_lifecycle', {
+    // Invocación automatizada exclusivamente desde Vercel Cron o con CRON_SECRET válido
+    if (isCronAuthorized && (isVercelCron || authHeader)) {
+      const serviceSb = getServiceSupabase();
+      const { data, error } = await (serviceSb.rpc as any)('archive_and_purge_lifecycle', {
         p_retention_days: 90,
         p_dry_run: false,
       });
@@ -33,12 +34,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Consulta normal de estadísticas de almacenamiento
+    // Consulta administrativa de estadísticas de almacenamiento (requiere Admin o superior)
     const supabase = await createSupabaseServerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const rbac = await getUserRbacContext(supabase, user);
+    if (!rbac.isAdminOrCoord) {
+      return NextResponse.json({ error: 'Acceso restringido: Se requieren privilegios administrativos.' }, { status: 403 });
     }
 
     const { data, error } = await (supabase.rpc as any)('nexus_get_database_storage_stats');
@@ -70,6 +76,10 @@ export async function POST(request: NextRequest) {
     if (!isCronAuthorized) {
       if (authError || !user) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+      }
+      const rbac = await getUserRbacContext(supabase, user);
+      if (!rbac.isSuperAdmin && !rbac.isFundadorDev) {
+        return NextResponse.json({ error: 'Acceso restringido: Solo Superadmin o Fundador Dev puede ejecutar purgas de ciclo de vida.' }, { status: 403 });
       }
     }
 

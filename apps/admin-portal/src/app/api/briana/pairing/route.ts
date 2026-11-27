@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 function generatePairingPin(): string {
   const digits = Math.floor(1000 + Math.random() * 9000);
@@ -99,13 +93,21 @@ export async function POST(req: NextRequest) {
         .eq('is_active', true)
         .maybeSingle();
 
-      // Entregar comandos pendientes si hay
+      // Entregar comandos pendientes y marcarlos como 'acked' atómicamente para evitar bucles
       const { data: pendingCommands } = await serviceSb
         .from('call_commands')
         .select('*')
         .eq('device_id', deviceRecord.id)
         .eq('status', 'pending')
         .order('created_at', { ascending: true });
+
+      if (pendingCommands && pendingCommands.length > 0) {
+        const cmdIds = pendingCommands.map((c: any) => c.id);
+        await serviceSb
+          .from('call_commands')
+          .update({ status: 'acked', acked_at: now.toISOString() })
+          .in('id', cmdIds);
+      }
 
       return NextResponse.json({
         success: true,
@@ -200,10 +202,21 @@ export async function POST(req: NextRequest) {
       }
 
       if (targetSessionId) {
-        await serviceSb
+        const { data: closedSess } = await serviceSb
           .from('operator_sessions')
           .update({ is_active: false, ended_at: new Date().toISOString(), ended_reason: reason })
-          .eq('id', targetSessionId);
+          .eq('id', targetSessionId)
+          .select('operator_id')
+          .maybeSingle();
+
+        // Liberar contactos bloqueados por ese operador al cerrar turno
+        if (closedSess?.operator_id) {
+          await serviceSb
+            .from('contacts_queue')
+            .update({ status: 'pending', assigned_operator_id: null, locked_until: null })
+            .eq('assigned_operator_id', closedSess.operator_id)
+            .in('status', ['assigned', 'in_call']);
+        }
       }
 
       if (targetDeviceId) {

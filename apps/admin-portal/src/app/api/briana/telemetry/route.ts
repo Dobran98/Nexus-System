@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 /**
  * POST /api/briana/telemetry
@@ -57,9 +51,10 @@ export async function POST(req: NextRequest) {
         .eq('id', commandId);
     }
 
-    // 2. Resolver sesión y dispositivo si no vinieron explícitos
+    // 2. Resolver sesión, operador, dispositivo y campaña si no vinieron explícitos
     let resolvedSessionId = sessionId;
     let resolvedOperatorId = operatorId;
+    let resolvedCampaignId = campaignId;
     let resolvedDeviceId = null;
 
     if (deviceUid) {
@@ -70,7 +65,7 @@ export async function POST(req: NextRequest) {
         .maybeSingle();
       resolvedDeviceId = dev?.id || null;
 
-      if (resolvedDeviceId && (!resolvedSessionId || !resolvedOperatorId)) {
+      if (resolvedDeviceId && (!resolvedSessionId || !resolvedOperatorId || !resolvedCampaignId)) {
         const { data: sess } = await serviceSb
           .from('operator_sessions')
           .select('id, operator_id, campaign_id')
@@ -80,18 +75,78 @@ export async function POST(req: NextRequest) {
         if (sess) {
           resolvedSessionId = resolvedSessionId || sess.id;
           resolvedOperatorId = resolvedOperatorId || sess.operator_id;
+          resolvedCampaignId = resolvedCampaignId || sess.campaign_id;
         }
       }
     }
 
-    // Si es evento final DISCONNECTED, hacer upsert en call_logs
-    if (state === 'DISCONNECTED') {
-      const { data: existingLog } = await serviceSb
-        .from('call_logs')
-        .select('id')
+    let contactAttemptCount = 0;
+    let contactMaxAttempts = 5;
+    if (contactId) {
+      const { data: contactRow } = await serviceSb
+        .from('contacts_queue')
+        .select('attempt_count, max_attempts, campaign_id')
+        .eq('id', contactId)
+        .maybeSingle();
+      if (contactRow) {
+        contactAttemptCount = contactRow.attempt_count || 0;
+        contactMaxAttempts = contactRow.max_attempts || 5;
+        resolvedCampaignId = resolvedCampaignId || contactRow.campaign_id;
+      }
+    }
+
+    if (!resolvedCampaignId) {
+      const { data: cmdRow } = await serviceSb
+        .from('call_commands')
+        .select('payload')
         .eq('call_uuid', callUuid)
         .maybeSingle();
+      resolvedCampaignId = cmdRow?.payload?.campaign_id || null;
+    }
 
+    const attemptNumber = contactAttemptCount + 1;
+    const resolvedChannel = callChannel === 'whatsapp' ? 'whatsapp' : 'sim';
+
+    const { data: existingLog } = await serviceSb
+      .from('call_logs')
+      .select('id, dialing_at, ringing_at, active_at')
+      .eq('call_uuid', callUuid)
+      .maybeSingle();
+
+    // Sincronizar transiciones en vivo (DIALING / RINGING / ACTIVE) para Realtime y polling PC
+    if (state !== 'DISCONNECTED') {
+      const nowIso = new Date().toISOString();
+      if (!existingLog && resolvedSessionId && contactId && resolvedCampaignId && resolvedOperatorId && resolvedDeviceId) {
+        await serviceSb.from('call_logs').insert({
+          call_uuid: callUuid,
+          session_id: resolvedSessionId,
+          contact_id: contactId,
+          campaign_id: resolvedCampaignId,
+          operator_id: resolvedOperatorId,
+          device_id: resolvedDeviceId,
+          attempt_number: attemptNumber,
+          call_channel: resolvedChannel,
+          initiated_from: initiatedFrom,
+          is_connected: state === 'ACTIVE' || !!isConnected,
+          dialing_at: dialingAt || nowIso,
+          ringing_at: ringingAt || (state === 'RINGING' ? nowIso : null),
+          active_at: activeAt || (state === 'ACTIVE' ? nowIso : null),
+          talk_duration_seconds: 0,
+        });
+      } else if (existingLog) {
+        await serviceSb
+          .from('call_logs')
+          .update({
+            is_connected: state === 'ACTIVE' || !!isConnected ? true : undefined,
+            ringing_at: existingLog.ringing_at || ringingAt || (state === 'RINGING' ? nowIso : undefined),
+            active_at: existingLog.active_at || activeAt || (state === 'ACTIVE' ? nowIso : undefined),
+          })
+          .eq('id', existingLog.id);
+      }
+    }
+
+    // Si es evento final DISCONNECTED, cerrar call_logs
+    if (state === 'DISCONNECTED') {
       // Determinar outcome automático cuando nunca conectó (isConnected === false)
       let autoOutcome: string | null = null;
       if (!isConnected) {
@@ -101,34 +156,21 @@ export async function POST(req: NextRequest) {
         else autoOutcome = 'sin_respuesta';
       }
 
-      // Calcular attempt_number si hay contactId
-      let attemptNumber = 1;
-      if (contactId) {
-        const { data: contactRow } = await serviceSb
-          .from('contacts_queue')
-          .select('attempt_count, max_attempts')
-          .eq('id', contactId)
-          .maybeSingle();
-        if (contactRow) {
-          attemptNumber = (contactRow.attempt_count || 0) + 1;
-        }
-      }
-
       const logPayload: any = {
         call_uuid: callUuid,
         session_id: resolvedSessionId,
         contact_id: contactId,
-        campaign_id: campaignId,
+        campaign_id: resolvedCampaignId,
         operator_id: resolvedOperatorId,
         device_id: resolvedDeviceId,
         attempt_number: attemptNumber,
-        call_channel: callChannel === 'whatsapp' ? 'whatsapp' : 'sim',
+        call_channel: resolvedChannel,
         initiated_from: initiatedFrom,
         ended_by: endedBy || 'network_or_no_answer',
         is_connected: !!isConnected,
-        dialing_at: dialingAt || new Date().toISOString(),
-        ringing_at: ringingAt || null,
-        active_at: activeAt || null,
+        dialing_at: existingLog?.dialing_at || dialingAt || new Date().toISOString(),
+        ringing_at: existingLog?.ringing_at || ringingAt || null,
+        active_at: existingLog?.active_at || activeAt || null,
         disconnected_at: disconnectedAt || new Date().toISOString(),
         talk_duration_seconds: isConnected ? Math.max(0, Number(talkDurationSeconds) || 0) : 0,
         outcome: autoOutcome,
@@ -137,7 +179,7 @@ export async function POST(req: NextRequest) {
         telecom_disconnect_msg: telecomDisconnectMsg ?? null,
       };
 
-      if (!existingLog && resolvedSessionId && contactId && campaignId && resolvedOperatorId && resolvedDeviceId) {
+      if (!existingLog && resolvedSessionId && contactId && resolvedCampaignId && resolvedOperatorId && resolvedDeviceId) {
         const { error: insertErr } = await serviceSb.from('call_logs').insert(logPayload);
         if (insertErr) throw insertErr;
       } else if (existingLog) {
@@ -146,6 +188,7 @@ export async function POST(req: NextRequest) {
           .update({
             ended_by: logPayload.ended_by,
             is_connected: logPayload.is_connected,
+            ringing_at: logPayload.ringing_at,
             active_at: logPayload.active_at,
             disconnected_at: logPayload.disconnected_at,
             talk_duration_seconds: logPayload.talk_duration_seconds,
@@ -158,14 +201,8 @@ export async function POST(req: NextRequest) {
 
       // Si NO conectó (STATE_ACTIVE = false), cerrar intento automáticamente y liberar cola
       if (!isConnected && contactId) {
-        const { data: contactRow } = await serviceSb
-          .from('contacts_queue')
-          .select('attempt_count, max_attempts')
-          .eq('id', contactId)
-          .maybeSingle();
-
-        const newAttempts = (contactRow?.attempt_count || 0) + 1;
-        const maxAtt = contactRow?.max_attempts || 5;
+        const newAttempts = contactAttemptCount + 1;
+        const maxAtt = contactMaxAttempts;
         const nextStatus = newAttempts >= maxAtt ? 'exhausted' : 'pending';
         const nextRetry = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 min cooldown
 

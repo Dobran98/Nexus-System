@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { getServiceSupabase, getUserRbacContext } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,11 +76,15 @@ export async function PATCH(req: NextRequest) {
       .from('nexus_notificaciones') as any)
       .update(updatePayload)
       .eq('id', id)
+      .or(`user_id.eq.${authData.user.id},user_email.eq.${authData.user.email || ''},user_email.eq.global@impress.com`)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ error: 'Notificación no encontrada o sin permiso para actualizarla' }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -102,6 +107,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    const rbac = await getUserRbacContext(supabase, authData.user);
+    if (!rbac.isSupervisorOrAbove) {
+      return NextResponse.json({ error: 'Acceso restringido: Solo Supervisores o superiores pueden emitir avisos.' }, { status: 403 });
+    }
+
     const body = await req.json();
     const {
       titulo,
@@ -114,15 +124,18 @@ export async function POST(req: NextRequest) {
       target_email,
       target_user_id,
       target_role,
-      popup = false,
+      popup,
+      metadata: bodyMetadata,
     } = body;
 
     if (!titulo || !descripcion) {
       return NextResponse.json({ error: 'Título y descripción requeridos' }, { status: 400 });
     }
 
+    const resolvedPopup = Boolean(popup ?? bodyMetadata?.popup ?? (prioridad === 'urgente'));
     const metadata = {
-      popup: !!popup,
+      ...(bodyMetadata || {}),
+      popup: resolvedPopup,
       broadcast: target_type === 'global',
       target_type,
       author_email: authData.user.email,
@@ -162,18 +175,29 @@ export async function POST(req: NextRequest) {
 
     // 2. Envío por Rol Específico
     if (target_type === 'role' && target_role) {
-      const { data: roleUsers, error: roleError } = await (supabase
+      const serviceSb = getServiceSupabase();
+      const { data: roleUsers, error: roleError } = await (serviceSb
         .from('user_roles') as any)
-        .select('user_id, roles!inner(name), auth_users:user_id(email)')
+        .select('user_id, roles!inner(name)')
         .eq('roles.name', target_role);
 
       if (roleError) {
         return NextResponse.json({ error: roleError.message }, { status: 500 });
       }
 
+      const emailById = new Map<string, string>();
+      try {
+        const { data: authList } = await serviceSb.auth.admin.listUsers({ perPage: 1000 });
+        for (const au of authList?.users || []) {
+          if (au.id && au.email) emailById.set(au.id, au.email);
+        }
+      } catch {
+        // continuar con user_id si no hay service_role
+      }
+
       const notificationsToInsert = (roleUsers || []).map((ru: any) => ({
         user_id: ru.user_id,
-        user_email: ru.auth_users?.email || '',
+        user_email: emailById.get(ru.user_id) || '',
         titulo,
         descripcion,
         modulo,
@@ -185,7 +209,7 @@ export async function POST(req: NextRequest) {
       }));
 
       if (notificationsToInsert.length > 0) {
-        await (supabase.from('nexus_notificaciones') as any).insert(notificationsToInsert);
+        await (serviceSb.from('nexus_notificaciones') as any).insert(notificationsToInsert);
       }
 
       return NextResponse.json({

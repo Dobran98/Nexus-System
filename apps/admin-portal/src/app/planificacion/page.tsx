@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 import { getUserRbacContext, checkModuleAccess } from '@/lib/rbac';
 import { ModuleBlockedScreen } from '@/components/ModuleBlockedScreen';
+import { ModuleManualButton } from '@/components/ModuleManualButton';
 
 export const metadata = {
   title: 'JADE — Control, Planificación & Rendición | Nexus Intranet',
@@ -67,6 +68,7 @@ export default async function PlanificacionPortalPage() {
         </div>
 
         <div className="flex items-center space-x-3 text-xs text-slate-400">
+          <ModuleManualButton initialModuleId="jade" />
           <a
             href="https://script.google.com/u/0/home/projects/1d8B9XsTjCS3RK5qQVZaZ7sFN2ML0GNRWlATI-J3H1YrnOdXN8BmFBR0Q/edit"
             target="_blank"

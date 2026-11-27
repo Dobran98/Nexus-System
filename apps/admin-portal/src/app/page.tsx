@@ -27,6 +27,7 @@ import { ModuleGovernanceButton } from '@/components/ModuleGovernanceButton';
 import { ModuleManualButton } from '@/components/ModuleManualButton';
 import { WorkstationQuickActions } from '@/components/WorkstationQuickActions';
 import { getModuleFlags } from '@/lib/moduleFlags';
+import { isFounderEmail } from '@/lib/rbac';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 
@@ -162,14 +163,19 @@ export default async function AdminHomePage() {
     ? legacyUser.areas_ids
     : (legacyUser?.areas_ids ? [legacyUser.areas_ids] : ['SALA DE CONFERENCIAS - P6']);
 
-  // 4. Conteo de tareas asignadas en Briana
+  // 4. Conteo de tareas asignadas en Briana (cola SIM + asignaciones clásicas)
   let brianaTasksCount = 0;
   try {
-    const { count } = await (supabase
-      .from('call_assignments') as any)
-      .select('id', { count: 'exact', head: true })
-      .eq('operator_id', user.id);
-    brianaTasksCount = count || 0;
+    const [{ count: legacyCount }, { count: simQueueCount }] = await Promise.all([
+      (supabase.from('call_assignments') as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('operator_id', user.id),
+      (supabase.from('contacts_queue') as any)
+        .select('id', { count: 'exact', head: true })
+        .eq('assigned_operator_id', user.id)
+        .in('status', ['pending', 'assigned', 'rescheduled']),
+    ]);
+    brianaTasksCount = (legacyCount || 0) + (simQueueCount || 0);
   } catch {
     brianaTasksCount = 0;
   }
@@ -191,7 +197,7 @@ export default async function AdminHomePage() {
 
   // Lógica de Permisos Especiales y Visibilidad
   const userEmail = (user?.email || '').toLowerCase();
-  const isBrando = userEmail.includes('brando') || userEmail === 'bralez@impress.com';
+  const isBrando = isFounderEmail(userEmail);
   const isFundadorDev = isBrando || roles.includes('fundador_dev');
   const isSuperAdmin = roles.includes('superadmin') || isFundadorDev;
   const isModuleAdmin = roles.includes('module_admin') || roles.includes('admin') || isSuperAdmin;

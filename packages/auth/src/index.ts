@@ -98,11 +98,11 @@ export async function withRbacGuard(
   );
 
   // Verificar perfil activo
-  const { data: profile } = await supabase
-    .from('profiles')
+  const { data: profile } = (await (supabase
+    .from('profiles') as any)
     .select('id, is_active')
     .eq('id', user.id)
-    .single();
+    .single()) as { data: { id: string; is_active: boolean } | null };
 
   if (!profile?.is_active) {
     return { authorized: false, reason: 'Cuenta desactivada' };

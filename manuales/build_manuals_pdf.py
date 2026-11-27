@@ -10,7 +10,7 @@ THEME_MAP = {
     "00_MANUAL_GENERAL_NEXUS": {"accent": "#2563eb", "badge": "DOCUMENTACIÓN MAESTRA", "sub": "Arquitectura, Roles RBAC & Gobernanza Global"},
     "01_MANUAL_DE_USUARIO_OPERADOR": {"accent": "#0ea5e9", "badge": "GUÍA DEL OPERADOR", "sub": "Uso Diario, Estación de Trabajo & Marcaje"},
     "02_MANUAL_MODULO_ASYS": {"accent": "#10b981", "badge": "MÓDULO ASYS", "sub": "Control de Asistencia QR, GPS & Guardias"},
-    "03_MANUAL_MODULO_BRIANA": {"accent": "#0284c7", "badge": "MÓDULO BRIANA", "sub": "Telefonía Celular sin PBX & Discador Guiado"},
+    "03_MANUAL_MODULO_BRIANA": {"accent": "#0284c7", "badge": "MÓDULO BRIANA", "sub": "Marcado Remoto Samsung (SIM & WhatsApp) & Realtime"},
     "04_MANUAL_MODULO_ORIANA": {"accent": "#4f46e5", "badge": "MÓDULO ORIANA", "sub": "Command Center, Reportes Diarios & Auditoría"},
     "05_MANUAL_MODULO_RECLASIFICACION": {"accent": "#d97706", "badge": "MÓDULO RECLASIFICACIÓN", "sub": "Triage Colaborativo & Calidad Operativa"},
     "06_MANUAL_MODULO_JADE": {"accent": "#059669", "badge": "MÓDULO JADE", "sub": "Control Territorial, Misiones & Rendición"},
@@ -315,11 +315,11 @@ def build_pdf(md_path: str, browser_exec: str):
       </div>
       <div class="cover-box">
         <strong>Versión & Emisión</strong>
-        Release 3.0.0 · Noviembre 2026
+        Release 4.0.0 · Noviembre 2026
       </div>
       <div class="cover-box">
         <strong>Infraestructura</strong>
-        Next.js 14 · Supabase · Vercel · GAS
+        Next.js 14 · Supabase Realtime · Vercel · Kotlin APK
       </div>
       <div class="cover-box">
         <strong>Archivo Fuente</strong>

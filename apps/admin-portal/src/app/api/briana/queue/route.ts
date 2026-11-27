@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 /**
  * GET /api/briana/queue?campaignId=...
@@ -29,6 +23,13 @@ export async function GET(req: NextRequest) {
     const campaignId = searchParams.get('campaignId');
     const serviceSb = getServiceSupabase();
     const nowIso = new Date().toISOString();
+
+    // 0. Liberar contactos cuyo bloqueo expiró (operador cerró navegador sin finalizar)
+    await serviceSb
+      .from('contacts_queue')
+      .update({ status: 'pending', assigned_operator_id: null, locked_until: null })
+      .in('status', ['assigned', 'in_call'])
+      .lt('locked_until', nowIso);
 
     // 1. ¿Ya tiene un contacto asignado activo?
     let currentQuery = serviceSb

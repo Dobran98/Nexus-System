@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import { supabaseAsys, fetchAllRowsAsys } from './asys-db';
 
+import { isFounderEmail } from '@/lib/rbac';
+
 function hashSHA256(text: string): string {
   return crypto.createHash('sha256').update(String(text).trim()).digest('hex');
 }
@@ -15,8 +17,7 @@ export async function handleAsysAction(
 
   const isSuperAdminCaller = Boolean(
     sessionContext.isSuperAdmin || 
-    sessionContext.email?.includes('brando') || 
-    sessionContext.email?.includes('bralez')
+    isFounderEmail(sessionContext.email)
   );
 
   switch (action) {
@@ -45,7 +46,7 @@ export async function handleAsysAction(
       const stored = String(u.clave || u.password_hash || '').trim();
       const valid = stored === password || stored === pHash || stored.includes(pHash);
 
-      if (!valid && password !== 'Nexus2026*') {
+      if (!valid) {
         return null;
       }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleAsysAction } from '@/lib/asys-handlers';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { isFounderEmail } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export async function POST(
       authUser = authData?.user || null;
       requesterEmail = authUser?.email?.toLowerCase() || '';
 
-      if (requesterEmail.includes('brando') || requesterEmail.includes('bralez')) {
+      if (isFounderEmail(requesterEmail)) {
         isSuperAdmin = true;
       } else if (authUser) {
         const { data: rolesData } = await (supabase

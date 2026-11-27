@@ -75,6 +75,7 @@ export function EmitirAvisoModal({ isOpen, onClose, currentUserEmail }: EmitirAv
         target_role: form.target_type === 'role' ? form.target_role : undefined,
         modulo: form.modulo,
         prioridad: form.prioridad,
+        popup: form.popup,
         titulo: form.titulo.trim(),
         descripcion: form.descripcion.trim(),
         enlace: form.enlace.trim() || undefined,
@@ -219,10 +220,12 @@ export function EmitirAvisoModal({ isOpen, onClose, currentUserEmail }: EmitirAv
                 onChange={(e) => setForm({ ...form, target_role: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
               >
-                <option value="multi_operator">Operadores Multifunción</option>
+                <option value="multi_operator">Analistas - Operadores</option>
                 <option value="supervisor">Supervisores</option>
-                <option value="data_analyst">Analistas de Datos</option>
+                <option value="coordinador">Coordinadores</option>
+                <option value="coordinador_general">Coordinadores Generales</option>
                 <option value="module_admin">Administradores de Módulo</option>
+                <option value="data_analyst">Analistas de Datos</option>
                 <option value="auditor">Auditores</option>
               </select>
             </div>

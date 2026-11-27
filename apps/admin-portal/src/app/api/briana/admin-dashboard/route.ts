@@ -1,24 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase, getUserRbacContext } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
-const ADMIN_ROLES = [
-  'fundador_dev',
-  'superadmin',
-  'admin',
-  'module_admin',
-  'coordinador_general',
-  'coordinador',
-  'supervisor',
-];
 
 /**
  * GET /api/briana/admin-dashboard?campaignId=...
@@ -33,16 +17,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const email = (authData.user.email || '').toLowerCase();
-    const isFounder = email.includes('brando') || email.includes('bralez');
-
-    const { data: rolesData } = await (supabase.from('user_roles') as any)
-      .select('roles!inner(name)')
-      .eq('user_id', authData.user.id);
-    const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name).filter(Boolean);
-
-    const hasAccess = isFounder || roleNames.some((r) => ADMIN_ROLES.includes(r));
-    if (!hasAccess) {
+    const rbac = await getUserRbacContext(supabase, authData.user);
+    if (!rbac.isSupervisorOrAbove) {
       return NextResponse.json({ error: 'Acceso restringido a Supervisores, Coordinadores y Administradores.' }, { status: 403 });
     }
 

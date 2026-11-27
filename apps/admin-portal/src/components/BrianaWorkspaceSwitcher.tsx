@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, ExternalLink, PhoneCall, Smartphone, Globe, BarChart3 } from 'lucide-react';
 import { BrianaRemoteDialerPanel } from '@/components/BrianaRemoteDialerPanel';
 import { BrianaAdminDashboard } from '@/components/BrianaAdminDashboard';
+import { ModuleManualButton } from '@/components/ModuleManualButton';
 
 interface BrianaWorkspaceSwitcherProps {
   userEmail: string;
@@ -79,6 +80,8 @@ export function BrianaWorkspaceSwitcher({ userEmail, canViewAdminDashboard = fal
               <span className="hidden sm:inline">Briana Clásico</span>
             </button>
           </div>
+
+          <ModuleManualButton initialModuleId="briana" />
 
           <a
             href="/briana/index.html"

@@ -34,7 +34,7 @@ export async function handleBrianaAction(action: string, args: any[] = [], body:
         const u = users[0];
         const pHash = hashSHA256(passwordIn);
         const stored = String(u.clave || u.password_hash || '').trim();
-        const valid = stored === passwordIn || stored === pHash || passwordIn === 'Nexus2026*' || passwordIn === '';
+        const valid = Boolean(passwordIn) && (stored === passwordIn || stored === pHash);
 
         if (!valid) {
           return { success: false, mensaje: 'Usuario o clave incorrectos' };
@@ -53,9 +53,8 @@ export async function handleBrianaAction(action: string, args: any[] = [], body:
         }
 
         turnoReal = u.turno || 'Mañana';
-      } else if (usuarioIn === 'admin' || usuarioIn.includes('admin')) {
-        usuarioReal = 'admin';
-        rolReal = 'admin';
+      } else {
+        return { success: false, mensaje: 'Usuario no registrado en el sistema.' };
       }
 
       // Registrar extensión

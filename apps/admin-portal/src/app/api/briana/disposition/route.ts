@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
-import { createClient } from '@supabase/supabase-js';
+import { getServiceSupabase } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
-
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
 
 /**
  * POST /api/briana/disposition
@@ -101,7 +95,14 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', contactId);
 
-    // 3. Registrar en call_schedules si es reprogramada
+    // 3. Cerrar reprogramaciones pendientes previas de este contacto
+    await serviceSb
+      .from('call_schedules')
+      .update({ status: 'executed' })
+      .eq('contact_id', contactId)
+      .eq('status', 'pending');
+
+    // 4. Registrar en call_schedules si es reprogramada
     if (outcome === 'reprogramada') {
       await serviceSb.from('call_schedules').insert({
         contact_id: contactId,

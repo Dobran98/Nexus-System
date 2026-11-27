@@ -331,6 +331,14 @@ export function BrianaRemoteDialerPanel() {
 
   const handleHangupFromPc = async () => {
     if (!activeCallUuid) return;
+    if (callChannel === 'whatsapp' && callPhase === 'DIALING') {
+      // Si WhatsApp aún no detectó notificación activa y el operador cancela antes de llamar,
+      // restablecemos el estado en PC para que pueda volver a intentar o cambiar de canal.
+      setCallPhase('IDLE');
+      setActiveCallUuid(null);
+      setNotice({ type: 'info', text: 'Espera de llamada WhatsApp cancelada. Puedes volver a marcar.' });
+      return;
+    }
     try {
       await fetch('/api/briana/hangup', {
         method: 'POST',
@@ -605,7 +613,11 @@ export function BrianaRemoteDialerPanel() {
                         className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-950/50 transition-all cursor-pointer disabled:opacity-50"
                       >
                         <PhoneOff className="w-5 h-5" />
-                        <span>Colgar Llamada</span>
+                        <span>
+                          {callChannel === 'whatsapp'
+                            ? (callPhase === 'DIALING' ? 'Cancelar Espera WhatsApp' : 'Finalizar en Teléfono (WhatsApp)')
+                            : 'Colgar Llamada'}
+                        </span>
                       </button>
                     )}
 

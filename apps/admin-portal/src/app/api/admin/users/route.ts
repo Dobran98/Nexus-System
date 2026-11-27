@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { getServiceSupabase, isFounderEmail } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,8 @@ async function verifyAdminAuthorization(supabase: any, user: any) {
     .eq('user_id', user.id);
 
   const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-  const isSuperAdmin = roleNames.includes('superadmin') || email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez');
-  const isModuleAdmin = roleNames.includes('module_admin');
+  const isSuperAdmin = roleNames.includes('superadmin') || roleNames.includes('fundador_dev') || isFounderEmail(email);
+  const isModuleAdmin = roleNames.includes('module_admin') || roleNames.includes('admin');
 
   // 2. Traer sub-rol de usuarios legacy para distinguir coordinadores
   const { data: legacyMatches } = await (supabase
@@ -82,8 +83,7 @@ export async function GET(req: NextRequest) {
                               uRole === 'fundador_dev' ||
                               uSubRol.includes('superadmin') || 
                               uSubRol.includes('fundador') ||
-                              uEmail.includes('brando') || 
-                              uEmail.includes('bralez') ||
+                              isFounderEmail(uEmail) ||
                               uName.includes('brando');
         return !isTargetSuper;
       });
@@ -240,12 +240,14 @@ export async function POST(req: NextRequest) {
     // Emisión automática de notificación de bienvenida al nuevo colaborador
     try {
       await (supabase.from('nexus_notificaciones') as any).insert({
+        user_id: result.user_id || null,
         user_email: cleanEmail,
         titulo: 'Bienvenido/a al Ecosistema Nexus',
-        mensaje: `Tu cuenta corporativa ha sido habilitada con el rol ${roleName} (${subRol}) en el turno ${turno}. Extensión asignada: ${result.extension || 'Configurada'}.`,
+        descripcion: `Tu cuenta corporativa ha sido habilitada con el rol ${roleName} (${subRol}) en el turno ${turno}. Extensión asignada: ${result.extension || 'Configurada'}.`,
+        modulo: 'sistema',
         tipo: 'sistema',
         prioridad: 'alta',
-        leida: false,
+        estado: 'pendiente',
       });
     } catch (notifErr) {
       console.warn('Advertencia emitiendo notificación inicial:', notifErr);
@@ -308,6 +310,15 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Identificador de usuario (userId) requerido' }, { status: 400 });
     }
 
+    const serviceSb = getServiceSupabase();
+    let targetAuthEmail = '';
+    try {
+      const { data: targetAuthData } = await serviceSb.auth.admin.getUserById(userId);
+      targetAuthEmail = String(targetAuthData?.user?.email || '').toLowerCase();
+    } catch {
+      targetAuthEmail = '';
+    }
+
     // Blindaje Stealth para PATCH:
     // Si el solicitante no es SuperAdmin, no puede promover a nadie a superadmin
     // ni puede editar perfiles de fundadores/superadmins.
@@ -318,22 +329,15 @@ export async function PATCH(req: NextRequest) {
         }, { status: 403 });
       }
 
-      // Validar si el usuario target es Superadmin o Brando/Bralez
-      const { data: targetAuth } = await (supabase.from('auth.users') as any)
-        .select('email')
-        .eq('id', userId)
-        .single();
-      const targetEmail = String(targetAuth?.email || '').toLowerCase();
-
       const { data: targetRoles } = await (supabase.from('user_roles') as any)
         .select('roles!inner(name)')
         .eq('user_id', userId);
       const targetRoleNames: string[] = (targetRoles ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
 
       if (
-        targetRoleNames.includes('superadmin') || 
-        targetEmail.includes('brando') || 
-        targetEmail.includes('bralez')
+        targetRoleNames.includes('superadmin') ||
+        targetRoleNames.includes('fundador_dev') ||
+        isFounderEmail(targetAuthEmail)
       ) {
         return NextResponse.json({ 
           error: 'Operación denegada: No posee privilegios suficientes para modificar este perfil administrativo reservado.' 
@@ -370,12 +374,10 @@ export async function PATCH(req: NextRequest) {
     // Actualizar foto_url si viene definida en el payload
     if (body.fotoUrl !== undefined) {
       try {
-        const { data: authTarget } = await (supabase.from('auth.users') as any).select('email').eq('id', userId).maybeSingle();
-        const targetEmail = authTarget?.email ? String(authTarget.email).toLowerCase() : '';
-        if (targetEmail) {
-          await (supabase.from('usuarios') as any)
+        if (targetAuthEmail) {
+          await (serviceSb.from('usuarios') as any)
             .update({ foto_url: body.fotoUrl ? String(body.fotoUrl).trim() : '' })
-            .or(`email.eq.${targetEmail},usuario.eq.${targetEmail.split('@')[0]}`);
+            .or(`email.eq.${targetAuthEmail},usuario.eq.${targetAuthEmail.split('@')[0]}`);
         }
       } catch (fotoErr) {
         console.warn('Advertencia actualizando foto_url en PATCH:', fotoErr);
@@ -384,22 +386,20 @@ export async function PATCH(req: NextRequest) {
 
     // Emisión automática de notificación de actualización
     try {
-      const { data: targetUser } = await (supabase.from('profiles') as any).select('full_name, id').eq('id', userId).single();
-      const { data: authTarget } = await (supabase.from('auth.users') as any).select('email').eq('id', userId).single();
-      const targetEmail = authTarget?.email;
-
-      if (targetEmail) {
+      if (targetAuthEmail) {
         let msg = 'Tu perfil corporativo ha sido actualizado por la Administración.';
         if (newPassword) msg = 'Tu contraseña ha sido restablecida exitosamente por un Administrador de Nexus.';
         if (resetCooldown) msg = 'Tu restricción semanal de 7 días (cooldown) ha sido liberada por la Administración.';
 
-        await (supabase.from('nexus_notificaciones') as any).insert({
-          user_email: targetEmail,
+        await (serviceSb.from('nexus_notificaciones') as any).insert({
+          user_id: userId,
+          user_email: targetAuthEmail,
           titulo: newPassword ? 'Actualización de Seguridad' : 'Actualización de Perfil',
-          mensaje: msg,
+          descripcion: msg,
+          modulo: 'sistema',
           tipo: 'sistema',
           prioridad: 'alta',
-          leida: false,
+          estado: 'pendiente',
         });
       }
     } catch (e) {

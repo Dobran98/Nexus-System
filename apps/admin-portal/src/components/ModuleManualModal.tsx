@@ -1,22 +1,20 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   BookOpen,
   X,
   HelpCircle,
-  FileText,
   CheckCircle2,
-  AlertTriangle,
   Lightbulb,
-  ExternalLink,
   QrCode,
   PhoneCall,
   LineChart,
   Tags,
   Vote,
   Compass,
-  ClipboardList
+  ClipboardList,
+  ShieldCheck
 } from 'lucide-react';
 
 export interface ManualContent {
@@ -37,53 +35,55 @@ export const MODULE_MANUALS: Record<string, ManualContent> = {
     moduleName: 'ASYS — Asistencia, Guardias & Seguridad',
     badge: 'Módulo 1 · Presencia',
     icon: QrCode,
-    overview: 'Sistema biométrico institucional para el registro seguro de entrada y salida mediante escaneo de Código QR maestro y geolocalización GPS obligatoria.',
+    overview: 'Sistema institucional para el registro seguro de entrada y salida mediante escaneo de Código QR maestro y geolocalización GPS obligatoria, sincronizado con el indicador ● DENTRO / ● FUERA en el Lobby y el Monitor Puente Administrativo.',
     operatorSteps: [
-      'Al llegar a la sede, diríjase a la estación física de marcaje con su celular.',
-      'Active el GPS de su dispositivo móvil para autorizar la precisión geográfica.',
-      'Presione "Mi Asistencia" en Asys y apunte la cámara hacia el Código QR Maestro fijado en sala.',
-      'El sistema confirmará de inmediato el marcaje de Entrada y su puesto pasará a estado ● DENTRO.',
-      'Al concluir la jornada laboral, repita el procedimiento exacto para marcar la Salida.'
+      'Al llegar a la sede, abra /asistencia o pulse "Marcar Ahora" desde su Estación de Trabajo.',
+      'Active el GPS de su celular y otorgue permisos de cámara y ubicación al navegador.',
+      'Apunte la cámara hacia el Código QR Maestro ubicado en sala.',
+      'Confirme el registro de Entrada: su tarjeta en el Lobby pasará automáticamente a estado ● DENTRO.',
+      'Al finalizar su turno, repita el escaneo para registrar la Salida y cambiar a estado ● FUERA.'
     ],
     supervisorGuidelines: [
-      'Monitorear la lista de "Sesiones Abiertas (Dentro)" para verificar el personal activo en sala.',
-      'Revisar la lista de "Ausentes Hoy" a los 15 minutos de iniciada la jornada.',
-      'Autorizar o rechazar solicitudes de permiso y suplencias desde la pestaña de Gestión de Permisos.'
+      'Usar el botón "Monitor ASYS" en /users (Puente Administrativo Intranet) para ver sesiones abiertas y ausentes sin salir de Nexus.',
+      'Registrar marcajes manuales justificados desde el Monitor ASYS ante fallas de GPS o extravío de celular.',
+      'Aprobar o rechazar solicitudes de permisos, guardias especiales y suplencias.'
     ],
     faq: [
-      { q: '¿Qué hacer si el navegador indica "Fuera de Rango Geográfico"?', a: 'Asegúrese de estar conectado al WiFi institucional o acérquese a una ventana para que el GPS de su celular calibre la precisión (menos de 50 metros del centro de la sede).' },
-      { q: '¿Se puede marcar entrada desde casa si tengo turno remoto?', a: 'Solo si el Coordinador General ha asignado la regla de teletrabajo a su cuenta institucional.' }
+      { q: '¿Qué hacer si el navegador indica "Fuera de Rango Geográfico"?', a: 'Conéctese al WiFi institucional o acérquese brevemente a una ventana para que el GPS calibre con precisión menor a 50 metros del centro de la sede.' },
+      { q: '¿Se puede marcar entrada desde casa si tengo turno remoto?', a: 'Solo si Coordinación o Administración habilitó la excepción correspondiente o registra asistencia supervisada.' }
     ],
     bestPractices: [
-      'No comparta fotos del Código QR Maestro; el sistema detecta intentos de marcaje fuera de radio.',
-      'Si olvida marcar la salida, notifique inmediatamente a su supervisor para evitar amonestación automática.'
+      'No comparta fotos del Código QR Maestro; el sistema audita coordenadas GPS y distancia en metros.',
+      'Si olvida marcar su salida, notifique de inmediato a su Supervisor para cierre manual auditado.'
     ]
   },
   briana: {
     moduleId: 'briana',
-    moduleName: 'BRIANA — Telefonía Celular & Contact Center',
-    badge: 'Módulo 2 · Gestión Telefónica',
+    moduleName: 'BRIANA — Marcado Remoto SIM, WhatsApp & Contact Center',
+    badge: 'Módulo 2 · Telefonía Celular',
     icon: PhoneCall,
-    overview: 'Solución de contact center descentralizado sin PBX. Permite gestionar campañas masivas salientes desde teléfonos móviles corporativos con tipificación guiada.',
+    overview: 'Centro de llamadas sin PBX conectado en tiempo real vía Supabase Realtime con la flota de teléfonos Samsung Galaxy A57 / A37 (APK BrianaDialer). Soporta marcado remoto por línea celular física (SIM) y monitoreo de llamadas por WhatsApp, con detección de conexión real, medición exacta en segundos y tipificación obligatoria.',
     operatorSteps: [
-      'Verifique que su extensión (ej. 110XX) se encuentre vinculada en el panel superior.',
-      'Haga clic en "Abrir Discador" o "Campañas Salientes" para recibir el lote de contactos asignado.',
-      'Presione "Llamar Siguiente" para que el teléfono marque automáticamente al ciudadano.',
-      'Durante la conversación, escuche atentamente y complete la encuesta o formulario emergente.',
-      'Al finalizar la llamada, tipifique el resultado (Efectiva, No Contesta, Buzón, Rechaza) y presione "Guardar y Continuar".'
+      'En el Samsung asignado al turno, abra la app BrianaDialer, active el "Modo Turno Operador" (conceda rol de marcador predeterminado y permiso de Monitor WhatsApp en Notificaciones) y anote el código único (ej. BRN-4829).',
+      'En su PC entre a /llamadas ("Marcador SIM"), ingrese el código BRN-XXXX y pulse "Vincular y Comenzar Turno".',
+      'El sistema asignará automáticamente el siguiente contacto disponible de la cola (incluyendo reprogramados vencidos).',
+      'Pulse "Llamar por SIM (Samsung)" para marcar automáticamente vía línea celular, o "Llamar por WhatsApp" para abrir el chat en WhatsApp y pulsar el ícono de llamada.',
+      'Si la llamada NO conecta (sin respuesta, ocupado o rechazada), el sistema la cierra automáticamente como No Efectiva y avanza al siguiente contacto. Si SÍ conecta (STATE ACTIVE), al colgar se abre el Modal Obligatorio de Cierre para clasificar: 1) Efectiva, 2) No Efectiva / Buzón / Cortada, 3) Reprogramar (fecha/hora exacta) o 4) Número Equivocado.',
+      'Al terminar su jornada, pulse "Cerrar Turno y Liberar Teléfono" en PC y desactive el Modo Turno en la APK para que el Samsung quede libre.'
     ],
     supervisorGuidelines: [
-      'Supervisar el tiempo de primera interacción (FIT) y la tasa de contacto de los operadores.',
-      'Reasignar lotes no gestionados a operadores con mayor velocidad de resolución.',
-      'Descargar reportes consolidados en Excel desde la pestaña de Reportes de Campaña.'
+      'Desde la pestaña "Dashboard Admin" en /llamadas, supervise métricas globales en vivo, porcentaje de efectividad y estado de batería/red de la flota Samsung.',
+      'Use "Cargar Contactos" para importar bases nuevas directamente a contacts_queue con deduplicación automática.',
+      'Audite el Análisis de Persistencia (efectivos al 1er, 2do, 3er o 4to+ intento), llamadas reprogramadas y números marcados como inválidos.'
     ],
     faq: [
-      { q: '¿Qué ocurre si se corta la llamada a mitad de la encuesta?', a: 'Seleccione la opción "Llamada Interrumpida". El contacto volverá a la cola de reintentos programados.' },
-      { q: '¿Cómo sé cuántos contactos me faltan por llamar?', a: 'En la esquina superior derecha del discador se muestra la barra de progreso del lote (ej. 42 / 100).' }
+      { q: '¿Qué diferencia hay entre Llamar por SIM y Llamar por WhatsApp?', a: 'En SIM la APK ejecuta TelecomManager.placeCall() y Call.disconnect() automáticamente al pulsar Colgar en PC. En WhatsApp, Android abre el chat listo para tocar el botón de llamada y el NotificationListenerService detecta timbre, conexión y colgado para disparar el modal en PC; por restricción de WhatsApp, el corte se toca en la pantalla del teléfono.' },
+      { q: '¿Los buzones de voz inflan mis llamadas efectivas?', a: 'No. Aunque el buzón active audio (STATE ACTIVE), en el modal obligatorio debe clasificarlo en la opción 2 ("Buzón de Voz") para descontarlo de las efectivas y devolver el número a cola.' },
+      { q: '¿Cómo accedo al módulo anterior de extensiones 110XX?', a: 'En la barra superior de /llamadas sigue disponible la pestaña "Briana Clásico" para compatibilidad histórica.' }
     ],
     bestPractices: [
-      'Use auriculares con micrófono para aislar el ruido ambiente de la sala.',
-      'No deje pasar más de 30 segundos entre la finalización de una llamada y la apertura de la siguiente.'
+      'Al concluir su turno nunca deje el Samsung vinculado; libérelo para que otro operador pueda rotarlo al día siguiente.',
+      'Conceda una sola vez el permiso de Monitor WhatsApp y desactive la optimización de batería para BrianaDialer en Samsung OneUI.'
     ]
   },
   oriana: {
@@ -190,19 +190,40 @@ export const MODULE_MANUALS: Record<string, ManualContent> = {
     overview: 'Canal de evaluación bidireccional entre la directiva y los operadores para el diagnóstico de condiciones de trabajo, ergonomía y retroalimentación técnica.',
     operatorSteps: [
       'Revise el botón "Encuestas" en el menú superior cuando aparezca el badge numérico.',
-      'Lea cada pregunta con calma y seleccione su nivel de satisfacción (1 a 5 estrellas).',
-      'Aproveche los campos abiertos para proponer ideas de mejora en su estación de trabajo.',
-      'Envíe la encuesta; sus aportes son confidenciales y analizados por la Coordinación.'
+      'Lea cada pregunta con calma y seleccione su nivel de satisfacción (1 a 5 estrellas), opción múltiple o comentario.',
+      'Envíe la encuesta; puede actualizar su respuesta mientras el sondeo esté activo.'
     ],
     supervisorGuidelines: [
-      'Diseñar encuestas breves (máximo 4 preguntas) para no restar tiempo a la gestión telefónica.',
-      'Analizar los promedios numéricos para identificar problemas recurrentes en hardware o conectividad.'
+      'Los roles Coordinador, Coordinador General, Admin y Superadmin pueden crear encuestas desde la pestaña "Crear Encuesta" y consultar métricas en "Resultados & Analítica".',
+      'Diseñar encuestas breves (máximo 4 preguntas) para no restar tiempo a la gestión telefónica.'
     ],
     faq: [
       { q: '¿Son obligatorias las encuestas?', a: 'Sí, forman parte del proceso de evaluación de calidad institucional.' }
     ],
     bestPractices: [
       'Responda con total franqueza para que la directiva pueda tomar decisiones que le beneficien.'
+    ]
+  },
+  gobernanza: {
+    moduleId: 'gobernanza',
+    moduleName: 'Gobernanza, Personal (/users), Fotos & Modales Admin',
+    badge: 'Administración RBAC',
+    icon: ShieldCheck,
+    overview: 'Suite ejecutiva para administrar credenciales @impress.com, fotografías corporativas, jerarquía RBAC (6 niveles), notificaciones emergentes, Monitor Puente ASYS, Feature Flags y ciclo de vida de datos.',
+    operatorSteps: [
+      'En "Mi Perfil" (/profile) revise sus datos y utilice su cuota semanal de actualización (cada edición activa un cooldown de 7 días).',
+      'Si necesita corrección urgente antes de los 7 días o actualización de foto corporativa, solicítela a su Administrador.'
+    ],
+    supervisorGuidelines: [
+      'En Gestión de Personal (/users): cree o edite usuarios, cargue su fotografía corporativa (foto_url), reasigne áreas/turnos, congele accesos o libere el cooldown de 7 días.',
+      'Use "Emitir Aviso" en el Navbar para enviar comunicados Globales, Por Rol o Individuales; marque "Desplegar como Alerta Flotante" para mostrar un modal prioritario encima de cualquier módulo.',
+      'Superadmin y Fundador Dev disponen del botón "Módulos" (Feature Flags en vivo: Público / Solo Pruebas Dev / Mantenimiento) y del mantenimiento Lifecycle (purga de logs > 90 días).'
+    ],
+    faq: [
+      { q: '¿Por qué un Admin no ve a los usuarios Superadmin o Fundador Dev en /users?', a: 'Por política de Gobierno Sigiloso (Stealth Governance), las cuentas Superadmin y Fundador Dev permanecen ocultas para los rangos 1 a 4.' }
+    ],
+    bestPractices: [
+      'Asigne fotografías corporativas actualizadas en /users para dar identidad visual en el Lobby, Asys y directorios.'
     ]
   }
 };
@@ -216,6 +237,13 @@ interface ModuleManualModalProps {
 export function ModuleManualModal({ isOpen, onClose, initialModuleId = 'asys' }: ModuleManualModalProps) {
   const [selectedModuleId, setSelectedModuleId] = useState<string>(initialModuleId);
   const [activeTab, setActiveTab] = useState<'operator' | 'supervisor' | 'faq' | 'bestPractices'>('operator');
+
+  useEffect(() => {
+    if (isOpen && initialModuleId) {
+      setSelectedModuleId(initialModuleId);
+      setActiveTab('operator');
+    }
+  }, [isOpen, initialModuleId]);
 
   if (!isOpen) return null;
 

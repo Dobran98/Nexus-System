@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { getModuleFlags, saveModuleFlags } from '@/lib/moduleFlags';
+import { getUserRbacContext } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,14 +15,9 @@ export async function GET() {
     let isSuperAdmin = false;
 
     if (authData?.user) {
-      const email = authData.user.email || '';
-      const { data: rolesData } = await (supabase.from('user_roles') as any)
-        .select('roles!inner(name)')
-        .eq('user_id', authData.user.id);
-      const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-
-      isFundadorDev = email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez') || roleNames.includes('fundador_dev');
-      isSuperAdmin = roleNames.includes('superadmin') || isFundadorDev;
+      const rbac = await getUserRbacContext(supabase, authData.user);
+      isFundadorDev = rbac.isFundadorDev;
+      isSuperAdmin = rbac.isSuperAdmin;
     }
 
     const flags = getModuleFlags();
@@ -48,16 +44,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const email = authData.user.email || '';
-    const { data: rolesData } = await (supabase.from('user_roles') as any)
-      .select('roles!inner(name)')
-      .eq('user_id', authData.user.id);
-    const roleNames: string[] = (rolesData ?? []).map((r: any) => r.roles?.name as string).filter(Boolean);
-
-    const isFundadorDev = email.toLowerCase().includes('brando') || email.toLowerCase().includes('bralez') || roleNames.includes('fundador_dev');
-    const isSuperAdmin = roleNames.includes('superadmin') || isFundadorDev;
-
-    if (!isSuperAdmin && !isFundadorDev) {
+    const rbac = await getUserRbacContext(supabase, authData.user);
+    if (!rbac.isSuperAdmin && !rbac.isFundadorDev) {
       return NextResponse.json({ error: 'Acceso restringido: Solo el Fundador Dev o Superadmin puede modificar la visibilidad de módulos.' }, { status: 403 });
     }
 
@@ -77,7 +65,7 @@ export async function POST(req: NextRequest) {
       ...currentFlags[moduleId],
       status: status,
       maintenance_message: message || currentFlags[moduleId].maintenance_message,
-      updated_by: isFundadorDev ? 'Fundador Dev' : email,
+      updated_by: rbac.isFundadorDev ? 'Fundador Dev' : rbac.email,
       updated_at: new Date().toISOString()
     };
 

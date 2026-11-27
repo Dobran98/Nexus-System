@@ -1,7 +1,7 @@
 # 👤 MANUAL DE USUARIO Y OPERADOR — NEXUS INTRANET
 
 **Dirigido a:** `Analista - Operador` y `Supervisor`  
-**Versión:** 3.0.0 · **Actualización:** Noviembre 2026
+**Versión:** 4.0.0 · **Actualización:** Noviembre 2026
 
 ---
 
@@ -31,11 +31,11 @@ En la parte superior del Lobby encontrará el panel **"Mi Estación de Trabajo &
 | Paso | Indicador | Qué significa y qué hacer |
 | :---: | :--- | :--- |
 | **1. Asistencia Asys** | `● DENTRO` / `● FUERA` | Muestra si marcó su Entrada hoy (con hora exacta). Use **Marcar Ahora** al llegar y **Marcar Salida** al terminar su turno. |
-| **2. Telefonía Briana** | `Ext: 110XX` / `Sin PBX` | Confirma su extensión móvil asignada. Pulse **Abrir Discador** para iniciar sus llamadas. |
+| **2. Telefonía Briana** | `Samsung SIM` / `Ext` | Acceso directo a `/llamadas` para vincular su Samsung del turno (`BRN-XXXX`) y gestionar llamadas por **SIM** o **WhatsApp**. |
 | **3. Analítica Oriana** | `Validación Habilitada` | Acceso directo para rendir su reporte de cierre de jornada. |
 | **4. Reclasificación** | `Triage` (si habilitado) | Cola de revisión de casos asignados según disponibilidad. |
 
-Además, el botón azul **"Iniciar Estación de Trabajo"** abre un modal compacto con el resumen completo de su turno, extensión, sede y acciones rápidas.
+Además, el botón azul **"Iniciar Estación de Trabajo"** abre un modal compacto con acceso directo a `/asistencia`, `/llamadas` y `/oriana`, mostrando su turno y área de servicio.
 
 ---
 
@@ -49,24 +49,24 @@ El sistema lee en tiempo real su último marcaje del día en **ASYS**:
 
 ---
 
-## 4. Notificaciones, Encuestas y Manuales
+## 4. Notificaciones, Encuestas y Manuales In-System
 
 ### 🔔 Centro de Notificaciones (Campana)
-- Recibirá alertas en tiempo real cuando le asignen lotes de llamadas, le aprueben un permiso o un coordinador emita un aviso urgente.
-- Los avisos prioritarios aparecen como alerta flotante encima de cualquier módulo en el que esté trabajando.
+- Recibirá alertas en tiempo real cuando le asignen lotes, le aprueben un permiso o un coordinador emita un aviso urgente.
+- Los avisos prioritarios con **Popup** aparecen como alerta flotante encima de cualquier módulo que esté usando; pulse **"Entendido / Confirmar Lectura"** para cerrarlos.
 
 ### 📋 Sondeos & Encuestas Operativas
 - Cuando aparezca un contador numérico en el botón **Encuestas** del Navbar, haga clic para responder las evaluaciones de clima laboral o herramientas.
-- Califique con estrellas (1 a 5), seleccione opciones o deje sugerencias. Su participación ayuda a mejorar las condiciones de sala.
+- Califique con estrellas (1 a 5), seleccione opciones o deje sugerencias.
 
-### 📖 Manuales Internos
-- En cualquier momento puede pulsar **Manuales** en la barra superior para consultar el paso a paso y las preguntas frecuentes de cada sistema.
+### 📖 Manuales Internos (In-System)
+- En cualquier momento puede pulsar **Manuales** tanto en el Navbar principal como en la barra superior de **ASYS**, **BRIANA**, **ORIANA** o **JADE** para abrir directamente la guía paso a paso de ese módulo.
 
 ---
 
-## 5. Mi Perfil y Regla de Cooldown (7 Días)
+## 5. Mi Perfil, Fotografía Corporativa y Cooldown (7 Días)
 
-Desde la tarjeta **Perfil y Cooldown (7 Días)** (`/profile`) puede actualizar su número de teléfono o dirección de habitación sincronizados con Asys.
+Desde la tarjeta **Perfil y Cooldown (7 Días)** (`/profile`) puede actualizar su número de teléfono o dirección de habitación sincronizados con Asys. La fotografía institucional del perfil se gestiona centralizadamente desde Administración (`/users`).
 
 > [!WARNING]
 > **Política de Bloqueo Semanal (7 Días):** Por seguridad e integridad de nómina, tras modificar sus datos personales el formulario quedará bloqueado durante **7 días calendario**. Si necesita una corrección urgente antes de ese plazo, solicite a su Administrador la liberación del cooldown.
@@ -77,8 +77,9 @@ Desde la tarjeta **Perfil y Cooldown (7 Días)** (`/profile`) puede actualizar s
 
 1. **[ ]** Ingresar a Nexus y confirmar su `@username`.
 2. **[ ]** Activar el GPS del celular y escanear el QR de **Entrada** en Asys (verificar estado `● DENTRO`).
-3. **[ ]** Abrir **Briana**, confirmar extensión `110XX` y gestionar el lote de llamadas asignado.
-4. **[ ]** Revisar si hay **Encuestas** o **Notificaciones** pendientes.
-5. **[ ]** 10 minutos antes de salir, enviar el reporte diario en **Oriana**.
-6. **[ ]** Escanear el QR de **Salida** en Asys y verificar que el estado cambie a `● FUERA`.
-7. **[ ]** Cerrar sesión con el botón de salida en el Navbar.
+3. **[ ]** Abrir la app **BrianaDialer** en su Samsung asignado, activar el **Modo Turno Operador** y vincular el código `BRN-XXXX` en `/llamadas`.
+4. **[ ]** Gestionar la cola de contactos (SIM o WhatsApp) y completar siempre el **Modal de Cierre** cuando la llamada conecte.
+5. **[ ]** Revisar si hay **Encuestas** o **Notificaciones** pendientes.
+6. **[ ]** 10 minutos antes de salir, enviar el reporte diario en **Oriana**.
+7. **[ ]** Pulsar **"Cerrar Turno y Liberar Teléfono"** en Briana PC y desactivar el Modo Turno en el Samsung.
+8. **[ ]** Escanear el QR de **Salida** en Asys, verificar `● FUERA` y cerrar sesión.

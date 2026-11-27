@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
 import { getUserRbacContext, checkModuleAccess } from '@/lib/rbac';
 import { ModuleBlockedScreen } from '@/components/ModuleBlockedScreen';
+import { ModuleManualButton } from '@/components/ModuleManualButton';
 
 export const metadata = {
   title: 'ASYS — Control y Registro de Asistencia | Nexus Intranet',
@@ -67,6 +68,7 @@ export default async function AsistenciaPortalPage() {
         </div>
 
         <div className="flex items-center space-x-3 text-xs text-slate-400">
+          <ModuleManualButton initialModuleId="asys" />
           <Link
             href="/profile"
             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-teal-300 bg-teal-950/80 border border-teal-800/80 hover:bg-teal-900/60 transition-all shadow-sm"
