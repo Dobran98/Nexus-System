@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const campaignId = searchParams.get('campaignId');
-    const serviceSb = getServiceSupabase();
+    const serviceSb = getServiceSupabase(supabase);
     const nowIso = new Date().toISOString();
 
     // 0. Liberar contactos cuyo bloqueo expiró (operador cerró navegador sin finalizar)

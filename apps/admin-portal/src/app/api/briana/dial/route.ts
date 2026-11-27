@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const callChannel = channel === 'whatsapp' ? 'whatsapp' : 'sim';
     const commandType = callChannel === 'whatsapp' ? 'DIAL_WHATSAPP' : 'DIAL';
 
-    const serviceSb = getServiceSupabase();
+    const serviceSb = getServiceSupabase(supabase);
 
     // Verificar sesión activa
     const { data: session } = await serviceSb

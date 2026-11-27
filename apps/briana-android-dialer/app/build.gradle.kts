@@ -16,7 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "NEXUS_BASE_URL", "\"https://nexus-system.vercel.app\"")
+        buildConfigField("String", "NEXUS_BASE_URL", "\"https://nexus-system-three.vercel.app\"")
     }
 
     buildTypes {

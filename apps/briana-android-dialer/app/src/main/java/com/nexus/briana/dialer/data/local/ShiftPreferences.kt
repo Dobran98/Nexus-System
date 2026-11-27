@@ -12,7 +12,15 @@ class ShiftPreferences(context: Context) {
             ?: "SAMSUNG-UNKNOWN"
 
     var baseUrl: String
-        get() = prefs.getString("base_url", "https://nexus-system.vercel.app") ?: "https://nexus-system.vercel.app"
+        get() {
+            val saved = prefs.getString("base_url", "https://nexus-system-three.vercel.app")
+                ?: "https://nexus-system-three.vercel.app"
+            return if (saved == "https://nexus-system.vercel.app") {
+                "https://nexus-system-three.vercel.app"
+            } else {
+                saved
+            }
+        }
         set(value) = prefs.edit().putString("base_url", value.trimEnd('/')).apply()
 
     var pairingPin: String

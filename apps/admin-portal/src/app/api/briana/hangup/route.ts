@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { callUuid, contactId } = await req.json();
-    const serviceSb = getServiceSupabase();
+    const serviceSb = getServiceSupabase(supabase);
 
     const { data: session } = await serviceSb
       .from('operator_sessions')

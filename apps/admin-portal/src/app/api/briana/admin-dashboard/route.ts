@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const campaignId = searchParams.get('campaignId');
-    const serviceSb = getServiceSupabase();
+    const serviceSb = getServiceSupabase(supabase);
 
     // 1. Consultar cola de contactos
     let queueQuery = serviceSb.from('contacts_queue').select('*');

@@ -245,7 +245,7 @@ fun PairingScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Usa https://nexus-system.vercel.app en producción o la IP local de tu PC (ej. http://172.28.2.232:3000) para probar en Wi-Fi.",
+                        text = "Usa https://nexus-system-three.vercel.app en producción o la IP local de tu PC (ej. http://172.28.2.232:3000) para probar en Wi-Fi.",
                         color = Color(0xFF94A3B8),
                         fontSize = 12.sp
                     )

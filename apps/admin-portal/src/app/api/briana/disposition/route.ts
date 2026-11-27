@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Debe indicar fecha y hora exacta para reprogramar la llamada' }, { status: 400 });
     }
 
-    const serviceSb = getServiceSupabase();
+    const serviceSb = getServiceSupabase(supabase);
     const isEffective = outcome === 'efectiva';
 
     // 1. Actualizar call_logs

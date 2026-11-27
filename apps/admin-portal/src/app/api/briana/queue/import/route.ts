@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Debe proporcionar al menos un contacto válido.' }, { status: 400 });
     }
 
-    const serviceSb = getServiceSupabase();
+    const serviceSb = getServiceSupabase(supabase);
 
     // 1. Resolver o crear campaña
     let targetCampaignId = campaignId;
