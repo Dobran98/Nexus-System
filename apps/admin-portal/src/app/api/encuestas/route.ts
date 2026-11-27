@@ -226,7 +226,7 @@ export async function GET(req: NextRequest) {
           avg_ratings: avgRatings,
           choice_breakdown: choiceBreakdown,
           recent_feedback: s.responses
-            .flatMap(r => 
+            .flatMap(r =>
               s.questions
                 .filter(q => q.type === 'text' && r.answers[q.id])
                 .map(q => ({
@@ -280,15 +280,15 @@ export async function POST(req: NextRequest) {
     const isCoordinador = rbac.isAdminOrCoord;
     const canManageSurveys = rbac.isAdminOrCoord;
 
-    const userRole = isFundadorDev 
-      ? 'Fundador Dev' 
-      : (isSuperAdmin 
-          ? 'Superadmin' 
-          : (isModuleAdmin 
-              ? 'Admin' 
-              : (isCoordinadorGeneral 
-                  ? 'Coordinador General' 
-                  : (isCoordinador ? 'Coordinador' : (roleNames.includes('supervisor') ? 'Supervisor' : 'Analista - Operador')))));
+    const userRole = isFundadorDev
+      ? 'Fundador Dev'
+      : (isSuperAdmin
+        ? 'Superadmin'
+        : (isModuleAdmin
+          ? 'Admin'
+          : (isCoordinadorGeneral
+            ? 'Coordinador General'
+            : (isCoordinador ? 'Coordinador' : (roleNames.includes('supervisor') ? 'Supervisor' : 'Analista - Operador')))));
 
     const body = await req.json();
     const { action } = body;

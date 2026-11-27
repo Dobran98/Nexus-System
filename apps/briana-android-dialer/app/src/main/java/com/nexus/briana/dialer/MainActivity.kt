@@ -4,7 +4,11 @@ import android.Manifest
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
@@ -24,6 +28,7 @@ import com.nexus.briana.dialer.service.BrianaForegroundService
 import com.nexus.briana.dialer.telecom.BrianaInCallService
 import com.nexus.briana.dialer.ui.incall.ActiveCallScreen
 import com.nexus.briana.dialer.ui.pairing.PairingScreen
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -55,21 +60,38 @@ class MainActivity : ComponentActivity() {
                 var isShiftActive by remember { mutableStateOf(prefs.isShiftActive) }
                 var operatorName by remember { mutableStateOf(prefs.activeOperatorName) }
                 var isDefaultDialer by remember { mutableStateOf(checkDefaultDialer()) }
+                var batteryPct by remember { mutableStateOf(readBatteryPct()) }
+                var networkType by remember { mutableStateOf(readNetworkType()) }
+                var serverUrl by remember { mutableStateOf(prefs.baseUrl) }
+                var connectionError by remember { mutableStateOf<String?>(null) }
+                var syncTrigger by remember { mutableStateOf(0) }
 
-                LaunchedEffect(Unit) {
-                    val res = apiClient.registerAndHeartbeat(
-                        RegisterDeviceRequest(
-                            deviceUid = prefs.deviceUid,
-                            model = "${Build.MANUFACTURER} ${Build.MODEL}",
-                            batteryPct = 100,
-                            networkType = "WIFI",
-                            isDefaultDialer = isDefaultDialer
+                LaunchedEffect(syncTrigger, serverUrl) {
+                    while (true) {
+                        batteryPct = readBatteryPct()
+                        networkType = readNetworkType()
+                        isDefaultDialer = checkDefaultDialer()
+                        val res = apiClient.registerAndHeartbeat(
+                            RegisterDeviceRequest(
+                                deviceUid = prefs.deviceUid,
+                                model = "${Build.MANUFACTURER} ${Build.MODEL}",
+                                batteryPct = batteryPct,
+                                networkType = networkType,
+                                isDefaultDialer = isDefaultDialer
+                            )
                         )
-                    )
-                    if (res != null) {
-                        prefs.pairingPin = res.pairingPin
-                        pairingPin = res.pairingPin
-                        operatorName = res.operatorName
+                        if (res != null) {
+                            prefs.pairingPin = res.pairingPin
+                            pairingPin = res.pairingPin
+                            operatorName = res.operatorName
+                            connectionError = null
+                        } else {
+                            connectionError = apiClient.lastError
+                            if (prefs.pairingPin.isNotBlank()) {
+                                pairingPin = prefs.pairingPin
+                            }
+                        }
+                        delay(if (res != null) 4000L else 6000L)
                     }
                 }
 
@@ -84,9 +106,23 @@ class MainActivity : ComponentActivity() {
                         pairingPin = pairingPin,
                         isShiftActive = isShiftActive,
                         operatorName = operatorName,
-                        batteryPct = 100,
-                        networkType = "ACTIVO",
+                        batteryPct = batteryPct,
+                        networkType = networkType,
                         isDefaultDialer = isDefaultDialer,
+                        serverUrl = serverUrl,
+                        connectionError = connectionError,
+                        onRetryConnection = { syncTrigger++ },
+                        onUpdateServerUrl = { newUrl ->
+                            val cleaned = newUrl.trim().trimEnd('/')
+                            if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
+                                prefs.baseUrl = cleaned
+                                prefs.pairingPin = ""
+                                pairingPin = ""
+                                serverUrl = cleaned
+                                connectionError = null
+                                syncTrigger++
+                            }
+                        },
                         onToggleShift = { enable ->
                             if (enable) {
                                 requestDialerRoleAndStartShift()
@@ -108,6 +144,24 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    private fun readBatteryPct(): Int {
+        val bm = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val level = bm?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: 100
+        val scale = bm?.getIntExtra(BatteryManager.EXTRA_SCALE, 100) ?: 100
+        return ((level * 100f) / scale).toInt().coerceIn(0, 100)
+    }
+
+    private fun readNetworkType(): String {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val net = cm.activeNetwork ?: return "OFFLINE"
+        val caps = cm.getNetworkCapabilities(net) ?: return "RED"
+        return when {
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WIFI"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "DATOS"
+            else -> "ACTIVO"
         }
     }
 

@@ -35,6 +35,10 @@ class NexusApiClient(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
+    @Volatile
+    var lastError: String? = null
+        private set
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
@@ -42,15 +46,23 @@ class NexusApiClient(context: Context) {
 
     suspend fun registerAndHeartbeat(reqData: RegisterDeviceRequest): HeartbeatResult? = withContext(Dispatchers.IO) {
         try {
+            val url = "${prefs.baseUrl}/api/briana/pairing"
             val bodyStr = json.encodeToString(reqData)
             val request = Request.Builder()
-                .url("${prefs.baseUrl}/api/briana/pairing")
+                .url(url)
                 .post(bodyStr.toRequestBody(mediaType))
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
-                val raw = response.body?.string() ?: return@withContext null
+                val raw = response.body?.string() ?: ""
+                if (!response.isSuccessful) {
+                    lastError = if (response.code == 404) {
+                        "HTTP 404 en ${prefs.baseUrl} (Falta desplegar /api/briana/pairing)"
+                    } else {
+                        "HTTP ${response.code}: ${raw.take(120)}"
+                    }
+                    return@withContext null
+                }
                 val root = json.parseToJsonElement(raw).jsonObject
                 val device = root["device"]?.jsonObject
                 val pin = device?.get("pairing_pin")?.jsonPrimitive?.content ?: prefs.pairingPin
@@ -70,9 +82,11 @@ class NexusApiClient(context: Context) {
                 val commandsJson = root["pendingCommands"]?.jsonArray ?: emptyList()
                 val commands = commandsJson.map { json.decodeFromJsonElement(CallCommandDto.serializer(), it) }
 
+                lastError = null
                 HeartbeatResult(pin, sessId, opId, opName, campId, commands)
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            lastError = "Error de conexión (${prefs.baseUrl}): ${e.localizedMessage ?: e.javaClass.simpleName}"
             null
         }
     }

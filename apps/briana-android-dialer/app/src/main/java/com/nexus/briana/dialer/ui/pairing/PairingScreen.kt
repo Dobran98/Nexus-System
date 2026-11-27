@@ -8,6 +8,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -28,11 +31,18 @@ fun PairingScreen(
     batteryPct: Int,
     networkType: String,
     isDefaultDialer: Boolean,
+    serverUrl: String,
+    connectionError: String?,
+    onRetryConnection: () -> Unit,
+    onUpdateServerUrl: (String) -> Unit,
     onToggleShift: (Boolean) -> Unit,
     onRequestBatteryOptimization: () -> Unit,
     onOpenDefaultAppsSettings: () -> Unit,
     onOpenNotificationAccessSettings: () -> Unit
 ) {
+    var showServerDialog by remember { mutableStateOf(false) }
+    var urlDraft by remember(serverUrl) { mutableStateOf(serverUrl) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -91,7 +101,7 @@ fun PairingScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
@@ -104,7 +114,7 @@ fun PairingScreen(
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = if (pairingPin.isNotBlank()) pairingPin else "BRN-...",
-                    color = Color(0xFF38BDF8),
+                    color = if (pairingPin.isNotBlank()) Color(0xFF38BDF8) else Color(0xFFF59E0B),
                     fontSize = 42.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace
@@ -124,12 +134,44 @@ fun PairingScreen(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                         )
                     }
+                } else if (connectionError != null) {
+                    Surface(
+                        color = Color(0xFF451A03),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = connectionError,
+                            color = Color(0xFFFCD34D),
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
+                    }
                 } else {
                     Text(
                         text = "Ingresa este código en tu PC (Briana Web) para iniciar turno.",
                         color = Color(0xFF64748B),
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
                     )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onRetryConnection) {
+                        Icon(Icons.Default.Refresh, null, tint = Color(0xFF38BDF8), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reintentar", color = Color(0xFF38BDF8), fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { showServerDialog = true }) {
+                        Icon(Icons.Default.Settings, null, tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Servidor", color = Color(0xFF94A3B8), fontSize = 11.sp)
+                    }
                 }
             }
         }
@@ -193,5 +235,41 @@ fun PairingScreen(
                 Text("Permiso Monitor WhatsApp (Notificaciones)", fontSize = 11.sp, color = Color(0xFF34D399))
             }
         }
+    }
+
+    if (showServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            containerColor = Color(0xFF0F172A),
+            title = { Text("Servidor Nexus Briana", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Usa https://nexus-system.vercel.app en producción o la IP local de tu PC (ej. http://172.28.2.232:3000) para probar en Wi-Fi.",
+                        color = Color(0xFF94A3B8),
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = urlDraft,
+                        onValueChange = { urlDraft = it },
+                        singleLine = true,
+                        label = { Text("URL Base") }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUpdateServerUrl(urlDraft)
+                    showServerDialog = false
+                }) {
+                    Text("Guardar y Probar", color = Color(0xFF38BDF8))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerDialog = false }) {
+                    Text("Cancelar", color = Color(0xFF94A3B8))
+                }
+            }
+        )
     }
 }
