@@ -193,3 +193,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 });
   }
 }
+
+/**
+ * GET /api/briana/telemetry?callUuid=...
+ * Permite consultar el estado actual de una llamada específica (respaldo de Realtime).
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const callUuid = searchParams.get('callUuid');
+    if (!callUuid) {
+      return NextResponse.json({ error: 'callUuid requerido' }, { status: 400 });
+    }
+    const serviceSb = getServiceSupabase();
+    const { data: log } = await serviceSb
+      .from('call_logs')
+      .select('*')
+      .eq('call_uuid', callUuid)
+      .maybeSingle();
+
+    return NextResponse.json({ success: true, callLog: log || null });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
