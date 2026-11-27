@@ -62,18 +62,6 @@ function guardarRegistro(pkg) {
       }
     }
 
-    // Diccionarios de usuarios y turnos
-    const dictNombres = {};
-    const dictTurnos = {};
-    try {
-      const dataUsu = obtenerDatosUsuariosCached();
-      for (let i = 1; i < dataUsu.length; i++) {
-        const uKey = String(dataUsu[i][0]).trim().toLowerCase();
-        dictNombres[uKey] = String(dataUsu[i][2] || dataUsu[i][0]).trim();
-        dictTurnos[uKey] = String(dataUsu[i][4] || "MAÑANA").trim().toUpperCase();
-      }
-    } catch (e) {}
-
     // ── Escribir registros ─────────────────────────────────────────────────
     regs.forEach(d => {
       let ef   = d.efectivas;
@@ -87,7 +75,6 @@ function guardarRegistro(pkg) {
         kVal = d.detalle;
       }
 
-      // 1. Escribir en la base global consolidada (BD_Registros)
       hoja.appendRow([
         d.idOperador || "S/ID",
         now,
@@ -104,9 +91,6 @@ function guardarRegistro(pkg) {
         "",
         d.variables ? JSON.stringify(d.variables) : ""
       ]);
-
-      // 2. Escribir dinámicamente en la hoja del Modo de Trabajo correspondiente
-      guardarEnHojaModo(ss, d, now, dictNombres, dictTurnos);
     });
 
     try {
@@ -121,11 +105,12 @@ function guardarRegistro(pkg) {
       encolarMensajeTelegramTexto(ss, msg);
     }
 
-    // Sincronizar / refrescar hojas dinámicas por modo de trabajo
-    try {
-      actualizarHojasPorModo();
-    } catch (ex) {
-      console.warn("Aviso al sincronizar hojas dinámicas por modo: " + ex);
+    // Si el reporte trae variables de evaluación, refrescar los archivos de indicadores en Drive
+    const tieneVariables = regs.some(d => d.variables && typeof d.variables === "object" && Object.keys(d.variables).length > 0);
+    if (tieneVariables) {
+      try { actualizarArchivosIndicadores(); } catch (ex) {
+        console.error("Error actualizando indicadores en Drive: " + ex);
+      }
     }
 
     return { success: true, message: "✅ Guardado exitosamente." };
@@ -182,18 +167,6 @@ function procesarRegistroEncolado(ss, pkg, alreadyLocked) {
       }
     }
 
-    // Diccionarios de usuarios y turnos
-    const dictNombres = {};
-    const dictTurnos = {};
-    try {
-      const dataUsu = obtenerDatosUsuariosCached();
-      for (let i = 1; i < dataUsu.length; i++) {
-        const uKey = String(dataUsu[i][0]).trim().toLowerCase();
-        dictNombres[uKey] = String(dataUsu[i][2] || dataUsu[i][0]).trim();
-        dictTurnos[uKey] = String(dataUsu[i][4] || "MAÑANA").trim().toUpperCase();
-      }
-    } catch (e) {}
-
     regs.forEach(d => {
       let ef   = d.efectivas;
       let kVal = d.municipios;
@@ -206,7 +179,6 @@ function procesarRegistroEncolado(ss, pkg, alreadyLocked) {
         kVal = d.detalle;
       }
 
-      // 1. Guardar en BD_Registros
       hoja.appendRow([
         d.idOperador || "S/ID",
         now,
@@ -223,15 +195,13 @@ function procesarRegistroEncolado(ss, pkg, alreadyLocked) {
         "",
         d.variables ? JSON.stringify(d.variables) : ""
       ]);
-
-      // 2. Guardar en hoja dinámica por Modo de Trabajo
-      guardarEnHojaModo(ss, d, now, dictNombres, dictTurnos);
     });
 
-    try {
-      actualizarHojasPorModo();
-    } catch (ex) {
-      console.warn("Aviso actualizando hojas por modo (background): " + ex);
+    const tieneVariables = regs.some(d => d.variables && typeof d.variables === "object" && Object.keys(d.variables).length > 0);
+    if (tieneVariables) {
+      try { actualizarArchivosIndicadores(); } catch (ex) {
+        console.error("Error actualizando indicadores en Drive (background): " + ex);
+      }
     }
 
     return true;
@@ -369,78 +339,4 @@ function guardarValidacionAdmin(rowId, ef, inc, user, rol) {
     return { success: true };
   }
   return { success: false, message: "Fila inválida" };
-}
-
-// ─── GUARDADO EN HOJA DINÁMICA POR MODO DE TRABAJO ───────────────────────────
-
-/**
- * Guarda un registro individual en la hoja dinámica específica de su Modo de Trabajo.
- * Las columnas contienen los indicadores y variables correspondientes a dicho modo.
- */
-function guardarEnHojaModo(ss, d, now, dictNombres, dictTurnos) {
-  try {
-    const modo = String(d.modo || "").trim();
-    if (!modo) return;
-
-    const { hoja, indicadores } = getOrCreateHojaModo(ss, modo);
-    const tz = (typeof Session !== "undefined" && Session.getScriptTimeZone) ? Session.getScriptTimeZone() : "America/Caracas";
-
-    const uKey = String(d.usuario || "").trim().toLowerCase();
-    const nombreCompleto = (dictNombres && dictNombres[uKey]) ? dictNombres[uKey] : String(d.usuario || "").toUpperCase();
-    const turno = (dictTurnos && dictTurnos[uKey]) ? dictTurnos[uKey] : "MAÑANA";
-
-    const fecha = d.fechaReporte;
-    const hora = (now instanceof Date) ? Utilities.formatDate(now, tz, "HH:mm") : "";
-
-    const varsObj = (d.variables && typeof d.variables === "object") ? d.variables : {};
-
-    const efVal  = parseInt(d.efectivas) || 0;
-    const totVal = parseInt(d.totales) || 0;
-    const incVal = parseInt(d.incidencias) || 0;
-    const kVal   = d.detalle ? String(d.detalle) : (d.municipios ? String(d.municipios) : "");
-
-    // Datos base del registro
-    const row = [
-      d.idOperador || "S/ID",
-      fecha,
-      hora,
-      String(nombreCompleto).toUpperCase(),
-      String(d.usuario || "").toUpperCase(),
-      String(turno).toUpperCase(),
-      modo,
-      d.campana || ""
-    ];
-
-    // Asignación de cada indicador/variable a su respectiva columna
-    let sumaIndicadores = 0;
-    indicadores.forEach(ind => {
-      let val = "";
-      if (varsObj[ind.key] !== undefined) {
-        val = varsObj[ind.key];
-        const num = parseFloat(val);
-        if (!isNaN(num)) sumaIndicadores += num;
-      } else if (ind.key === "efectivas") {
-        val = efVal;
-        sumaIndicadores += efVal;
-      } else if (ind.key === "totales") {
-        val = totVal;
-      } else if (ind.key === "incidencias") {
-        val = incVal;
-      }
-      row.push(val);
-    });
-
-    // Columnas de contexto y totales
-    row.push(
-      d.estados || "",
-      kVal,
-      "",
-      "",
-      sumaIndicadores > 0 ? sumaIndicadores : efVal
-    );
-
-    hoja.appendRow(row);
-  } catch (err) {
-    console.error("Error guardando en hoja dinámica del modo " + d.modo + ": " + err);
-  }
 }

@@ -69,10 +69,10 @@ function enviarTelegramDirecto(msg) {
   }
 }
 
-/** Envía un mensaje a un chat_id específico. Devuelve true si tiene éxito. */
+/** Envía un mensaje a un chat_id específico usando el bot de balances. Devuelve true si tiene éxito. */
 function enviarTelegramAChat(msg, chatId) {
   try {
-    const token = getTelegramToken();
+    const token = getTelegramTokenBalance();
     const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method:          "post",
       contentType:     "application/json",
@@ -360,11 +360,9 @@ function construirMensajeTelegram(ss, regs, todoElDia, turnoBase) {
       if (d.detalle) msg += `   📝 Detalle: ${escapeHtml(d.detalle)}\n`;
     } else if (m.includes("ANALISTA") || m.includes("CUALITATIV")) {
       msg += `${modeEmoji} <b>MODO: ${escapeHtml(d.modo)}</b>\n`;
-      if (d.detalle) {
-        String(d.detalle).split("\n").forEach(line => {
-          if (line.trim() !== "") msg += `   ✔️ ${escapeHtml(line)}\n`;
-        });
-      }
+      String(d.detalle).split("\n").forEach(line => {
+        if (line.trim() !== "") msg += `   ✔️ ${escapeHtml(line)}\n`;
+      });
       msg += `   📊 Total Actividades Realizadas: ${ef} | Datos Analizados: ${d.totales || 0}\n`;
     } else {
       msg += `${modeEmoji} <b>CAMPAÑA: ${escapeHtml(d.campana)}</b>\n   ⚙️ Modo: ${escapeHtml(d.modo)}\n`;
@@ -414,4 +412,337 @@ function construirMensajeTelegram(ss, regs, todoElDia, turnoBase) {
   if (msg.length > 4000) msg = msg.substring(0, 4000) + "\n\n⚠️ <i>[MENSAJE RECORTADO]</i>";
 
   return msg;
+}
+
+// ─── BOT INTERACTIVO (WEBHOOK) ────────────────────────────────────────────────
+
+const TEXTO_AYUDA =
+`🤖 <b>ORIANA — Asistente</b>
+
+Puedes escribirme en lenguaje natural o usar comandos:
+
+📊 <b>Balances:</b>
+• "balance del día" / /dia
+• "balance de ayer" / /ayer
+• "balance de la semana" / /semana
+• "balance del mes" / /mes
+
+👤 <b>Rendimiento de un operador:</b>
+• "rendimiento de Juan" / /operador Juan
+• "rendimiento de Juan esta semana"
+
+🛠 <b>Otros:</b>
+• /id → ver tu Chat ID
+• /ayuda → este mensaje`;
+
+/** Recibe las actualizaciones de Telegram (webhook). */
+function doPost(e) {
+  try {
+    const contents = e && e.postData ? e.postData.contents : null;
+    if (!contents) return ContentService.createTextOutput("OK");
+
+    const update = JSON.parse(contents);
+    const msg = update.message || update.edited_message;
+    if (!msg || !msg.text) return ContentService.createTextOutput("OK");
+
+    // Anti-duplicados: Telegram a veces retransmite el mismo update; lo ignoramos.
+    const updateId = update.update_id || 0;
+    if (updateId > 0) {
+      const props = PropertiesService.getScriptProperties();
+      const lastId = parseInt(props.getProperty("LAST_TELEGRAM_UPDATE_ID") || "0") || 0;
+      if (updateId <= lastId) return ContentService.createTextOutput("OK");
+      props.setProperty("LAST_TELEGRAM_UPDATE_ID", String(updateId));
+    }
+
+    const chatId = String(msg.chat.id);
+    const texto  = String(msg.text || "").trim();
+    const nombre = (msg.from && (msg.from.first_name || msg.from.username)) || "";
+
+    console.log("📩 Telegram recibido: chat=" + chatId + " texto=" + JSON.stringify(texto));
+
+    try {
+      procesarComandoTelegram(chatId, texto, nombre);
+    } catch (err) {
+      console.error("Error procesando comando '" + texto + "': " + err);
+      try {
+        enviarTelegramAChat("⚠️ No pude procesar tu solicitud.\nMensaje: " + texto + "\nError: " + err, chatId);
+      } catch (e2) {}
+    }
+    return ContentService.createTextOutput("OK");
+  } catch (err) {
+    console.error("Error en doPost (Telegram): " + err);
+    return ContentService.createTextOutput("OK");
+  }
+}
+
+/** Procesa un mensaje entrante y responde según lo solicitado. */
+function procesarComandoTelegram(chatId, texto, nombre) {
+  if (!esChatAutorizado(chatId)) {
+    enviarTelegramAChat("🔒 No estás autorizado para usar este bot.\n🆔 Tu Chat ID es: <code>" + chatId + "</code>", chatId);
+    return;
+  }
+
+  const t = String(texto || "").toLowerCase();
+  let respuesta = "";
+
+  if (/^\/?(start|hola|inicio)\b/.test(t)) {
+    respuesta = "👋 ¡Hola" + (nombre ? " " + escapeHtml(nombre) : "") + "!\n\n" + TEXTO_AYUDA;
+  }
+  else if (t.includes("/id") || t.includes("chat id") || t.includes("mi id")) {
+    respuesta = "🆔 Tu Chat ID es: <code>" + chatId + "</code>";
+  }
+  else if (t.includes("/operador") || t.includes("/op") || t.includes("/rendimiento") || t.includes("rendimiento") || t.includes("operador")) {
+    respuesta = construirRendimientoOperador(extraerOperador(texto), detectarPeriodo(t));
+  }
+  else if (t.includes("ayuda") || t.includes("help") || t.includes("comandos")) {
+    respuesta = TEXTO_AYUDA;
+  }
+  else if (t.includes("semana")) {
+    respuesta = construirBalancePeriodo("SEMANA");
+  }
+  else if (t.includes("mes")) {
+    respuesta = construirBalancePeriodo("MES");
+  }
+  else if (t.includes("ayer")) {
+    respuesta = construirBalancePeriodo("AYER");
+  }
+  else if (t.includes("dia") || t.includes("hoy") || t.includes("balance") || t === "/dia" || t === "/hoy" || t === "/balance") {
+    respuesta = construirBalancePeriodo("HOY");
+  }
+  else {
+    respuesta = "🤔 No entendí tu mensaje.\n\n" + TEXTO_AYUDA;
+  }
+
+  enviarTelegramAChat(respuesta, chatId);
+}
+
+/** Detecta el periodo en el texto: SEMANA, MES, AYER o HOY (por defecto). */
+function detectarPeriodo(t) {
+  if (t.includes("semana")) return "SEMANA";
+  if (t.includes("mes")) return "MES";
+  if (t.includes("ayer")) return "AYER";
+  return "HOY";
+}
+
+/** Extrae el nombre del operador de un texto de comando. */
+function extraerOperador(texto) {
+  let s = String(texto || "");
+  s = s.replace(/^\/(operador|op|rendimiento)\s*/i, "");
+  s = s.replace(/rendimiento\s+(de\s+)?/i, "");
+  s = s.replace(/operador\s+/i, "");
+  return s.trim();
+}
+
+/** Llama a getMe para validar un token. Devuelve el objeto parseado de la respuesta. */
+function getMeTelegram(token) {
+  try {
+    const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/getMe`, {
+      method: "get",
+      muteHttpExceptions: true
+    });
+    return JSON.parse(response.getContentText());
+  } catch (e) {
+    return { ok: false, description: "Error consultando getMe: " + e };
+  }
+}
+
+/** Configura el webhook del bot de balances apuntando a la URL de este web app. */
+function configurarWebhookTelegram() {
+  try {
+    const token = getTelegramTokenBalance();
+    if (!token) return { success: false, message: "No hay token del bot de balances. Péguelo y guárdelo primero." };
+
+    if (!/^\d+:[A-Za-z0-9_-]{30,}$/.test(token)) {
+      return { success: false, message: "El token guardado tiene formato incorrecto (" + token.length + " caracteres). Vuelva a pegarlo completo en 'Token del Bot de Balances' y presione Guardar." };
+    }
+
+    // Validar el token antes de configurar
+    const me = getMeTelegram(token);
+    if (!me || !me.ok) {
+      return { success: false, message: "Token inválido o revocado (Telegram: Unauthorized). Cree un bot nuevo en @BotFather y guárdelo de nuevo." };
+    }
+
+    const url = ScriptApp.getService().getUrl();
+    const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: "post",
+      contentType: "application/json",
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ url: url })
+    });
+    const body = response.getContentText();
+    let json = {};
+    try { json = JSON.parse(body); } catch (e) {}
+
+    if (json && json.ok) {
+      const botNombre = (me.result && (me.result.username || me.result.first_name)) || "";
+      return { success: true, message: "✅ Webhook configurado correctamente" + (botNombre ? " (@" + botNombre + ")" : "") + "." };
+    }
+    return { success: false, message: "No se pudo configurar el webhook. Telegram: " + body };
+  } catch (e) {
+    return { success: false, message: "Error configurando webhook: " + e };
+  }
+}
+
+/** Consulta getWebhookInfo de un token. Devuelve el objeto parseado. */
+function getWebhookInfoTelegram(token) {
+  try {
+    const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`, {
+      method: "get",
+      muteHttpExceptions: true
+    });
+    return JSON.parse(response.getContentText());
+  } catch (e) {
+    return { ok: false, description: "Error: " + e };
+  }
+}
+
+/** Diagnóstico legible del estado de ambos bots y sus webhooks. */
+function diagnosticoWebhook() {
+  const lineas = [];
+  const appUrl = ScriptApp.getService().getUrl();
+  lineas.push("🔗 URL de la app: " + appUrl);
+  lineas.push("");
+
+  try {
+    const tokOp = getTelegramToken();
+    const meOp = getMeTelegram(tokOp);
+    const botOp = (meOp && meOp.ok) ? (meOp.result.username || meOp.result.first_name) : "TOKEN INVÁLIDO";
+    const whOp = getWebhookInfoTelegram(tokOp);
+    const whUrlOp = (whOp && whOp.result && whOp.result.url) ? whOp.result.url : "(sin webhook)";
+    lineas.push("🤖 BOT OPERATIVO: @" + botOp);
+    lineas.push("   Webhook: " + whUrlOp);
+  } catch (e) { lineas.push("🤖 BOT OPERATIVO: error " + e); }
+
+  lineas.push("");
+
+  try {
+    const tokBal = getTelegramTokenBalance();
+    const meBal = getMeTelegram(tokBal);
+    const botBal = (meBal && meBal.ok) ? (meBal.result.username || meBal.result.first_name) : "TOKEN INVÁLIDO";
+    const whBal = getWebhookInfoTelegram(tokBal);
+    const whUrlBal = (whBal && whBal.result && whBal.result.url) ? whBal.result.url : "(sin webhook)";
+    lineas.push("📊 BOT BALANCES: @" + botBal);
+    lineas.push("   Webhook: " + whUrlBal);
+    if (whBal && whBal.result) {
+      lineas.push("   Pendientes: " + (whBal.result.pending_update_count || 0));
+      if (whBal.result.last_error_message) {
+        lineas.push("   ⚠️ Último error de entrega: " + whBal.result.last_error_message);
+      }
+    }
+  } catch (e) { lineas.push("📊 BOT BALANCES: error " + e); }
+
+  return { success: true, message: lineas.join("\n") };
+}
+
+/** Borra el webhook del bot de balances (para reiniciar). */
+function borrarWebhookBalance() {
+  try {
+    const token = getTelegramTokenBalance();
+    const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: "post",
+      contentType: "application/json",
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ url: "" })
+    });
+    return { success: true, message: "Webhook del bot de balances borrado: " + response.getContentText() };
+  } catch (e) {
+    return { success: false, message: "Error borrando webhook: " + e };
+  }
+}
+
+/** Borra el webhook del bot operativo (por si se configuró por error). */
+function borrarWebhookOperativo() {
+  try {
+    const token = getTelegramToken();
+    const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: "post",
+      contentType: "application/json",
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ url: "" })
+    });
+    return { success: true, message: "Webhook del bot operativo borrado: " + response.getContentText() };
+  } catch (e) {
+    return { success: false, message: "Error borrando webhook: " + e };
+  }
+}
+
+// ─── SONDEO (getUpdates) — alternativa confiable al webhook ────────────────────
+
+/**
+ * Procesa los mensajes pendientes del bot de balances (polling vía getUpdates).
+ * Se ejecuta por un trigger cada 1 minuto. No depende del webhook.
+ */
+function procesarMensajesBot() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return;
+  try {
+    const token = getTelegramTokenBalance();
+    const props = PropertiesService.getScriptProperties();
+    const offset = parseInt(props.getProperty("TELEGRAM_OFFSET_BALANCE") || "0") || 0;
+
+    const response = UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/getUpdates`, {
+      method: "post",
+      contentType: "application/json",
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ offset: offset, timeout: 0, allowed_updates: ["message"] })
+    });
+
+    const body = JSON.parse(response.getContentText());
+    if (!body || !body.ok || !body.result || !body.result.length) return;
+
+    let nuevoOffset = offset;
+    body.result.forEach(update => {
+      nuevoOffset = Math.max(nuevoOffset, (update.update_id || 0) + 1);
+      const msg = update.message;
+      if (!msg || !msg.text) return;
+      const chatId = String(msg.chat.id);
+      const texto  = String(msg.text || "").trim();
+      const nombre = (msg.from && (msg.from.first_name || msg.from.username)) || "";
+      console.log("📩 Sondeo recibido: chat=" + chatId + " texto=" + JSON.stringify(texto));
+      try {
+        procesarComandoTelegram(chatId, texto, nombre);
+      } catch (e) {
+        console.error("Error procesando '" + texto + "': " + e);
+        try { enviarTelegramAChat("⚠️ Error al procesar: " + e, chatId); } catch (e2) {}
+      }
+    });
+
+    props.setProperty("TELEGRAM_OFFSET_BALANCE", String(nuevoOffset));
+  } catch (e) {
+    console.error("Error en procesarMensajesBot: " + e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Instala el trigger de sondeo del bot de balances (cada 1 minuto). */
+function instalarTriggerBot() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === "procesarMensajesBot") {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger("procesarMensajesBot")
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+  return { success: true, message: "Trigger del bot de balances instalado (cada 1 minuto)." };
+}
+
+/** Activa el modo sondeo: borra el webhook e instala el trigger. */
+function activarSondeoBot() {
+  try {
+    const token = getTelegramTokenBalance();
+    // Borrar webhook para liberar getUpdates
+    UrlFetchApp.fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+      method: "post",
+      contentType: "application/json",
+      muteHttpExceptions: true,
+      payload: JSON.stringify({ url: "" })
+    });
+    const r = instalarTriggerBot();
+    return { success: true, message: "Bot activado en modo sondeo (sin webhook). " + r.message };
+  } catch (e) {
+    return { success: false, message: "Error activando sondeo: " + e };
+  }
 }

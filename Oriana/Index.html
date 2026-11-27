@@ -629,8 +629,8 @@
           <div id="tab-exportar" class="section-tab">
             <div class="tab-header">
               <div>
-                <h2>Exportar Base de Datos</h2>
-                <p class="muted">Descargue registros en formato Excel.</p>
+                <h2>Reporte Excel</h2>
+                <p class="muted">Descargue el reporte de operatividad en Excel con resumen y desgloses.</p>
               </div>
             </div>
 
@@ -648,12 +648,12 @@
               <div class="form-group">
                 <label>Filtrar por Modo</label>
                 <select id="exp-modo">
-                  <option value="TODOS">Todos</option>
+                  <option value="TODOS">Todos los modos</option>
                 </select>
               </div>
               <button class="btn btn-primary btn-lg" onclick="doExport()" id="btn-exp" style="width:100%;margin-top:8px;">
                 <span class="material-symbols-outlined">table_view</span>
-                Generar Excel Completo
+                Descargar Reporte Excel
               </button>
             </div>
           </div>
@@ -792,31 +792,27 @@
               <p id="rules-cfg-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
             </div>
 
-            <!-- Hojas Dinámicas por Modo de Trabajo Card -->
+            <!-- Indicadores Macro Card -->
             <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
-              <h3>Hojas Dinámicas por Modo de Trabajo <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
+              <h3>Indicadores Macro <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
               <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;line-height:1.5;">
-                Las hojas de cálculo se crean y actualizan <b>por Modo de Trabajo</b> (ej. <i>Modo_LLAMADAS</i>, <i>Modo_ISSABEL</i>, <i>Modo_1X10</i>, <i>Modo_ANALISTA</i>).
-                Los <b>indicadores y variables de evaluación</b> se configuran como <b>columnas</b> dentro de cada hoja, junto con los datos de operador, fecha, turno, estados y detalles.
+                Agrupe las campañas/actividades de un <b>modo</b> en un indicador (ej. indicador
+                <b>LLAMADAS GENERAL</b> → modo <b>LLAMADA</b>). Cada indicador se guarda en Google Drive con la
+                estructura <b>Carpeta/MODO/INDICADOR/archivo</b> y columnas
+                <b>Fecha, Hora, Nombre y Apellido, Modo, Campaña/Actividad, [variables], Total</b>.
               </p>
-              <button class="btn btn-primary btn-lg" onclick="generarHojasPorModo()" style="width:100%;margin-bottom:var(--sp-sm);">
-                <span class="material-symbols-outlined">sync</span>
-                Sincronizar Hojas por Modo de Trabajo
+              <div id="ind-list-container" style="display:flex;flex-direction:column;gap:8px;margin-bottom:var(--sp-md);"></div>
+              <button type="button" class="btn btn-secondary btn-mini" onclick="addIndRow()" style="margin-bottom:var(--sp-md);">
+                <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir indicador
               </button>
-              <div style="border-top:1px solid var(--outline-variant);margin:var(--sp-md) 0;padding-top:var(--sp-sm);">
-                <p class="muted" style="font-size:12px;margin-bottom:var(--sp-sm);">
-                  Configuración de Indicadores / Agrupaciones personalizadas por Modo:
-                </p>
-                <div id="ind-list-container" style="display:flex;flex-direction:column;gap:8px;margin-bottom:var(--sp-md);"></div>
-                <div style="display:flex;gap:8px;">
-                  <button type="button" class="btn btn-secondary btn-mini" onclick="addIndRow()">
-                    <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir indicador
-                  </button>
-                  <button class="btn btn-success btn-sm" onclick="saveInd()" style="flex:1;">
-                    <span class="material-symbols-outlined">save</span> Guardar Indicadores
-                  </button>
-                </div>
-              </div>
+              <button class="btn btn-success btn-lg" onclick="saveInd()" style="width:100%;">
+                <span class="material-symbols-outlined">save</span>
+                Guardar Indicadores
+              </button>
+              <button class="btn btn-primary btn-lg" onclick="generarIndicadores()" style="width:100%;margin-top:var(--sp-sm);">
+                <span class="material-symbols-outlined">drive_folder_upload</span>
+                Generar / Actualizar en Drive
+              </button>
               <p id="ind-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
             </div>
 
@@ -838,13 +834,26 @@
               <p id="emoji-msg" style="text-align:center;margin-top:var(--sp-md);font-weight:700;font-size:13px;"></p>
             </div>
 
-            <!-- Reportes Programados Card (Admin) -->
+            <!-- Bot Interactivo y Reportes Card (Admin) -->
             <div class="glass-card glass-card-padded" style="max-width:620px;margin:var(--sp-lg) auto 0;">
-              <h3>Reportes Programados <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
+              <h3>Bot Interactivo y Reportes <span class="badge badge-manana" style="margin-left:6px;">Admin</span></h3>
               <p class="muted" style="margin-bottom:var(--sp-md);font-size:13px;line-height:1.5;">
-                El bot enviará un <b>consolidado diario</b> y uno <b>semanal</b> a los Chat IDs de Telegram que indique.
-                Luego presione <b>Instalar Triggers</b> una vez para activar el envío automático.
+                Use un <b>bot de Telegram aparte</b> (el bot operativo queda intacto). Ese bot enviará el
+                <b>balance general diario/semanal</b> a los Chat IDs indicados y responderá cuando le escriba
+                para pedir balances o el rendimiento de un operador.
               </p>
+
+              <div style="background:rgba(255,255,255,0.03);padding:var(--sp-md);border-radius:var(--r-lg);border:1px solid rgba(255,255,255,0.08);margin-bottom:var(--sp-md);">
+                <label style="margin-bottom:6px;">Token del Bot de Balances (nuevo bot)</label>
+                <div style="display:flex;gap:8px;">
+                  <input type="text" id="balance-token-input" placeholder="Pegue aquí el token del nuevo bot (BotFather)">
+                  <button class="btn btn-secondary" onclick="saveBalanceToken()" style="white-space:nowrap;">Guardar</button>
+                </div>
+                <p style="font-size:12px;color:var(--on-surface-variant);margin-top:6px;">
+                  Cree un bot con <b>@BotFather</b> y pegue su token aquí. No toque el token del bot operativo.
+                </p>
+              </div>
+
               <div id="dest-list-container" style="display:flex;flex-direction:column;gap:8px;margin-bottom:var(--sp-md);"></div>
               <button type="button" class="btn btn-secondary btn-mini" onclick="addDestRow()" style="margin-bottom:var(--sp-md);">
                 <span class="material-symbols-outlined" style="font-size:15px;">add</span> Añadir destinatario
@@ -852,6 +861,34 @@
               <button class="btn btn-success btn-lg" onclick="saveDest()" style="width:100%;">
                 <span class="material-symbols-outlined">save</span>
                 Guardar Destinatarios
+              </button>
+
+              <div style="background:rgba(255,255,255,0.03);padding:var(--sp-md);border-radius:var(--r-lg);border:1px solid rgba(255,255,255,0.08);margin:var(--sp-md) 0;">
+                <label style="margin-bottom:6px;">Chat del Administrador (su teléfono personal)</label>
+                <div style="display:flex;gap:8px;">
+                  <input type="text" id="admin-chat-input" placeholder="Pegue aquí su Chat ID (ej: 123456789)">
+                  <button class="btn btn-secondary" onclick="saveAdminChat()" style="white-space:nowrap;">Guardar</button>
+                </div>
+                <p style="font-size:12px;color:var(--on-surface-variant);margin-top:6px;">
+                  Para saber su Chat ID, escríbale <b>/id</b> al bot una vez configurado el webhook.
+                </p>
+              </div>
+
+              <button class="btn btn-success btn-lg" onclick="activarSondeo()" style="width:100%;margin-top:var(--sp-sm);">
+                <span class="material-symbols-outlined">autorenew</span>
+                Activar Bot (sondeo automático) — RECOMENDADO
+              </button>
+              <button class="btn btn-primary btn-lg" onclick="configurarWebhook()" style="width:100%;margin-top:var(--sp-sm);">
+                <span class="material-symbols-outlined">link</span>
+                Configurar Webhook del Bot de Balances
+              </button>
+              <button class="btn btn-secondary btn-lg" onclick="diagnosticarWebhook()" style="width:100%;margin-top:var(--sp-sm);">
+                <span class="material-symbols-outlined">monitor_heart</span>
+                Ver Estado del Webhook
+              </button>
+              <button class="btn btn-danger btn-lg" onclick="borrarWebhookBal()" style="width:100%;margin-top:var(--sp-sm);">
+                <span class="material-symbols-outlined">link_off</span>
+                Borrar Webhook (reiniciar)
               </button>
               <button class="btn btn-primary btn-lg" onclick="instalarTriggers()" style="width:100%;margin-top:var(--sp-sm);">
                 <span class="material-symbols-outlined">schedule</span>

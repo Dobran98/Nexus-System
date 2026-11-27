@@ -1,13 +1,13 @@
 <script>
   // ─── ESTADO GLOBAL ──────────────────────────────────────────────────────────
-  let gConfig = {};
-  let gVariables = {};          // { MODO: [{ variable, etiqueta, tipo, obligatorio, padre }] }
-  let cUser = {};          // { u, id, n, r, t }
-  let tCamps = [];
-  let tVars = [];          // variables en edición (config)
-  let tEmojis = [];          // [{tipo, nombre, emoji}]
-  let tDest = [];          // [{chatId, frecuencia, activo}]
-  let tInd = [];          // [{indicador, modo}]
+  let gConfig          = {};
+  let gVariables       = {};          // { MODO: [{ variable, etiqueta, tipo, obligatorio, padre }] }
+  let cUser            = {};          // { u, id, n, r, t }
+  let tCamps           = [];
+  let tVars            = [];          // variables en edición (config)
+  let tEmojis          = [];          // [{tipo, nombre, emoji}]
+  let tDest            = [];          // [{chatId, frecuencia, activo}]
+  let tInd             = [];          // [{indicador, modo}]
   let contadorCampanas = 0;
 
   // Escape HTML para inyectar texto dinámico de forma segura
@@ -21,47 +21,31 @@
   }
 
   // Paginación tablas
-  let currPage = 1, totalP = 1;
+  let currPage   = 1, totalP   = 1;
   let currPageAn = 1, totalPAn = 1;
 
   // Nuevas variables globales para Áreas, Reglas y Temporizador
-  let gAreas = [];
-  let gRules = {};
-  let gSuperRules = { analistasTodos: true, todosModos: false };
-  let countdownTimer = null;
-  let countdownSeconds = 10;
-  let reportPendingPayload = null;
+  let gAreas                = [];
+  let gRules                = {};
+  let gSuperRules           = { analistasTodos: true, todosModos: false };
+  let countdownTimer        = null;
+  let countdownSeconds      = 10;
+  let reportPendingPayload  = null;
 
   // ─── PROMISIFIED API WRAPPER (PROXY) ───────────────────────────────────────
   const api = new Proxy({}, {
     get(target, prop) {
       if (typeof google !== 'undefined' && google.script && google.script.run) {
-        return function (...args) {
+        return function(...args) {
           return new Promise((resolve, reject) => {
             google.script.run
               .withSuccessHandler(resolve)
               .withFailureHandler(reject)
-            [prop](...args);
+              [prop](...args);
           });
         };
       }
-      return async function(...args) {
-        try {
-          const res = await fetch(`/api/${prop}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ args })
-          });
-          const json = await res.json();
-          if (!res.ok) {
-            throw new Error(json.message || `Error HTTP ${res.status}`);
-          }
-          return json;
-        } catch (err) {
-          console.error(`Error al invocar API ${prop}:`, err);
-          throw err;
-        }
-      };
+      return () => Promise.reject(new Error("google.script.run no disponible"));
     }
   });
 
@@ -130,7 +114,7 @@
   };
 
   // Redirección de alerts nativos al sistema Toast
-  window.alert = function (msg) {
+  window.alert = function(msg) {
     if (!msg) return;
     const lower = msg.toLowerCase();
     if (lower.includes('éxito') || lower.includes('exitosamente') || lower.includes('completado') || lower.includes('guardado')) {
@@ -151,13 +135,13 @@
 
     // Fechas de hoy en todos los date pickers
     const hoy = new Date().toISOString().split('T')[0];
-    ['fechaReporte', 'exp-f1', 'exp-f2', 'dash-f1', 'dash-f2', 'word-f1', 'word-f2'].forEach(id => {
+    ['fechaReporte','exp-f1','exp-f2','dash-f1','dash-f2','word-f1','word-f2'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = hoy;
     });
 
     // Filtros de validación sin fecha preseleccionada
-    ['filter-date', 'filter-date-an'].forEach(id => {
+    ['filter-date','filter-date-an'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -167,7 +151,7 @@
       gConfig = await api.obtenerConfiguracionVinculada();
       gVariables = await api.obtenerTodasVariables();
       fillS('exp-modo');
-
+      
       // Cargar Áreas y Reglas
       gAreas = await api.obtenerAreas();
       const accessConfig = await api.obtenerReglasAcceso();
@@ -203,9 +187,9 @@
   // Auto-mayúsculas en inputs de texto (excepto usuario/contraseña y campos de escritura libre)
   document.addEventListener('input', function (e) {
     if ((e.target.tagName === 'TEXTAREA' ||
-      (e.target.tagName === 'INPUT' && e.target.type === 'text')) &&
-      !['login-user', 'login-pass'].includes(e.target.id) &&
-      !e.target.classList.contains('free-text')) {
+        (e.target.tagName === 'INPUT' && e.target.type === 'text')) &&
+        !['login-user','login-pass'].includes(e.target.id) &&
+        !e.target.classList.contains('free-text')) {
       const s = e.target.selectionStart, f = e.target.selectionEnd;
       e.target.value = e.target.value.toUpperCase();
       e.target.setSelectionRange(s, f);
@@ -231,9 +215,9 @@
     document.querySelectorAll('.section-tab,.nav-item').forEach(e => e.classList.remove('active'));
     document.getElementById('tab-' + id).classList.add('active');
     document.getElementById('nav-' + id).classList.add('active');
-    if (id === 'validar') loadTablaValidacion('REGULARES');
+    if (id === 'validar')       loadTablaValidacion('REGULARES');
     if (id === 'val-analistas') loadTablaValidacion('ANALISTAS');
-    if (id === 'dashboard') loadDashboard();
+    if (id === 'dashboard')     loadDashboard();
   }
 
   // ─── LOGOUT ─────────────────────────────────────────────────────────────────
@@ -241,7 +225,7 @@
     cUser = {}; tCamps = []; currPage = 1; currPageAn = 1;
     contadorCampanas = 0;
     document.getElementById('reportes-container').innerHTML = '';
-    ['login-user', 'login-pass'].forEach(i => document.getElementById(i).value = '');
+    ['login-user','login-pass'].forEach(i => document.getElementById(i).value = '');
     document.getElementById('login-area-select').value = '';
     document.getElementById('login-msg').innerText = '';
     document.getElementById('user-role').innerText = '';
@@ -284,7 +268,7 @@
       if (!esAdmin) {
         // Operadores y Analistas: Cargar y requerir selección de Área
         window._datosLoginTemp = r;
-
+        
         // Poblar selector de áreas
         const areaSelect = document.getElementById('login-area-select');
         areaSelect.innerHTML = '<option value="" disabled selected>Seleccione su área de trabajo...</option>';
@@ -328,10 +312,10 @@
 
     // Mostrar datos del usuario
     document.getElementById('user-display').innerText = r.nombre;
-    document.getElementById('user-role').innerText = r.rol;
-    document.getElementById('user-turno').innerText = 'Área: ' + areaOId + ' | Turno: ' + r.turno;
+    document.getElementById('user-role').innerText    = r.rol;
+    document.getElementById('user-turno').innerText   = 'Área: ' + areaOId + ' | Turno: ' + r.turno;
 
-    document.getElementById('sidebar-name').innerText = r.nombre;
+    document.getElementById('sidebar-name').innerText  = r.nombre;
     const sbRole = document.getElementById('sidebar-role');
     sbRole.innerText = r.rol;
     document.getElementById('sidebar-turno').innerText = 'Turno: ' + r.turno;
@@ -407,6 +391,14 @@
       tInd = await api.obtenerIndicadores();
       renderInd();
 
+      const adminChat = await api.obtenerAdminChatId();
+      const adminInput = document.getElementById('admin-chat-input');
+      if (adminInput) adminInput.value = adminChat || '';
+
+      const balanceToken = await api.obtenerTokenBalanceGuardado();
+      const tokenInput = document.getElementById('balance-token-input');
+      if (tokenInput) tokenInput.value = balanceToken || '';
+
       // Reiniciar formulario de reporte
       contadorCampanas = 0;
       document.getElementById('reportes-container').innerHTML = '';
@@ -451,19 +443,19 @@
     const adminCont = document.getElementById('rules-admin-container');
     const analCont = document.getElementById('rules-analista-container');
     const operCont = document.getElementById('rules-operador-container');
-
+    
     if (!adminCont || !analCont || !operCont) return;
-
+    
     adminCont.innerHTML = '';
     analCont.innerHTML = '';
     operCont.innerHTML = '';
-
+    
     // Configurar checkboxes de Super Reglas
     document.getElementById('sr-analistas-todos').checked = gSuperRules.analistasTodos;
-    document.getElementById('sr-todos-modos').checked = gSuperRules.todosModos;
-
+    document.getElementById('sr-todos-modos').checked     = gSuperRules.todosModos;
+    
     const modos = Object.keys(gConfig);
-
+    
     const buildCheckboxes = (container, role, list) => {
       modos.forEach((modo, i) => {
         const isChecked = list.includes('*') || list.includes(modo);
@@ -474,7 +466,7 @@
           </label>`;
       });
     };
-
+    
     buildCheckboxes(adminCont, 'ADMIN', gRules.ADMIN || []);
     buildCheckboxes(analCont, 'ANALISTA', gRules.ANALISTA || []);
     buildCheckboxes(operCont, 'OPERADOR', gRules.OPERADOR || []);
@@ -489,11 +481,11 @@
         nombre: input.value.toUpperCase().trim()
       });
     });
-
+    
     const btn = document.querySelector('[onclick="saveAreasConfig()"]');
     btn.disabled = true; btn.innerText = 'Guardando...';
     document.getElementById('areas-cfg-msg').innerText = '';
-
+    
     try {
       const res = await api.guardarAreas(list);
       btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">save</span> Guardar Nombres de Áreas';
@@ -516,22 +508,22 @@
         .filter(chk => chk.checked)
         .map(chk => chk.value);
     };
-
+    
     const rulesData = {
       ADMIN: getChks('admin'),
       ANALISTA: getChks('analista'),
       OPERADOR: getChks('operador')
     };
-
+    
     const superRulesData = {
       analistasTodos: document.getElementById('sr-analistas-todos').checked,
       todosModos: document.getElementById('sr-todos-modos').checked
     };
-
+    
     const btn = document.querySelector('[onclick="saveRulesConfig()"]');
     btn.disabled = true; btn.innerText = 'Guardando...';
     document.getElementById('rules-cfg-msg').innerText = '';
-
+    
     try {
       const res = await api.guardarReglasAcceso(rulesData, superRulesData);
       btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">save</span> Guardar Reglas de Acceso';
@@ -557,7 +549,7 @@
 
   function updateMsText(dropId, textId, defaultText) {
     const count = document.querySelectorAll(`#${dropId} input:checked`).length;
-    const el = document.getElementById(textId);
+    const el    = document.getElementById(textId);
     if (count === 0) {
       el.innerText = defaultText; el.style.fontWeight = 'normal'; el.style.color = '';
     } else {
@@ -570,9 +562,9 @@
   }
 
   function poblarMsDropdownModos(config) {
-    const msModos = document.getElementById('ms-dropdown-modos');
+    const msModos   = document.getElementById('ms-dropdown-modos');
     const msModosAn = document.getElementById('ms-dropdown-modos-an');
-    if (msModos) msModos.innerHTML = '';
+    if (msModos)   msModos.innerHTML   = '';
     if (msModosAn) msModosAn.innerHTML = '';
 
     Object.keys(config).forEach(k => {
@@ -581,20 +573,20 @@
         onchange="updateMsText('${isAnalista ? 'ms-dropdown-modos-an' : 'ms-dropdown-modos'}',
         '${isAnalista ? 'ms-text-modos-an' : 'ms-text-modos'}', 'Todos los modos')"> ${k}</label>`;
       if (isAnalista && msModosAn) msModosAn.innerHTML += html;
-      else if (msModos) msModos.innerHTML += html;
+      else if (msModos)            msModos.innerHTML   += html;
     });
   }
 
   function poblarMsDropdownOps(users) {
-    const msOps = document.getElementById('ms-dropdown-ops');
+    const msOps   = document.getElementById('ms-dropdown-ops');
     const msOpsAn = document.getElementById('ms-dropdown-ops-an');
-    if (msOps) msOps.innerHTML = '';
+    if (msOps)   msOps.innerHTML   = '';
     if (msOpsAn) msOpsAn.innerHTML = '';
 
     users.forEach(u => {
       const html = name => `<label class="ms-option"><input type="checkbox" value="${u.usuario}"
-        onchange="updateMsText('${name}', '${name.replace('dropdown', 'text')}', '${name.includes('an') ? 'Todos los analistas' : 'Todos los operadores'}')"> ${u.nombre}</label>`;
-      if (msOps) msOps.innerHTML += html('ms-dropdown-ops');
+        onchange="updateMsText('${name}', '${name.replace('dropdown','text')}', '${name.includes('an') ? 'Todos los analistas' : 'Todos los operadores'}')"> ${u.nombre}</label>`;
+      if (msOps)   msOps.innerHTML   += html('ms-dropdown-ops');
       if (msOpsAn) msOpsAn.innerHTML += html('ms-dropdown-ops-an');
     });
   }
@@ -609,12 +601,12 @@
 
   function agregarBloqueCampaña() {
     contadorCampanas++;
-    const n = contadorCampanas;
+    const n         = contadorCampanas;
     const container = document.getElementById('reportes-container');
 
-    const div = document.createElement('div');
+    const div     = document.createElement('div');
     div.className = 'report-card col';
-    div.id = `col-${n}`;
+    div.id        = `col-${n}`;
 
     const btnEliminar = n > 1
       ? `<button type="button" onclick="eliminarBloque(${n})" style="position:absolute;top:14px;right:14px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:var(--danger);border-radius:var(--r-full);width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;"><span class='material-symbols-outlined' style='font-size:16px;'>close</span></button>`
@@ -696,10 +688,10 @@
   }
 
   function addActivityRow(n) {
-    const wrapper = document.getElementById(`actividades_wrapper_${n}`);
+    const wrapper  = document.getElementById(`actividades_wrapper_${n}`);
     const rowCount = wrapper.querySelectorAll('.act-row').length + 1;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = templateActRow(n, rowCount, true);
+    const tmp      = document.createElement('div');
+    tmp.innerHTML  = templateActRow(n, rowCount, true);
     wrapper.appendChild(tmp.firstElementChild);
 
     const s = document.getElementById(`campana_${n}_${rowCount}`);
@@ -712,10 +704,10 @@
   }
 
   function changeCampanaRow(n, rowId) {
-    const val = document.getElementById(`campana_${n}_${rowId}`).value;
+    const val   = document.getElementById(`campana_${n}_${rowId}`).value;
     const input = document.getElementById(`campana_other_${n}_${rowId}`);
     if (val === 'Otros') { input.classList.remove('hidden'); input.required = true; }
-    else { input.classList.add('hidden'); input.required = false; }
+    else                  { input.classList.add('hidden');    input.required = false; }
   }
 
   function fillS(id) {
@@ -729,7 +721,7 @@
 
   // Filtrar los modos según reglas y super reglas
   function fillModoSelect(n) {
-    const s = document.getElementById(`modo_${n}`);
+    const s   = document.getElementById(`modo_${n}`);
     if (!s) return;
     s.innerHTML = '<option value="" disabled selected>Seleccione...</option>';
 
@@ -738,19 +730,19 @@
     Object.keys(gConfig).forEach(k => {
       const kUp = k.toUpperCase();
       const esAnalistaMode = kUp.includes('ANALISTA') || kUp.includes('CUALITATIV');
-
+      
       // 1. Bypass completo (Super Regla)
       if (gSuperRules.todosModos) {
         s.add(new Option(k, k));
         return;
       }
-
+      
       // 2. Bypass de Analistas para todos (Super Regla)
       if (esAnalistaMode && gSuperRules.analistasTodos) {
         s.add(new Option(k, k));
         return;
       }
-
+      
       // 3. Regla específica por Rol
       const allowedModes = gRules[rolUp] || [];
       if (allowedModes.includes('*') || allowedModes.includes(k)) {
@@ -760,8 +752,8 @@
   }
 
   function changeModo(n) {
-    const m = document.getElementById(`modo_${n}`).value;
-    const v = m.toUpperCase();
+    const m   = document.getElementById(`modo_${n}`).value;
+    const v   = m.toUpperCase();
 
     const wrapper = document.getElementById(`actividades_wrapper_${n}`);
     wrapper.innerHTML = templateActRow(n, 1);
@@ -770,24 +762,24 @@
     (gConfig[m] || []).forEach(c => s.add(new Option(c, c)));
     s.add(new Option('Otros', 'Otros'));
 
-    const ids = { e: `efectivas_${n}`, d: `detalle_${n}`, t: `totales_${n}` };
-    const boxGen = document.getElementById(`gx_${n}`);
-    const boxDet = document.getElementById(`gd_${n}`);
-    const boxEfec = document.getElementById(`ge_${n}`);
+    const ids       = { e: `efectivas_${n}`, d: `detalle_${n}`, t: `totales_${n}` };
+    const boxGen    = document.getElementById(`gx_${n}`);
+    const boxDet    = document.getElementById(`gd_${n}`);
+    const boxEfec   = document.getElementById(`ge_${n}`);
     const btnAddAct = document.getElementById(`btn_add_act_${n}`);
-    const lblCamp = document.getElementById(`lbl_campana_${n}_1`);
-    const anFields = document.getElementById(`analista_fields_${n}_1`);
-    const dAnaliz = document.getElementById(`datos_analizados_${n}_1`);
-    const dDesc = document.getElementById(`desc_actividad_${n}_1`);
+    const lblCamp   = document.getElementById(`lbl_campana_${n}_1`);
+    const anFields  = document.getElementById(`analista_fields_${n}_1`);
+    const dAnaliz   = document.getElementById(`datos_analizados_${n}_1`);
+    const dDesc     = document.getElementById(`desc_actividad_${n}_1`);
 
     boxEfec.classList.remove('hidden'); document.getElementById(ids.e).required = true;
-    boxDet.classList.add('hidden'); document.getElementById(ids.d).required = false;
-    boxGen.classList.add('hidden'); document.getElementById(ids.t).required = false;
+    boxDet.classList.add('hidden');     document.getElementById(ids.d).required = false;
+    boxGen.classList.add('hidden');     document.getElementById(ids.t).required = false;
     lblCamp.innerText = 'Campaña';
     btnAddAct.classList.add('hidden');
     anFields.classList.add('hidden');
     dAnaliz.required = false;
-    dDesc.required = false;
+    dDesc.required   = false;
 
     // Modos con variables de evaluación personalizadas
     const gv = document.getElementById(`gv_${n}`);
@@ -806,7 +798,7 @@
       varsCfg.forEach((vv, idx) => {
         const esNum = String(vv.tipo || 'NUMERO').toUpperCase() !== 'TEXTO';
         const oblig = vv.obligatorio === true;
-        const req = oblig ? ' <span style="color:var(--danger);">*</span>' : '';
+        const req   = oblig ? ' <span style="color:var(--danger);">*</span>' : '';
         const depNote = vv.padre ? ` <span style="color:var(--on-surface-variant);font-size:11px;">(depende de ${escHtml(vv.padre)})</span>` : '';
         const fg = document.createElement('div');
         fg.className = 'form-group';
@@ -821,11 +813,11 @@
     if (v.includes('ANALISTA') || v.includes('CUALITATIV')) {
       lblCamp.innerText = 'Actividad Realizada';
       boxEfec.classList.add('hidden'); document.getElementById(ids.e).required = false;
-      boxDet.classList.add('hidden'); document.getElementById(ids.d).required = false;
+      boxDet.classList.add('hidden');  document.getElementById(ids.d).required = false;
       btnAddAct.classList.remove('hidden');
       anFields.classList.remove('hidden');
       dAnaliz.required = true;
-      dDesc.required = true;
+      dDesc.required   = true;
     } else if (v.includes('ESPECIAL') || v.includes('ESEQUIBO')) {
       boxDet.classList.remove('hidden'); document.getElementById(ids.d).required = true;
     } else if (v.includes('ISSABEL') || v.includes('ISABELL')) {
@@ -846,38 +838,38 @@
   // ─── ENVIAR REPORTE (Con Factor de Edición de 10 segundos) ─────────────────
   function enviarReporte(e) {
     e.preventDefault();
-    const regs = [];
+    const regs   = [];
     const bloques = document.querySelectorAll('.report-card.col');
 
     for (const bloque of bloques) {
-      const n = parseInt(bloque.id.split('-')[1]);
+      const n  = parseInt(bloque.id.split('-')[1]);
       const mv = document.getElementById(`modo_${n}`).value;
       if (!mv || mv.includes('Seleccione')) { toast.error(`Falta seleccionar el MODO en el Registro ${n}`); return; }
 
       let actList = [], totalDatos = 0, detalleCuali = '';
-      const mUp = mv.toUpperCase();
+      const mUp   = mv.toUpperCase();
       const varsCfg = (gVariables && gVariables[mv]) || [];
       const esCustom = varsCfg.length > 0;
-      const isAn = mUp.includes('ANALISTA') || mUp.includes('CUALITATIV');
+      const isAn  = mUp.includes('ANALISTA') || mUp.includes('CUALITATIV');
 
       for (const row of bloque.querySelectorAll('.act-row')) {
-        const rowId = row.id.split('_').pop();
-        const selEl = document.getElementById(`campana_${n}_${rowId}`);
-        const textEl = document.getElementById(`campana_other_${n}_${rowId}`);
+        const rowId   = row.id.split('_').pop();
+        const selEl   = document.getElementById(`campana_${n}_${rowId}`);
+        const textEl  = document.getElementById(`campana_other_${n}_${rowId}`);
         if (!selEl) continue;
 
-        const selVal = selEl.value;
+        const selVal  = selEl.value;
         if (!selVal || selVal.includes('Seleccione')) { toast.error(`Falta seleccionar campaña/actividad en Registro ${n}`); return; }
 
         const finalVal = selVal === 'Otros' ? (textEl ? textEl.value.trim() : '') : selVal;
-        if (!finalVal) { toast.error(`Falta especificar nombre en "Otros" del Registro ${n}`); return; }
+        if (!finalVal)  { toast.error(`Falta especificar nombre en "Otros" del Registro ${n}`); return; }
 
         if (esCustom) {
           actList.push(finalVal.toUpperCase());
         } else if (isAn) {
           const datos = parseInt(document.getElementById(`datos_analizados_${n}_${rowId}`)?.value) || 0;
-          const desc = document.getElementById(`desc_actividad_${n}_${rowId}`)?.value.trim();
-          if (!desc) { toast.error(`Falta la descripción en una actividad del Registro ${n}`); return; }
+          const desc  = document.getElementById(`desc_actividad_${n}_${rowId}`)?.value.trim();
+          if (!desc)   { toast.error(`Falta la descripción en una actividad del Registro ${n}`); return; }
           totalDatos += datos;
           actList.push(finalVal.toUpperCase());
           detalleCuali += `ACTIVIDAD: ${finalVal.toUpperCase()} | DATOS: ${datos} | DETALLE: ${desc}\n`;
@@ -887,8 +879,8 @@
       }
 
       let efecFinal = document.getElementById(`efectivas_${n}`).value;
-      let detFinal = document.getElementById(`detalle_${n}`).value;
-      let totFinal = document.getElementById(`totales_${n}`).value;
+      let detFinal  = document.getElementById(`detalle_${n}`).value;
+      let totFinal  = document.getElementById(`totales_${n}`).value;
       let variablesObj = null;
 
       if (esCustom) {
@@ -921,25 +913,25 @@
       }
 
       regs.push({
-        idOperador: cUser.id,
-        usuario: cUser.u,
+        idOperador:   cUser.id,
+        usuario:      cUser.u,
         fechaReporte: document.getElementById('fechaReporte').value,
-        modo: mv,
-        campana: actList.join(' | '),
-        efectivas: efecFinal,
-        detalle: detFinal,
-        totales: totFinal,
-        estados: document.getElementById(`estados_${n}`)?.value || '',
-        municipios: document.getElementById(`municipios_${n}`)?.value || '',
-        incidencias: document.getElementById(`incidencias_${n}`)?.value || '',
-        variables: variablesObj
+        modo:         mv,
+        campana:      actList.join(' | '),
+        efectivas:    efecFinal,
+        detalle:      detFinal,
+        totales:      totFinal,
+        estados:      document.getElementById(`estados_${n}`)?.value || '',
+        municipios:   document.getElementById(`municipios_${n}`)?.value || '',
+        incidencias:  document.getElementById(`incidencias_${n}`)?.value || '',
+        variables:    variablesObj
       });
     }
 
     if (regs.length === 0) return toast.error('No hay registros para reportar.');
 
     const dobleTurno = document.getElementById('chk-todoeldia').checked;
-
+    
     // Almacenar el payload temporalmente
     reportPendingPayload = { registros: regs, todoElDia: dobleTurno, rol: cUser.r, turnoUsuario: cUser.t };
 
@@ -950,11 +942,11 @@
   function iniciarCountdownEnvio() {
     countdownSeconds = 10;
     document.getElementById('countdown-number').innerText = countdownSeconds;
-
+    
     const bar = document.getElementById('countdown-progress-bar');
     bar.style.transition = 'none';
     bar.style.transform = 'scaleX(1)';
-
+    
     document.getElementById('countdown-overlay').classList.remove('hidden');
 
     // Desencadenar animación de la barra
@@ -984,12 +976,12 @@
   async function enviarReporteInmediato() {
     clearInterval(countdownTimer);
     document.getElementById('countdown-overlay').classList.add('hidden');
-
+    
     if (!reportPendingPayload) return;
 
-    const btn = document.getElementById('btn-enviar');
+    const btn    = document.getElementById('btn-enviar');
     const loader = document.getElementById('loader-form');
-
+    
     btn.disabled = true; loader.style.display = 'block';
 
     try {
@@ -1019,20 +1011,20 @@
   async function loadDashboard() {
     const f1 = document.getElementById('dash-f1').value;
     const f2 = document.getElementById('dash-f2').value;
-    const u = document.getElementById('dash-user').value;
+    const u  = document.getElementById('dash-user').value;
     const tb = document.querySelector('#table-dash tbody');
 
     tb.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:20px;">Cargando Rendimiento...</td></tr>';
     document.getElementById('loader-dash').style.display = 'block';
     document.getElementById('dash-total-efec').innerText = '0';
-    document.getElementById('dash-total-tot').innerText = '0';
+    document.getElementById('dash-total-tot').innerText  = '0';
 
     try {
       const res = await api.obtenerDatosDashboard(f1, f2, u);
       document.getElementById('loader-dash').style.display = 'none';
       tb.innerHTML = '';
       document.getElementById('dash-total-efec').innerText = res.totalEfec;
-      document.getElementById('dash-total-tot').innerText = res.totalTot;
+      document.getElementById('dash-total-tot').innerText  = res.totalTot;
 
       if (res.datos.length === 0) {
         tb.innerHTML = '<tr><td colspan="3" style="text-align:center;color:gray;">Sin resultados en estas fechas</td></tr>';
@@ -1048,7 +1040,7 @@
 
       // Desglose por variables de evaluación
       const varsCard = document.getElementById('dash-vars-card');
-      const varsTb = document.querySelector('#table-dash-vars tbody');
+      const varsTb   = document.querySelector('#table-dash-vars tbody');
       if (varsCard && varsTb) {
         if (res.variablesTotales && res.variablesTotales.length > 0) {
           varsCard.style.display = '';
@@ -1078,14 +1070,14 @@
 
     const f1 = document.getElementById('dash-f1').value;
     const f2 = document.getElementById('dash-f2').value;
-    const u = document.getElementById('dash-user').value;
+    const u  = document.getElementById('dash-user').value;
     const tE = document.getElementById('dash-total-efec').innerText;
     const tT = document.getElementById('dash-total-tot').innerText;
     csv += `"TOTAL GENERAL","${tE}","${tT}"\n`;
 
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    link.href  = URL.createObjectURL(blob);
     link.download = `Rendimiento_${u}_${f1}_al_${f2}.csv`;
     link.click();
     toast.success('Rendimiento exportado en CSV con éxito.');
@@ -1093,8 +1085,8 @@
 
   // ─── REPORTES WORD ──────────────────────────────────────────────────────────
   async function doExportWord(tipo) {
-    const b = document.getElementById('btn-word-' + tipo);
-    const textOrig = b.innerHTML;
+    const b           = document.getElementById('btn-word-' + tipo);
+    const textOrig    = b.innerHTML;
     b.disabled = true; b.innerText = 'Generando Documento...';
 
     try {
@@ -1105,8 +1097,8 @@
       );
       b.disabled = false; b.innerHTML = textOrig;
       if (r.success) {
-        const a = document.createElement('a');
-        a.href = 'data:application/msword;base64,' + r.base64;
+        const a  = document.createElement('a');
+        a.href   = 'data:application/msword;base64,' + r.base64;
         a.download = r.filename;
         a.click();
         toast.success('Reporte Word descargado correctamente.');
@@ -1191,7 +1183,7 @@
 
   async function saveConfig() {
     const sel = document.getElementById('cfg-modo-select').value;
-    const m = sel === 'NUEVO' ? document.getElementById('cfg-modo-input').value.trim().toUpperCase() : sel;
+    const m   = sel === 'NUEVO' ? document.getElementById('cfg-modo-input').value.trim().toUpperCase() : sel;
     if (!m) return toast.error('Especifique un modo.');
 
     const vars = tVars
@@ -1199,7 +1191,7 @@
       .filter(v => v.variable);
 
     try {
-      const r = await api.guardarNuevaConfiguracion(m, tCamps.join(', '));
+      const r  = await api.guardarNuevaConfiguracion(m, tCamps.join(', '));
       const rv = await api.guardarVariablesModo(m, vars);
       toast.success(rv.success ? rv.message : r.message);
       loadCfg();
@@ -1248,34 +1240,20 @@
     }
   }
 
-  async function generarHojasPorModo() {
-    const btn = document.querySelector('[onclick="generarHojasPorModo()"]') || document.querySelector('[onclick="generarIndicadores()"]');
+  async function generarIndicadores() {
+    const btn = document.querySelector('[onclick="generarIndicadores()"]');
     const msg = document.getElementById('ind-msg');
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Sincronizando hojas por modo...'; }
+    if (btn) { btn.disabled = true; btn.innerText = 'Generando...'; }
     if (msg) msg.innerText = '';
     try {
-      let r;
-      if (typeof api.actualizarHojasPorModo === 'function') {
-        r = await api.actualizarHojasPorModo();
-      } else {
-        r = await api.actualizarArchivosIndicadores();
-      }
-      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Sincronizar Hojas por Modo de Trabajo'; }
-      if (r && r.success) {
-        toast.success(r.message || 'Hojas por modo sincronizadas.');
-        if (msg) msg.innerText = r.message;
-      } else {
-        toast.error((r && r.message) || 'Error al sincronizar hojas.');
-        if (msg) msg.innerText = (r && r.message) || 'Error al procesar.';
-      }
+      const r = await api.actualizarArchivosIndicadores();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">drive_folder_upload</span> Generar / Actualizar en Drive'; }
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
     } catch (e) {
-      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">sync</span> Sincronizar Hojas por Modo de Trabajo'; }
-      toast.error('Error al sincronizar hojas por modo de trabajo: ' + (e.message || e));
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">drive_folder_upload</span> Generar / Actualizar en Drive'; }
+      toast.error('Error generando indicadores en Drive.');
     }
-  }
-
-  async function generarIndicadores() {
-    return generarHojasPorModo();
   }
 
   // ─── REPOSITORIO DE EMOJIS (ADMIN) ───────────────────────────────────────────
@@ -1377,37 +1355,117 @@
     }
   }
 
+  async function saveAdminChat() {
+    const el = document.getElementById('admin-chat-input');
+    const msg = document.getElementById('dest-msg');
+    try {
+      const r = await api.guardarAdminChatId(el ? el.value : '');
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      toast.error('Error guardando el chat del administrador.');
+    }
+  }
+
+  async function saveBalanceToken() {
+    const el = document.getElementById('balance-token-input');
+    const msg = document.getElementById('dest-msg');
+    try {
+      const r = await api.guardarTokenBalance(el ? el.value : '');
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      toast.error('Error guardando el token del bot de balances.');
+    }
+  }
+
+  async function configurarWebhook() {
+    const btn = document.querySelector('[onclick="configurarWebhook()"]');
+    const msg = document.getElementById('dest-msg');
+    if (btn) { btn.disabled = true; btn.innerText = 'Configurando...'; }
+    try {
+      const r = await api.configurarWebhookTelegram();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span> Configurar Webhook del Bot de Balances'; }
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">link</span> Configurar Webhook del Bot de Balances'; }
+      toast.error('Error configurando el webhook.');
+    }
+  }
+
+  async function diagnosticarWebhook() {
+    const msg = document.getElementById('dest-msg');
+    try {
+      const r = await api.diagnosticoWebhook();
+      if (msg) { msg.style.whiteSpace = 'pre-line'; msg.style.textAlign = 'left'; msg.innerText = r.message || ''; }
+      toast.info('Diagnóstico del webhook listo (revise el recuadro).');
+    } catch (e) {
+      toast.error('Error obteniendo diagnóstico del webhook.');
+    }
+  }
+
+  async function borrarWebhookBal() {
+    const btn = document.querySelector('[onclick="borrarWebhookBal()"]');
+    const msg = document.getElementById('dest-msg');
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api.borrarWebhookBalance();
+      if (btn) btn.disabled = false;
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) btn.disabled = false;
+      toast.error('Error borrando el webhook.');
+    }
+  }
+
+  async function activarSondeo() {
+    const btn = document.querySelector('[onclick="activarSondeo()"]');
+    const msg = document.getElementById('dest-msg');
+    if (btn) { btn.disabled = true; btn.innerText = 'Activando...'; }
+    try {
+      const r = await api.activarSondeoBot();
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">autorenew</span> Activar Bot (sondeo automático) — RECOMENDADO'; }
+      if (r.success) { toast.success(r.message); if (msg) msg.innerText = r.message; }
+      else { toast.error(r.message); if (msg) msg.innerText = r.message; }
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<span class="material-symbols-outlined">autorenew</span> Activar Bot (sondeo automático) — RECOMENDADO'; }
+      toast.error('Error activando el sondeo del bot.');
+    }
+  }
+
   // ─── TABLAS DE VALIDACIÓN (UNIFICADAS) ──────────────────────────────────────
 
   async function loadTablaValidacion(tipo, pageOverride) {
-    const isAn = tipo === 'ANALISTAS';
-    const pageVar = isAn ? 'currPageAn' : 'currPage';
-    const tableId = isAn ? 'admin-table-an' : 'admin-table';
-    const rowsId = isAn ? 'rows-per-page-an' : 'rows-per-page';
-    const f1Id = isAn ? 'filter-1-an' : 'filter-1';
-    const fdId = isAn ? 'filter-date-an' : 'filter-date';
-    const msDrop = isAn ? 'ms-dropdown-modos-an' : 'ms-dropdown-modos';
-    const msOps = isAn ? 'ms-dropdown-ops-an' : 'ms-dropdown-ops';
-    const msTurnos = isAn ? 'ms-dropdown-turnos-an' : 'ms-dropdown-turnos';
-    const pageInpId = isAn ? 'curr-page-input-an' : 'curr-page-input';
-    const totalPgId = isAn ? 'total-pages-an' : 'total-pages';
-    const totalRcId = isAn ? 'total-records-an' : 'total-records';
-    const btnPrevId = isAn ? 'btn-prev-an' : 'btn-prev';
-    const btnNextId = isAn ? 'btn-next-an' : 'btn-next';
-    const colSpan = isAn ? 10 : 11;
+    const isAn      = tipo === 'ANALISTAS';
+    const pageVar   = isAn ? 'currPageAn' : 'currPage';
+    const tableId   = isAn ? 'admin-table-an' : 'admin-table';
+    const rowsId    = isAn ? 'rows-per-page-an' : 'rows-per-page';
+    const f1Id      = isAn ? 'filter-1-an'      : 'filter-1';
+    const fdId      = isAn ? 'filter-date-an'   : 'filter-date';
+    const msDrop    = isAn ? 'ms-dropdown-modos-an' : 'ms-dropdown-modos';
+    const msOps     = isAn ? 'ms-dropdown-ops-an'   : 'ms-dropdown-ops';
+    const msTurnos  = isAn ? 'ms-dropdown-turnos-an': 'ms-dropdown-turnos';
+    const pageInpId = isAn ? 'curr-page-input-an'   : 'curr-page-input';
+    const totalPgId = isAn ? 'total-pages-an'        : 'total-pages';
+    const totalRcId = isAn ? 'total-records-an'      : 'total-records';
+    const btnPrevId = isAn ? 'btn-prev-an'           : 'btn-prev';
+    const btnNextId = isAn ? 'btn-next-an'           : 'btn-next';
+    const colSpan   = isAn ? 10 : 11;
 
     if (pageOverride) {
       if (isAn) currPageAn = pageOverride;
-      else currPage = pageOverride;
+      else      currPage   = pageOverride;
     }
     const paginaActual = isAn ? currPageAn : currPage;
 
-    const cant = parseInt(document.getElementById(rowsId).value);
-    const f1 = document.getElementById(f1Id)?.value || '';
-    const fd = document.getElementById(fdId)?.value || '';
-    const arrM = getSelectedMs(msDrop);
-    const arrO = getSelectedMs(msOps);
-    const arrT = getSelectedMs(msTurnos);
+    const cant    = parseInt(document.getElementById(rowsId).value);
+    const f1      = document.getElementById(f1Id)?.value || '';
+    const fd      = document.getElementById(fdId)?.value || '';
+    const arrM    = getSelectedMs(msDrop);
+    const arrO    = getSelectedMs(msOps);
+    const arrT    = getSelectedMs(msTurnos);
 
     const tb = document.querySelector(`#${tableId} tbody`);
     if (tb) tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:20px;">Buscando...</td></tr>`;
@@ -1418,13 +1476,13 @@
       tb.innerHTML = '';
 
       if (isAn) { totalPAn = res.totalPaginas; currPageAn = res.paginaActual; }
-      else { totalP = res.totalPaginas; currPage = res.paginaActual; }
+      else       { totalP   = res.totalPaginas; currPage   = res.paginaActual; }
 
-      document.getElementById(pageInpId).value = res.paginaActual;
+      document.getElementById(pageInpId).value   = res.paginaActual;
       document.getElementById(totalPgId).innerText = res.totalPaginas;
       document.getElementById(totalRcId).innerText = res.totalRegistros;
-      document.getElementById(btnPrevId).disabled = res.paginaActual <= 1;
-      document.getElementById(btnNextId).disabled = res.paginaActual >= res.totalPaginas;
+      document.getElementById(btnPrevId).disabled  = res.paginaActual <= 1;
+      document.getElementById(btnNextId).disabled  = res.paginaActual >= res.totalPaginas;
 
       if (res.datos.length === 0) {
         tb.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;">Sin resultados</td></tr>`;
@@ -1432,7 +1490,7 @@
       }
 
       if (isAn) renderFilasAnalistas(tb, res.datos);
-      else renderFilasRegulares(tb, res.datos);
+      else       renderFilasRegulares(tb, res.datos);
     } catch (e) {
       if (tb) tb.innerHTML = `<tr><td colspan="${colSpan}" style="color:red;text-align:center;">Error al cargar</td></tr>`;
       toast.error('Error cargando registros de validación.');
@@ -1441,7 +1499,7 @@
 
   function _getTurnoBadge(turno) {
     const t = String(turno).toUpperCase();
-    if (t.includes('TARDE')) return `<span class="badge badge-tarde">${turno}</span>`;
+    if (t.includes('TARDE'))  return `<span class="badge badge-tarde">${turno}</span>`;
     return `<span class="badge badge-manana">${turno}</span>`;
   }
 
@@ -1450,7 +1508,7 @@
     let cls = 'mode-normal';
     if (m.includes('INCIDENCIA')) cls = 'mode-incidencia';
     else if (m.includes('ESEQUIBO')) cls = 'mode-esequibo';
-    else if (m.includes('1X10')) cls = 'mode-1x10';
+    else if (m.includes('1X10'))     cls = 'mode-1x10';
     else if (m.includes('ANALISTA') || m.includes('CUALITATIV')) cls = 'mode-analista';
     return `<span class="mode-badge ${cls}">${modo}</span>`;
   }
@@ -1468,7 +1526,7 @@
           <td class="text-center" style="font-weight:700;color:var(--secondary);">${r.efectivas}</td>
           <td class="text-center" style="color:var(--on-surface-variant);">${r.incidencias}</td>
           <td class="text-center"><input class="input-mini ve" type="number" value="${r.valEfec || ''}" placeholder="—"></td>
-          <td class="text-center"><input class="input-mini vi" type="number" value="${r.valInc || ''}" placeholder="—"></td>
+          <td class="text-center"><input class="input-mini vi" type="number" value="${r.valInc  || ''}" placeholder="—"></td>
           <td class="text-center">
             <button class="btn-mini-save" onclick="saveRowValidacion(${r.rowId}, this, '.ve', '.vi')">
               <span class="material-symbols-outlined">save</span>
@@ -1507,9 +1565,9 @@
   // ─── ACCIONES DE VALIDACIÓN ──────────────────────────────────────────────────
 
   async function saveRowValidacion(rowId, btn, veClass, viClass) {
-    const tr = btn.closest('tr');
-    const ve = tr.querySelector(veClass).value;
-    const vi = tr.querySelector(viClass).value;
+    const tr   = btn.closest('tr');
+    const ve   = tr.querySelector(veClass).value;
+    const vi   = tr.querySelector(viClass).value;
     const icon = btn.innerHTML;
     btn.innerHTML = '...';
 
@@ -1529,12 +1587,12 @@
     const list = [];
     document.querySelectorAll(`#${tableId} tbody tr`).forEach(tr => {
       const rowId = tr.getAttribute('data-row');
-      const ve = tr.querySelector(veClass)?.value;
-      const vi = tr.querySelector(viClass)?.value;
+      const ve    = tr.querySelector(veClass)?.value;
+      const vi    = tr.querySelector(viClass)?.value;
       if (rowId) list.push({ rowId: parseInt(rowId), efectivas: ve, incidencias: vi });
     });
 
-    const btn = document.querySelector(`[onclick="saveTable()"], [onclick="saveTableAn()"]`);
+    const btn  = document.querySelector(`[onclick="saveTable()"], [onclick="saveTableAn()"]`);
     if (btn) { btn.innerHTML = 'Guardando...'; btn.disabled = true; }
 
     try {
@@ -1556,16 +1614,16 @@
   }
 
   // Alias para compatibilidad con los onclick del HTML
-  function saveTable() { saveTableMasivo('admin-table', '.ve', '.vi'); }
+  function saveTable()   { saveTableMasivo('admin-table',    '.ve',    '.vi'); }
   function saveTableAn() { saveTableMasivo('admin-table-an', '.ve-an', '.vi-an'); }
-  function loadTable(p) { loadTablaValidacion('REGULARES', p); }
-  function loadTableAnalistas(p) { loadTablaValidacion('ANALISTAS', p); }
-  function changePage(d) { loadTablaValidacion('REGULARES', currPage + d); }
-  function changePageAn(d) { loadTablaValidacion('ANALISTAS', currPageAn + d); }
-  function jumpToPage() { const p = parseInt(document.getElementById('curr-page-input').value); loadTablaValidacion('REGULARES', Math.min(Math.max(1, p), totalP)); }
+  function loadTable(p)           { loadTablaValidacion('REGULARES', p); }
+  function loadTableAnalistas(p)  { loadTablaValidacion('ANALISTAS', p); }
+  function changePage(d)          { loadTablaValidacion('REGULARES', currPage   + d); }
+  function changePageAn(d)        { loadTablaValidacion('ANALISTAS', currPageAn + d); }
+  function jumpToPage()   { const p = parseInt(document.getElementById('curr-page-input').value); loadTablaValidacion('REGULARES', Math.min(Math.max(1, p), totalP)); }
   function jumpToPageAn() { const p = parseInt(document.getElementById('curr-page-input-an').value); loadTablaValidacion('ANALISTAS', Math.min(Math.max(1, p), totalPAn)); }
 
-  // ─── EXPORTAR BD ─────────────────────────────────────────────────────────────
+  // ─── REPORTE EXCEL ───────────────────────────────────────────────────────────
   async function doExport() {
     const b = document.getElementById('btn-exp');
     b.disabled = true; b.innerText = '...';
@@ -1576,19 +1634,19 @@
         document.getElementById('exp-f2').value,
         document.getElementById('exp-modo').value
       );
-      b.disabled = false; b.innerText = 'Generar Excel Completo';
+      b.disabled = false; b.innerText = 'Descargar Reporte Excel';
       if (r.success) {
-        const a = document.createElement('a');
-        a.href = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + r.base64;
+        const a  = document.createElement('a');
+        a.href   = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,' + r.base64;
         a.download = r.filename;
         a.click();
-        toast.success('Descarga de Excel iniciada correctamente.');
+        toast.success('Reporte Excel descargado correctamente.');
       } else {
         toast.error(r.message);
       }
     } catch (e) {
-      b.disabled = false; b.innerText = 'Generar Excel Completo';
-      toast.error('Error al exportar base de datos.');
+      b.disabled = false; b.innerText = 'Descargar Reporte Excel';
+      toast.error('Error al generar el reporte Excel.');
     }
   }
 </script>

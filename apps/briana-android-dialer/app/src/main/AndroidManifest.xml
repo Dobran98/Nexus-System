@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Permisos de Telefonía, Red y Servicio Persistente (Samsung Galaxy A57/A37 OneUI) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".BrianaApp"
+        android:allowBackup="false"
+        android:icon="@android:drawable/sym_action_call"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Requerido para que Android ofrezca la app como Marcador Predeterminado (ROLE_DIALER) -->
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+        </activity>
+
+        <!-- InCallService: Intercepta y mide llamadas reales en SIM Física -->
+        <service
+            android:name=".telecom.BrianaInCallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_UI"
+                android:value="true" />
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_RINGING"
+                android:value="false" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
+        <!-- Foreground Service para mantener escucha de comandos PC <-> Samsung -->
+        <service
+            android:name=".service.BrianaForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="phoneCall|dataSync" />
+
+        <receiver
+            android:name=".service.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

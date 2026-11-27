@@ -20,6 +20,7 @@ const NOMBRE_HOJA_INDICADORES   = "Config_Indicadores";
 const ID_HOJA_CROSS          = "14UCgTpVC4Y6MhdhJPQqgUgfADcMuufjpAcQPPtRzXWQ";
 const CHAT_ID_TELEGRAM       = "-1003081975085";
 const NOMBRE_PROP_TOKEN      = "TELEGRAM_BOT_TOKEN";
+const NOMBRE_PROP_TOKEN_BALANCE = "TELEGRAM_BOT_TOKEN_BALANCE";
 
 // Hora local (zona del script) de los reportes programados consolidados
 const HORA_REPORTE_DIARIO   = 18;   // 18:00
@@ -44,84 +45,43 @@ function getOrCreateSheet(ss, nombre, cabeceras) {
   return hoja;
 }
 
-/**
- * Retorna la lista de indicadores / variables que corresponden a un modo de trabajo,
- * para ser utilizados como columnas en la hoja de ese modo.
- */
-function obtenerIndicadoresColumnasModo(modo) {
-  const vars = (typeof obtenerVariablesModo === "function") ? obtenerVariablesModo(modo) : [];
-  if (vars && vars.length > 0) {
-    return vars.map(v => ({ key: v.variable, etiqueta: v.etiqueta || v.variable }));
-  }
-  const mUp = String(modo || "").toUpperCase();
-  if (mUp.includes("ANALISTA") || mUp.includes("CUALITATIV")) {
-    return [
-      { key: "efectivas", etiqueta: "Total Actividades Realizadas" },
-      { key: "totales", etiqueta: "Datos Analizados" }
-    ];
-  }
-  if (mUp.includes("ESPECIAL") || mUp.includes("ESEQUIBO")) {
-    return [
-      { key: "efectivas", etiqueta: "Llamadas Efectivas" }
-    ];
-  }
-  if (mUp.includes("INCIDENCIA") || mUp.includes("1X10")) {
-    return [
-      { key: "efectivas", etiqueta: "Llamadas Efectivas" },
-      { key: "totales", etiqueta: "Llamadas Totales" },
-      { key: "incidencias", etiqueta: "Incidencias Reportadas" }
-    ];
-  }
-  return [
-    { key: "efectivas", etiqueta: "Llamadas Efectivas" },
-    { key: "totales", etiqueta: "Llamadas Totales" }
-  ];
-}
-
-/**
- * Nombre estandarizado de la hoja dinámica de un modo en el Spreadsheet.
- * Ej: Modo "LLAMADAS" -> "Modo_LLAMADAS"
- */
-function getNombreHojaModo(modo) {
-  const mClean = String(modo || "GENERAL").trim().replace(/[:\/?*\[\]]/g, "_");
-  return `Modo_${mClean}`;
-}
-
-/**
- * Obtiene o crea dinámicamente la hoja de cálculo específica para un modo de trabajo,
- * configurando los indicadores como columnas en su cabecera junto a los datos correspondientes.
- */
-function getOrCreateHojaModo(ss, modo) {
-  const nombreHoja = getNombreHojaModo(modo);
-  let hoja = ss.getSheetByName(nombreHoja);
-  const indicadores = obtenerIndicadoresColumnasModo(modo);
-
-  const cabeceras = [
-    "ID_Operador", "Fecha", "Hora", "Nombre y Apellido", "Usuario",
-    "Turno", "Modo", "Campaña / Actividad"
-  ];
-  indicadores.forEach(ind => cabeceras.push(ind.etiqueta));
-  cabeceras.push("Estados", "Municipios / Detalle", "(Admin) Efectivas", "(Admin) Incidencias", "Total");
-
-  if (!hoja) {
-    hoja = ss.insertSheet(nombreHoja);
-    hoja.appendRow(cabeceras);
-    try {
-      hoja.getRange(1, 1, 1, cabeceras.length)
-        .setFontWeight("bold")
-        .setBackground("#1e40af")
-        .setFontColor("#ffffff");
-      hoja.setFrozenRows(1);
-    } catch (e) {}
-  }
-  return { hoja, cabeceras, indicadores };
-}
-
-/** Token de Telegram desde PropertiesService. */
+/** Token de Telegram (bot operativo) desde PropertiesService. */
 function getTelegramToken() {
   const token = PropertiesService.getScriptProperties().getProperty(NOMBRE_PROP_TOKEN);
   if (!token) throw new Error("Token de Telegram no configurado. Ejecute setupTelegramToken().");
   return token;
+}
+
+/** Token del bot de balances/interactivo (bot aparte) desde PropertiesService. */
+function getTelegramTokenBalance() {
+  const token = PropertiesService.getScriptProperties().getProperty(NOMBRE_PROP_TOKEN_BALANCE);
+  if (!token) throw new Error("Token del bot de balances no configurado. Péguelo en Configuración → Bot Interactivo.");
+  return token;
+}
+
+/** Guarda el token del bot de balances/interactivo, validándolo contra Telegram. */
+function guardarTokenBalance(token) {
+  const t = String(token || "").trim();
+  if (!t) {
+    PropertiesService.getScriptProperties().setProperty(NOMBRE_PROP_TOKEN_BALANCE, "");
+    return { success: false, message: "Token vacío." };
+  }
+  // Validación de formato: <id>:<clave>  (ej. 123456789:AA...)
+  if (!/^\d+:[A-Za-z0-9_-]{30,}$/.test(t)) {
+    return { success: false, message: "Formato de token incorrecto (" + t.length + " caracteres). Debe verse como '123456789:AA...'. Copie el token COMPLETO de @BotFather." };
+  }
+  const me = getMeTelegram(t);
+  if (!me || !me.ok) {
+    return { success: false, message: "Token inválido o revocado. Cree un bot nuevo en @BotFather y copie su token completo." };
+  }
+  PropertiesService.getScriptProperties().setProperty(NOMBRE_PROP_TOKEN_BALANCE, t);
+  const botNombre = (me.result && (me.result.username || me.result.first_name)) || "";
+  return { success: true, message: "Token guardado correctamente" + (botNombre ? " (@" + botNombre + ")" : "") + "." };
+}
+
+/** Devuelve el token del bot de balances guardado (vacío si no hay). */
+function obtenerTokenBalanceGuardado() {
+  return PropertiesService.getScriptProperties().getProperty(NOMBRE_PROP_TOKEN_BALANCE) || "";
 }
 
 // ─── CACHE LAYER: MEJORA DE FLUIDEZ ───────────────────────────────────────────
@@ -476,6 +436,30 @@ function guardarDestinatarios(lista) {
   }
 }
 
+// ─── CHAT DEL ADMINISTRADOR (BOT INTERACTIVO) ──────────────────────────────────
+
+/** Chat ID del administrador (su teléfono personal). Vacío si no está configurado. */
+function obtenerAdminChatId() {
+  return PropertiesService.getScriptProperties().getProperty("ADMIN_CHAT_ID") || "";
+}
+
+/** Guarda el chat ID del administrador. */
+function guardarAdminChatId(chatId) {
+  PropertiesService.getScriptProperties().setProperty("ADMIN_CHAT_ID", String(chatId || "").trim());
+  return { success: true, message: "Chat del administrador guardado correctamente." };
+}
+
+/** Indica si un chat está autorizado a hablar con el bot (admin o destinatario de reportes). */
+function esChatAutorizado(chatId) {
+  const cid = String(chatId || "").trim();
+  // Chat personal del administrador (siempre autorizado)
+  if (cid === "867349063") return true;
+  const admin = obtenerAdminChatId();
+  if (admin === "") return true;                 // sin admin configurado → modo abierto
+  if (cid === admin) return true;
+  return obtenerDestinatarios().some(d => String(d.chatId).trim() === cid);
+}
+
 // ─── INDICADORES MACRO (AGRUPAN POR MODO) ──────────────────────────────────────
 
 /** Lista de indicadores macro: [{ indicador, modo }]. */
@@ -669,6 +653,17 @@ function setupTelegramToken() {
     "8533958111:AAFtWPPBE50TEOUUdNbvBVLP6vWsblTgx88"
   );
   Logger.log("✅ Token de Telegram guardado en PropertiesService.");
+}
+
+/**
+ * Guardar el token del bot de balances (bot aparte) en PropertiesService.
+ */
+function setupTelegramTokenBalance() {
+  PropertiesService.getScriptProperties().setProperty(
+    NOMBRE_PROP_TOKEN_BALANCE,
+    "9168856529:AAH7MNxowmh0fgnxj5eo1V6G33C1kIDHE5U"
+  );
+  Logger.log("✅ Token del bot de balances guardado en PropertiesService.");
 }
 
 /**
