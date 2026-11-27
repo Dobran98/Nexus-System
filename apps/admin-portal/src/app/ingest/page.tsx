@@ -1,16 +1,49 @@
 import React from 'react';
+import { redirect } from 'next/navigation';
+import { createSupabaseServerClient } from '@intranet/auth/server';
 import { BulkDataIngestor } from '@/components/BulkDataIngestor';
+import { getUserRbacContext, checkModuleAccess } from '@/lib/rbac';
+import { ModuleBlockedScreen } from '@/components/ModuleBlockedScreen';
 
 export const metadata = {
   title: 'Ingesta Masiva de Campañas — Nexus Admin Portal',
   description: 'Módulo de carga y particionamiento de bases de datos de telefonía y contactos',
 };
 
-// Página Server Component en Next.js App Router
 export default async function IngestPage() {
-  // IDs de campaña y operador por defecto para la sesión de carga
+  const supabase = createSupabaseServerClient();
+  let user: any = null;
+
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
+      user = data.user;
+    }
+  } catch {
+    user = null;
+  }
+
+  if (!user) {
+    redirect('/login?redirectTo=/ingest');
+  }
+
+  const rbac = await getUserRbacContext(supabase, user);
+  if (!rbac.isSuperAdmin && !rbac.isFundadorDev) {
+    redirect('/unauthorized');
+  }
+
+  const access = checkModuleAccess('ingest', rbac);
+  if (!access.allowed && access.flag) {
+    return (
+      <ModuleBlockedScreen
+        moduleName={access.flag.name}
+        status={access.flag.status}
+        message={access.flag.maintenance_message}
+      />
+    );
+  }
+
   const defaultCampaignId = 'c1b2a3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d';
-  const defaultOperatorId = 'a0000000-0000-0000-0000-000000000001';
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
@@ -25,9 +58,8 @@ export default async function IngestPage() {
 
       <BulkDataIngestor
         campaignId={defaultCampaignId}
-        operatorId={defaultOperatorId}
+        operatorId={user.id}
       />
     </main>
   );
 }
-

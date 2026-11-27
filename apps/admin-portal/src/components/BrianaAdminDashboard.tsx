@@ -16,7 +16,8 @@ import {
   AlertOctagon,
   Search,
   RefreshCw,
-  TrendingUp
+  TrendingUp,
+  Upload
 } from 'lucide-react';
 
 export function BrianaAdminDashboard() {
@@ -25,6 +26,11 @@ export function BrianaAdminDashboard() {
   const [activeTab, setActiveTab] = useState<'overview' | 'traceability' | 'schedules'>('overview');
   const [filterType, setFilterType] = useState<'all' | 'effective' | 'failed'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importTitle, setImportTitle] = useState('');
+  const [importRawText, setImportRawText] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<string | null>(null);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -152,6 +158,14 @@ export function BrianaAdminDashboard() {
                 Reprogramados & Inválidos ({summary.reprogramados + summary.invalidos})
               </button>
             </div>
+
+            <button
+              onClick={() => { setShowImportModal(true); setImportFeedback(null); }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Cargar Contactos</span>
+            </button>
 
             <button
               onClick={loadDashboard}
@@ -433,6 +447,86 @@ export function BrianaAdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Modal de Carga Rápida a Cola SIM */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md">
+          <div className="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-sm font-bold text-white">Cargar Contactos a Cola de Marcado (contacts_queue)</h3>
+              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase mb-1">Nombre de Campaña (Opcional)</label>
+                <input
+                  type="text"
+                  value={importTitle}
+                  onChange={(e) => setImportTitle(e.target.value)}
+                  placeholder="Ej. Jornada Comunal Noviembre"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 uppercase mb-1">
+                  Contactos (1 por línea: Nombre, Teléfono, Cédula)
+                </label>
+                <textarea
+                  rows={6}
+                  value={importRawText}
+                  onChange={(e) => setImportRawText(e.target.value)}
+                  placeholder={"María Pérez, +584121234567, V-18234567\nCarlos Ruiz, +584147654321"}
+                  className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white"
+                />
+              </div>
+              {importFeedback && (
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-sky-300">
+                  {importFeedback}
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={importing || !importRawText.trim()}
+                onClick={async () => {
+                  setImporting(true);
+                  setImportFeedback(null);
+                  try {
+                    const parsed = importRawText
+                      .split('\n')
+                      .map((line) => line.trim())
+                      .filter(Boolean)
+                      .map((line) => {
+                        const parts = line.split(/[,;\t]/).map((p) => p.trim());
+                        if (parts.length === 1) return { full_name: 'Ciudadano', phone_number: parts[0] };
+                        return { full_name: parts[0], phone_number: parts[1], document_id: parts[2] || null };
+                      });
+                    const res = await fetch('/api/briana/queue/import', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ campaignTitle: importTitle || undefined, contacts: parsed }),
+                    });
+                    const json = await res.json();
+                    if (!res.ok) {
+                      setImportFeedback(json.error || 'Error al cargar');
+                    } else {
+                      setImportFeedback(json.message);
+                      setImportRawText('');
+                      loadDashboard();
+                    }
+                  } catch (e: any) {
+                    setImportFeedback(e.message);
+                  } finally {
+                    setImporting(false);
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs disabled:opacity-50"
+              >
+                {importing ? 'Cargando a Supabase...' : 'Importar Contactos a Cola'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@intranet/auth/server';
+import { getUserRbacContext, checkModuleAccess } from '@/lib/rbac';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,12 @@ export async function GET(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const rbac = await getUserRbacContext(supabase, user);
+    const access = checkModuleAccess('elecciones', rbac);
+    if (!access.allowed) {
+      return NextResponse.json({ error: 'Módulo Elecciones restringido o en mantenimiento.' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -143,6 +150,12 @@ export async function POST(request: NextRequest) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    const rbac = await getUserRbacContext(supabase, user);
+    const access = checkModuleAccess('elecciones', rbac);
+    if (!access.allowed) {
+      return NextResponse.json({ error: 'Módulo Elecciones restringido o en mantenimiento.' }, { status: 403 });
     }
 
     const body = await request.json().catch(() => ({}));

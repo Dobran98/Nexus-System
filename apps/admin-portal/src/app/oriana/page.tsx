@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { ArrowLeft, ExternalLink, LineChart } from 'lucide-react';
 import { createSupabaseServerClient } from '@intranet/auth/server';
 import { redirect } from 'next/navigation';
+import { getUserRbacContext, checkModuleAccess } from '@/lib/rbac';
+import { ModuleBlockedScreen } from '@/components/ModuleBlockedScreen';
 
 export const metadata = {
   title: 'ORIANA — Command Center | Nexus Intranet',
@@ -24,6 +26,18 @@ export default async function OrianaPortalPage() {
 
   if (!user) {
     redirect('/login?redirectTo=/oriana');
+  }
+
+  const rbac = await getUserRbacContext(supabase, user);
+  const access = checkModuleAccess('oriana', rbac);
+  if (!access.allowed && access.flag) {
+    return (
+      <ModuleBlockedScreen
+        moduleName={access.flag.name}
+        status={access.flag.status}
+        message={access.flag.maintenance_message}
+      />
+    );
   }
 
   const userEmail = user.email || 'Usuario';

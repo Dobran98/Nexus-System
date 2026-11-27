@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@intranet/database';
+import { getUserRbacContext } from '@/lib/rbac';
 
 // POST /api/campaigns/assignments/bulk
 // Inserta un batch de call_assignments en Supabase
@@ -19,10 +20,18 @@ export async function POST(request: Request) {
     }
   );
 
-  // Verificar autenticación
+  // Verificar autenticación y permisos RBAC (Supervisor o superior)
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
+  const rbac = await getUserRbacContext(supabase, user);
+  if (!rbac.isSupervisorOrAbove) {
+    return NextResponse.json(
+      { error: 'Acceso restringido: Se requieren privilegios de Supervisor o superior para cargas masivas.' },
+      { status: 403 }
+    );
   }
 
   let body: { assignments: any[] };
