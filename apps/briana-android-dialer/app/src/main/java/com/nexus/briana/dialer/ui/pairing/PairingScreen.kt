@@ -30,7 +30,8 @@ fun PairingScreen(
     isDefaultDialer: Boolean,
     onToggleShift: (Boolean) -> Unit,
     onRequestBatteryOptimization: () -> Unit,
-    onOpenDefaultAppsSettings: () -> Unit
+    onOpenDefaultAppsSettings: () -> Unit,
+    onOpenNotificationAccessSettings: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -182,6 +183,14 @@ fun PairingScreen(
                         color = if (isDefaultDialer) Color(0xFF34D399) else Color(0xFFCBD5E1)
                     )
                 }
+            }
+
+            OutlinedButton(
+                onClick = onOpenNotificationAccessSettings,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Permiso Monitor WhatsApp (Notificaciones)", fontSize = 11.sp, color = Color(0xFF34D399))
             }
         }
     }

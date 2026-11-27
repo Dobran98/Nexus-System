@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
       operatorId,
       sessionId,
       state, // 'DIALING' | 'RINGING' | 'ACTIVE' | 'DISCONNECTED'
+      callChannel = 'sim', // 'sim' | 'whatsapp'
       isConnected = false,
       initiatedFrom = 'android_app',
       endedBy,
@@ -121,6 +122,7 @@ export async function POST(req: NextRequest) {
         operator_id: resolvedOperatorId,
         device_id: resolvedDeviceId,
         attempt_number: attemptNumber,
+        call_channel: callChannel === 'whatsapp' ? 'whatsapp' : 'sim',
         initiated_from: initiatedFrom,
         ended_by: endedBy || 'network_or_no_answer',
         is_connected: !!isConnected,

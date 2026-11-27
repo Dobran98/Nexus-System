@@ -18,7 +18,8 @@ import {
   RefreshCw,
   Power,
   Link2,
-  User
+  User,
+  MessageCircle
 } from 'lucide-react';
 
 interface DeviceInfo {
@@ -73,6 +74,7 @@ export function BrianaRemoteDialerPanel() {
   const [isConnected, setIsConnected] = useState(false);
   const [talkSeconds, setTalkSeconds] = useState(0);
   const [initiatedFrom, setInitiatedFrom] = useState<string>('pc_web');
+  const [callChannel, setCallChannel] = useState<'sim' | 'whatsapp'>('sim');
   const [endedBy, setEndedBy] = useState<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -291,13 +293,14 @@ export function BrianaRemoteDialerPanel() {
     }
   };
 
-  // Control Bidireccional PC -> Samsung
-  const handleDialFromPc = async () => {
+  // Control Bidireccional PC -> Samsung (SIM o WhatsApp)
+  const handleDialFromPc = async (channel: 'sim' | 'whatsapp' = 'sim') => {
     if (!contact || !session) return;
     setNotice(null);
     setTalkSeconds(0);
     setIsConnected(false);
     setEndedBy(null);
+    setCallChannel(channel);
     setInitiatedFrom('pc_web');
     setCallPhase('DIALING');
 
@@ -310,6 +313,7 @@ export function BrianaRemoteDialerPanel() {
           phoneNumber: contact.phone_number,
           contactName: contact.full_name,
           campaignId: contact.campaign_id,
+          channel,
         }),
       });
       const data = await res.json();
@@ -570,21 +574,30 @@ export function BrianaRemoteDialerPanel() {
                         }`}
                       >
                         {callPhase === 'IDLE' && '● LISTO PARA MARCAR'}
-                        {callPhase === 'DIALING' && '● ENVIANDO A SAMSUNG...'}
-                        {callPhase === 'RINGING' && '● TIMBRANDO EN SIM...'}
+                        {callPhase === 'DIALING' && `● ENVIANDO A ${callChannel === 'whatsapp' ? 'WHATSAPP' : 'SAMSUNG'}...`}
+                        {callPhase === 'RINGING' && `● TIMBRANDO EN ${callChannel === 'whatsapp' ? 'WHATSAPP' : 'SIM'}...`}
                         {callPhase === 'ACTIVE' && `● CONECTADA (${formatTimer(talkSeconds)})`}
                         {callPhase === 'DISCONNECTED' && '● LLAMADA FINALIZADA'}
                       </span>
                     </div>
 
                     {callPhase === 'IDLE' ? (
-                      <button
-                        onClick={handleDialFromPc}
-                        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
-                      >
-                        <PhoneCall className="w-5 h-5" />
-                        <span>Llamar desde Samsung</span>
-                      </button>
+                      <div className="w-full space-y-2.5">
+                        <button
+                          onClick={() => handleDialFromPc('sim')}
+                          className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 transition-all cursor-pointer"
+                        >
+                          <PhoneCall className="w-4 h-4" />
+                          <span>Llamar por SIM (Samsung)</span>
+                        </button>
+                        <button
+                          onClick={() => handleDialFromPc('whatsapp')}
+                          className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 border border-green-500/40 shadow-md transition-all cursor-pointer"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>Llamar por WhatsApp</span>
+                        </button>
+                      </div>
                     ) : (
                       <button
                         onClick={handleHangupFromPc}

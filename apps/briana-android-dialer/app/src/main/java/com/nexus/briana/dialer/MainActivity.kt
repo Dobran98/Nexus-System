@@ -101,6 +101,9 @@ class MainActivity : ComponentActivity() {
                         onRequestBatteryOptimization = { requestBatteryExclusion() },
                         onOpenDefaultAppsSettings = {
                             startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                        },
+                        onOpenNotificationAccessSettings = {
+                            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                         }
                     )
                 }
@@ -166,3 +169,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

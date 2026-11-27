@@ -70,3 +70,4 @@ class ShiftPreferences(context: Context) {
             .apply()
     }
 }
+

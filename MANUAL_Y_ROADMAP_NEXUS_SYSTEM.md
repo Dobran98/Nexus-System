@@ -1,4 +1,4 @@
-# NEXUS INTRANET CORPORATIVA
+ # NEXUS INTRANET CORPORATIVA
 ## Documento Maestro de Estado, Arquitectura y Hoja de Ruta Viva
 *Versión 2.0 — Noviembre 2026*  
 *Entorno de Producción:* `https://nexus-system-three.vercel.app`  

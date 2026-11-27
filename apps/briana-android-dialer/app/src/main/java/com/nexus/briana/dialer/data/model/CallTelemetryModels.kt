@@ -38,6 +38,7 @@ data class TelemetryPayload(
     val operatorId: String? = null,
     val sessionId: String? = null,
     val state: String, // DIALING | RINGING | ACTIVE | DISCONNECTED
+    val callChannel: String = "sim", // sim | whatsapp
     val isConnected: Boolean = false,
     val initiatedFrom: String = "android_app",
     val endedBy: String? = null,
@@ -49,3 +50,4 @@ data class TelemetryPayload(
     val telecomDisconnectCode: Int? = null,
     val telecomDisconnectMsg: String? = null
 )
+

@@ -188,7 +188,7 @@ class BrianaInCallService : InCallService() {
                     ringingAt = ringingAt,
                     activeAt = activeAt,
                     disconnectedAt = disconnectedAt,
-                    talkDurationSeconds = talkSeconds,
+                    talkDurationSeconds = talkDurationSeconds,
                     telecomDisconnectCode = disconnectCode,
                     telecomDisconnectMsg = disconnectMsg
                 )

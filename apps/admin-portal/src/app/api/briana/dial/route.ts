@@ -23,10 +23,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
 
-    const { contactId, phoneNumber, contactName, campaignId } = await req.json();
+    const { contactId, phoneNumber, contactName, campaignId, channel = 'sim' } = await req.json();
     if (!phoneNumber) {
       return NextResponse.json({ error: 'Número telefónico requerido' }, { status: 400 });
     }
+    const callChannel = channel === 'whatsapp' ? 'whatsapp' : 'sim';
+    const commandType = callChannel === 'whatsapp' ? 'DIAL_WHATSAPP' : 'DIAL';
 
     const serviceSb = getServiceSupabase();
 
@@ -58,13 +60,14 @@ export async function POST(req: NextRequest) {
         device_id: session.device.id,
         contact_id: contactId || null,
         call_uuid: callUuid,
-        command_type: 'DIAL',
+        command_type: commandType,
         payload: {
           phone_number: phoneNumber,
           contact_name: contactName || 'Contacto',
           campaign_id: campaignId || session.campaign_id,
           operator_id: authData.user.id,
           initiated_from: 'pc_web',
+          call_channel: callChannel,
         },
         status: 'pending',
       })

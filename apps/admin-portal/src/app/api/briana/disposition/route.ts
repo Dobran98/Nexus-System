@@ -125,3 +125,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 });
   }
 }
+
